@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "General",
+    "transcribe": "Transcribe",
     "models": "Models",
     "advanced": "Advanced",
     "postProcessing": "Post Process",
@@ -463,6 +464,96 @@
         "createFirst": "Click 'Create New Prompt' above to create your first post-processing prompt."
       }
     },
+    "transcribeFiles": {
+      "title": "Transcribe Files",
+      "description": "Turn existing recordings into text on this computer. Your files never leave your device.",
+      "settingsNote": "Uses your selected model and your language, translation, custom word and filler word settings.",
+      "model": "Model: {{model}}",
+      "noModel": "Select a downloaded model on the Models page to transcribe files.",
+      "dropzone": {
+        "title": "Drop audio or video files here",
+        "hint": "Interviews, meetings, lectures and voice memos of any length",
+        "active": "Release to add",
+        "choose": "Choose Files…",
+        "skipped": "Skipped files that aren't audio or video: {{number}}"
+      },
+      "picker": {
+        "title": "Choose Recordings",
+        "filterName": "Audio and video files"
+      },
+      "formats": {
+        "native": "Opens {{formats}}",
+        "ffmpegAvailable": "Other formats such as Opus, WebM, WMA and DSS open with ffmpeg.",
+        "ffmpegMissing": "Install ffmpeg to also open Opus, WebM, WMA, DSS and other formats."
+      },
+      "saveToHistory": {
+        "label": "Save to History",
+        "description": "Finished transcripts are saved and starred so automatic cleanup keeps them."
+      },
+      "queue": {
+        "title": "Files",
+        "cancelAll": "Cancel All",
+        "clearFinished": "Clear Finished"
+      },
+      "status": {
+        "queued": "Waiting to start",
+        "preparing": "Preparing…",
+        "waiting": "Paused while you dictate",
+        "transcribing": "Transcribing…",
+        "completed": "Done",
+        "partial": "Done, with gaps",
+        "cancelled": "Cancelled",
+        "failed": "Failed"
+      },
+      "progress": "{{processed}} of {{total}}",
+      "progressNoTotal": "{{processed}} transcribed",
+      "noSpeech": "No speech found in this file.",
+      "actions": {
+        "cancel": "Cancel",
+        "remove": "Remove from List",
+        "view": "View Transcript",
+        "copy": "Copy Transcript",
+        "showFile": "Show File"
+      },
+      "copied": "Transcript copied to clipboard.",
+      "copyError": "Failed to copy the transcript.",
+      "savedToHistory": "Saved to History",
+      "errors": {
+        "notFound": "The file can't be found or opened.",
+        "unsupportedFormat": "This file type isn't supported.",
+        "needsFfmpeg": "This format needs ffmpeg. Install ffmpeg, then try again.",
+        "noModel": "No transcription model is selected.",
+        "modelChanged": "The model changed while this file was being transcribed.",
+        "decodeFailed": "The audio in this file couldn't be read.",
+        "engineFailed": "Transcription failed.",
+        "internal": "Something went wrong.",
+        "enqueue": "Couldn't add files: {{error}}",
+        "cancel": "Couldn't cancel: {{error}}",
+        "remove": "Couldn't remove from the list: {{error}}",
+        "loadTranscript": "Couldn't load the transcript: {{error}}"
+      },
+      "transcript": {
+        "title": "Transcript: {{file}}",
+        "live": "Updating as transcription runs",
+        "partial": "This transcript is incomplete: {{reason}}",
+        "partialNoReason": "This transcript is incomplete.",
+        "approximateTimes": "Times are approximate because this model doesn't report timestamps.",
+        "empty": "No speech found."
+      },
+      "export": {
+        "button": "Export…",
+        "dialogTitle": "Export Transcript",
+        "formats": {
+          "txt": "Plain text (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip subtitles (.srt)",
+          "vtt": "WebVTT subtitles (.vtt)"
+        },
+        "success": "Transcript exported.",
+        "showInFolder": "Show in Folder",
+        "error": "Export failed: {{error}}"
+      }
+    },
     "history": {
       "title": "History",
       "openFolder": "Open Recordings Folder",
@@ -477,7 +568,13 @@
       "retranscribe": "Re-transcribe",
       "retranscribeError": "Failed to re-transcribe. Please try again.",
       "transcribing": "Transcribing...",
-      "transcriptionFailed": "Transcription failed. You can re-transcribe using the retry icon."
+      "transcriptionFailed": "Transcription failed. You can re-transcribe using the retry icon.",
+      "openTranscript": "Open Transcript",
+      "showOriginal": "Show Original File",
+      "originalMissing": "The original file has been moved or deleted.",
+      "fileDuration": "Length {{duration}}",
+      "incomplete": "Incomplete",
+      "retranscribeFileUnavailable": "To transcribe this file again, use the Transcribe page."
     },
     "debug": {
       "title": "Debug",

@@ -915,6 +915,70 @@ async updateRecordingRetentionPeriod(period: string) : Promise<Result<null, stri
     else return { status: "error", error: e  as any };
 }
 },
+async getSupportedAudioFormats() : Promise<Result<SupportedAudioFormats, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_supported_audio_formats") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async enqueueFileTranscriptions(paths: string[], options: FileTranscriptionOptions) : Promise<Result<FileJobSnapshot[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("enqueue_file_transcriptions", { paths, options }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelFileTranscription(jobId: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_file_transcription", { jobId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelAllFileTranscriptions() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_all_file_transcriptions") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async listFileTranscriptionJobs() : Promise<Result<FileJobSnapshot[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_file_transcription_jobs") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dismissFileTranscriptionJob(jobId: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("dismiss_file_transcription_job", { jobId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getFileTranscript(source: TranscriptSource) : Promise<Result<FileTranscript, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_file_transcript", { source }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async exportFileTranscript(source: TranscriptSource, format: TranscriptFormat, path: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_file_transcript", { source, format, path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 /**
  * Checks if the Mac is a laptop by detecting battery presence
  * 
@@ -935,10 +999,12 @@ async isLaptop() : Promise<Result<boolean, string>> {
 
 
 export const events = __makeEvents__<{
+fileTranscriptionEvent: FileTranscriptionEvent,
 historyUpdatePayload: HistoryUpdatePayload,
 streamPhaseEvent: StreamPhaseEvent,
 streamTextEvent: StreamTextEvent
 }>({
+fileTranscriptionEvent: "file-transcription-event",
 historyUpdatePayload: "history-update-payload",
 streamPhaseEvent: "stream-phase-event",
 streamTextEvent: "stream-text-event"
@@ -1033,6 +1099,11 @@ export type ChineseScript =
 "as_transcribed" | "simplified" | "traditional"
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
+export type DecoderKind = 
+/**
+ * 16 kHz mono 16-bit PCM WAV read directly (same samples as read_wav_samples).
+ */
+"wav" | "symphonia" | "ffmpeg"
 export type EngineType = 
 /**
  * Any GGML/GGUF model loaded through transcribe-cpp (Whisper, Parakeet,
@@ -1040,8 +1111,90 @@ export type EngineType =
  * the file, so this one variant covers the whole transcribe-cpp family.
  */
 "TranscribeCpp" | "Parakeet" | "Moonshine" | "MoonshineStreaming" | "SenseVoice" | "GigaAM" | "Canary" | "Cohere"
+/**
+ * Present on HistoryEntry for entries made by file transcription.
+ */
+export type FileHistoryInfo = { source_path: string; source_name: string; duration_ms: number; model_id: string | null; model_name: string | null; status: TranscriptStatus; 
+/**
+ * Whether source_path exists right now (checked when the entry is read).
+ */
+source_exists: boolean }
+export type FileJobError = { code: FileJobErrorCode; 
+/**
+ * English detail for logs/tooltips; the UI shows a translated text per `code`.
+ */
+message: string }
+export type FileJobErrorCode = "not_found" | "unsupported_format" | "needs_ffmpeg" | "no_model" | "model_changed" | "decode_failed" | "engine_failed" | "internal"
+export type FileJobSnapshot = { job_id: number; path: string; file_name: string; status: FileJobStatus; duration_ms: number | null; 
+/**
+ * End of the last finished (or skipped) chunk.
+ */
+processed_ms: number; chunks_done: number; decoder: DecoderKind | null; model_id: string | null; error: FileJobError | null; 
+/**
+ * get_file_transcript(Job) returns something (final, partial or running).
+ */
+has_transcript: boolean; transcript_status: TranscriptStatus | null; history_id: number | null; 
+/**
+ * Unix milliseconds.
+ */
+enqueued_at: number }
+export type FileJobStatus = "queued" | 
+/**
+ * Probing the file and loading the model.
+ */
+"preparing" | 
+/**
+ * Paused because a dictation is recording or being transcribed.
+ */
+"waiting" | "transcribing" | "completed" | "cancelled" | "failed"
+export type FileTranscript = { source_path: string; source_name: string; 
+/**
+ * Decoded audio length (exact when finished; probe estimate while running).
+ */
+duration_ms: number; model_id: string; model_name: string | null; 
+/**
+ * ISO code of the transcript language, when known.
+ */
+language: string | null; status: TranscriptStatus; 
+/**
+ * English explanation when `status` is `Partial`.
+ */
+status_detail: string | null; timing: TimingGrain; 
+/**
+ * `paragraphs` texts joined by "\n\n": what Copy, TXT export and History use.
+ */
+text: string; 
+/**
+ * One per transcribed (non-silent, non-empty) chunk: chunk start/end and
+ * its post-processed text (processed exactly like a dictation).
+ */
+paragraphs: TranscriptSegment[]; 
+/**
+ * Finer timed segments for subtitles and the timestamped view. For chunks
+ * without model timestamps the chunk's paragraph is its only segment.
+ */
+segments: TranscriptSegment[]; 
+/**
+ * Unix seconds when transcription finished (or the snapshot was taken).
+ */
+created_at: number; history_id: number | null }
+export type FileTranscriptionEvent = 
+/**
+ * Full job state after any change. Progress-only changes are throttled
+ * to at most one per 250 ms per job; status changes are never throttled.
+ */
+{ kind: "updated"; job: FileJobSnapshot } | 
+/**
+ * Post-processed segments of one finished chunk, in order. Append to the live view.
+ */
+{ kind: "chunk"; job_id: number; chunk_index: number; segments: TranscriptSegment[] } | 
+/**
+ * The job was dismissed (or evicted) and its result freed.
+ */
+{ kind: "removed"; job_id: number }
+export type FileTranscriptionOptions = { save_to_history: boolean }
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
-export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean }
+export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean; file: FileHistoryInfo | null }
 export type HistoryUpdatePayload = { action: "added"; entry: HistoryEntry } | { action: "updated"; entry: HistoryEntry } | { action: "deleted"; id: number } | { action: "toggled"; id: number }
 /**
  * Result of changing keyboard implementation
@@ -1185,12 +1338,49 @@ export type StreamTextEvent = { committed: string; tentative: string }
  * Semantic kind of "working" phase, used to localize the spinner label.
  */
 export type StreamWorkKind = "transcribing" | "polishing"
+export type SupportedAudioFormats = { 
+/**
+ * Decoded in-process. Lowercase extensions without dots.
+ */
+native: string[]; 
+/**
+ * Need ffmpeg. Lowercase extensions without dots.
+ */
+ffmpeg: string[]; ffmpeg_available: boolean; ffmpeg_path: string | null }
 /**
  * UI appearance mode. `System` follows the OS `prefers-color-scheme`; `Light`
  * and `Dark` force one of the two palettes Handy already ships.
  */
 export type Theme = "system" | "light" | "dark"
+/**
+ * How precise segment times are. A job's grain is the minimum over its chunks.
+ */
+export type TimingGrain = 
+/**
+ * One segment per chunk (about every 15–28 s): the model gave no timestamps.
+ */
+"chunk" | 
+/**
+ * Model-provided segment (phrase/sentence) timestamps.
+ */
+"segment"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
+export type TranscriptFormat = "txt" | "md" | "srt" | "vtt" | "json"
+/**
+ * One timed piece of transcript text. Milliseconds from the start of the
+ * source file; `end_ms > start_ms`; `text` is trimmed and non-empty.
+ */
+export type TranscriptSegment = { start_ms: number; end_ms: number; text: string }
+/**
+ * Where a transcript to view or export comes from.
+ */
+export type TranscriptSource = { kind: "job"; job_id: number } | { kind: "history"; history_id: number }
+export type TranscriptStatus = "completed" | 
+/**
+ * Something is missing (decoding stopped early, chunks failed, the job
+ * was cancelled or is still running). See `status_detail`.
+ */
+"partial"
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type VadBackend = "silero" | "earshot"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }
