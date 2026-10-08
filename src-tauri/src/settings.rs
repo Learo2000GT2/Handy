@@ -365,6 +365,59 @@ impl std::ops::DerefMut for SecretMap {
     }
 }
 
+/// Which engine transcribes files. Dictation always uses Handy's selected model.
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default, clap::ValueEnum,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum FileTranscriptionEngine {
+    /// Handy's selected model (dictation's engine).
+    #[default]
+    Handy,
+    /// A local Lemonade Server over HTTP.
+    Lemonade,
+}
+
+pub const DEFAULT_LEMONADE_URL: &str = "http://localhost:13305";
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Type)]
+#[serde(default)]
+pub struct LemonadeSettings {
+    /// As typed by the user; normalized at use (trailing "/", "/v1", "/api/v1" removed).
+    pub base_url: String,
+    /// Lemonade model id, e.g. "Whisper-Base"; "" = none chosen.
+    pub model: String,
+    /// "" = send no Authorization header.
+    pub api_key: String,
+}
+
+impl Default for LemonadeSettings {
+    fn default() -> Self {
+        Self {
+            base_url: DEFAULT_LEMONADE_URL.to_string(),
+            model: String::new(),
+            api_key: String::new(),
+        }
+    }
+}
+
+impl fmt::Debug for LemonadeSettings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LemonadeSettings")
+            .field("base_url", &self.base_url)
+            .field("model", &self.model)
+            .field(
+                "api_key",
+                &if self.api_key.is_empty() {
+                    ""
+                } else {
+                    "[REDACTED]"
+                },
+            )
+            .finish()
+    }
+}
+
 /* still handy for composing the initial JSON in the store ------------- */
 /// The container-level `serde(default)` (backed by the `Default` impl below)
 /// guarantees every field — including ones added in the future — falls back to
@@ -530,6 +583,11 @@ pub struct AppSettings {
     /// `overlay_position` (position `none` → style `None`).
     #[serde(default = "default_overlay_style")]
     pub overlay_style: OverlayStyle,
+    /// Engine for file transcription (Transcribe page); dictation is unaffected.
+    #[serde(default)]
+    pub file_transcription_engine: FileTranscriptionEngine,
+    #[serde(default)]
+    pub lemonade: LemonadeSettings,
 }
 
 fn default_model() -> String {
@@ -993,6 +1051,8 @@ pub fn get_default_settings() -> AppSettings {
         vad_enabled: default_vad_enabled(),
         vad_backend: VadBackend::default(),
         overlay_style: default_overlay_style(),
+        file_transcription_engine: FileTranscriptionEngine::Handy,
+        lemonade: LemonadeSettings::default(),
     }
 }
 
@@ -1780,6 +1840,22 @@ mod tests {
         assert!(!debug_output.contains("sk-proj-secret-key-12345"));
         assert!(!debug_output.contains("sk-ant-secret-key-67890"));
         assert!(debug_output.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn debug_output_redacts_lemonade_key() {
+        let mut settings = get_default_settings();
+        settings.lemonade.api_key = "lemonade-secret-key-24680".to_string();
+
+        let debug_output = format!("{:?}", settings);
+
+        assert!(!debug_output.contains("lemonade-secret-key-24680"));
+        assert!(debug_output.contains("[REDACTED]"));
+
+        settings.lemonade.api_key.clear();
+        let debug_output = format!("{:?}", settings.lemonade);
+        assert!(!debug_output.contains("[REDACTED]"));
+        assert!(debug_output.contains(DEFAULT_LEMONADE_URL));
     }
 
     #[test]

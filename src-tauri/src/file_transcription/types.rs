@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::path::Path;
 
+use crate::settings::FileTranscriptionEngine;
+
 /// Languages written without spaces between words: chunk and segment texts
 /// are joined with "" instead of " ", and subtitle lines wrap by characters.
 pub const NO_SPACE_LANGUAGES: &[&str] = &["zh", "ja", "yue", "th", "lo", "km", "my"];
@@ -29,6 +31,21 @@ pub struct TranscriptSegment {
     pub start_ms: u64,
     pub end_ms: u64,
     pub text: String,
+    /// Display speaker id (1-based, an id in `FileTranscript.speakers`) when
+    /// speaker labels were made; absent from JSON otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speaker: Option<u32>,
+}
+
+impl TranscriptSegment {
+    pub fn new(start_ms: u64, end_ms: u64, text: impl Into<String>) -> Self {
+        Self {
+            start_ms,
+            end_ms,
+            text: text.into(),
+            speaker: None,
+        }
+    }
 }
 
 /// How precise segment times are. A job's grain is the minimum over its chunks.
@@ -86,6 +103,74 @@ pub struct FileTranscript {
     /// Unix seconds when transcription finished (or the snapshot was taken).
     pub created_at: i64,
     pub history_id: Option<i64>,
+    /// Speaker labels ("who said what"); None when not requested or not made.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speakers: Option<TranscriptSpeakers>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct TranscriptSpeaker {
+    /// 1-based, in order of first appearance in the transcript.
+    pub id: u32,
+    /// User-given name; None shows "Speaker {id}".
+    pub name: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct TranscriptSpeakers {
+    pub speakers: Vec<TranscriptSpeaker>,
+    /// Labels were placed on sentences with interpolated times (the model
+    /// gave no timestamps): expect mistakes near speaker changes.
+    pub approximate: bool,
+    /// Segments that overlapped no speaker turn and were left unlabeled.
+    pub unassigned_segments: u32,
+    /// Diarizer id, e.g. "sortformer-4spk-v2.1-q8_0".
+    pub model: String,
+}
+
+/// Progress of speaker labelling for one file job.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum SpeakerJobState {
+    Pending,
+    Running,
+    Done {
+        speakers: u32,
+    },
+    /// The transcript was kept without labels.
+    Failed {
+        message: String,
+    },
+    Skipped {
+        reason: SpeakerSkipReason,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeakerSkipReason {
+    /// The speaker model isn't downloaded.
+    ModelMissing,
+    /// The diarizer found no speech, or no transcript text matched a speaker.
+    NoSpeech,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type)]
+pub struct SpeakerModelStatus {
+    pub downloaded: bool,
+    pub downloading: bool,
+    pub size_bytes: u64,
+    pub path: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type, tauri_specta::Event)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SpeakerModelEvent {
+    Progress { downloaded: u64, total: u64 },
+    Verifying,
+    Completed,
+    Failed { message: String },
+    Cancelled,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type, clap::ValueEnum)]
@@ -145,6 +230,9 @@ pub struct SupportedAudioFormats {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Type)]
 pub struct FileTranscriptionOptions {
     pub save_to_history: bool,
+    /// Label speakers with the local diarizer (needs the speaker model).
+    #[serde(default)]
+    pub label_speakers: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -171,6 +259,12 @@ pub enum FileJobErrorCode {
     ModelChanged,
     DecodeFailed,
     EngineFailed,
+    /// Lemonade Server: connection refused, DNS failure, reset before any answer.
+    ServerUnreachable,
+    /// Lemonade Server: HTTP 401/403.
+    ServerUnauthorized,
+    /// Lemonade Server does not know the requested model.
+    ServerModelMissing,
     Internal,
 }
 
@@ -193,6 +287,10 @@ pub struct FileJobSnapshot {
     pub chunks_done: u32,
     pub decoder: Option<DecoderKind>,
     pub model_id: Option<String>,
+    /// The engine the job runs on (fixed when it starts; settings' value while queued).
+    pub engine: FileTranscriptionEngine,
+    /// None when speaker labels were not requested.
+    pub speakers: Option<SpeakerJobState>,
     pub error: Option<FileJobError>,
     /// get_file_transcript(Job) returns something (final, partial or running).
     pub has_transcript: bool,
@@ -229,4 +327,76 @@ pub struct FileHistoryInfo {
     pub status: TranscriptStatus,
     /// Whether source_path exists right now (checked when the entry is read).
     pub source_exists: bool,
+    /// Number of labelled speakers; 0 when the transcript has none.
+    pub speaker_count: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn segment_without_speaker_has_no_speaker_key() {
+        let segment = TranscriptSegment::new(0, 1_500, "Hello.");
+        assert_eq!(
+            serde_json::to_value(&segment).expect("serialize"),
+            json!({"start_ms": 0, "end_ms": 1_500, "text": "Hello."})
+        );
+
+        let labelled = TranscriptSegment {
+            speaker: Some(2),
+            ..segment.clone()
+        };
+        let value = serde_json::to_value(&labelled).expect("serialize");
+        assert_eq!(value["speaker"], json!(2));
+        let back: TranscriptSegment = serde_json::from_value(value).expect("deserialize");
+        assert_eq!(back, labelled);
+
+        let legacy: TranscriptSegment =
+            serde_json::from_value(json!({"start_ms": 0, "end_ms": 1_500, "text": "Hello."}))
+                .expect("deserialize legacy");
+        assert_eq!(legacy, segment);
+    }
+
+    #[test]
+    fn options_without_label_speakers_default_to_off() {
+        let options: FileTranscriptionOptions =
+            serde_json::from_value(json!({"save_to_history": true})).expect("deserialize");
+        assert!(options.save_to_history);
+        assert!(!options.label_speakers);
+    }
+
+    #[test]
+    fn speaker_job_state_is_tagged_by_state() {
+        let cases = [
+            (SpeakerJobState::Pending, json!({"state": "pending"})),
+            (SpeakerJobState::Running, json!({"state": "running"})),
+            (
+                SpeakerJobState::Done { speakers: 2 },
+                json!({"state": "done", "speakers": 2}),
+            ),
+            (
+                SpeakerJobState::Failed {
+                    message: "boom".to_string(),
+                },
+                json!({"state": "failed", "message": "boom"}),
+            ),
+            (
+                SpeakerJobState::Skipped {
+                    reason: SpeakerSkipReason::ModelMissing,
+                },
+                json!({"state": "skipped", "reason": "model_missing"}),
+            ),
+            (
+                SpeakerJobState::Skipped {
+                    reason: SpeakerSkipReason::NoSpeech,
+                },
+                json!({"state": "skipped", "reason": "no_speech"}),
+            ),
+        ];
+        for (state, expected) in cases {
+            assert_eq!(serde_json::to_value(&state).expect("serialize"), expected);
+        }
+    }
 }

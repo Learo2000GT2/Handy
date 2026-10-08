@@ -543,7 +543,9 @@ impl Progress {
                 self.chunk = index.saturating_add(1);
                 self.processed_ms = processed_ms;
             }
-            PipelineEvent::ModelReady | PipelineEvent::Waiting => return,
+            PipelineEvent::ModelReady | PipelineEvent::Waiting | PipelineEvent::Speakers(_) => {
+                return
+            }
         }
         let now = Instant::now();
         if self.due(now) {
@@ -774,19 +776,12 @@ mod tests {
                 text: "First paragraph.\n\nSecond paragraph.".to_string(),
                 paragraphs: Vec::new(),
                 segments: vec![
-                    TranscriptSegment {
-                        start_ms: 0,
-                        end_ms: 2_500,
-                        text: "First paragraph.".to_string(),
-                    },
-                    TranscriptSegment {
-                        start_ms: 28_000,
-                        end_ms: 30_000,
-                        text: "Second paragraph.".to_string(),
-                    },
+                    TranscriptSegment::new(0, 2_500, "First paragraph."),
+                    TranscriptSegment::new(28_000, 30_000, "Second paragraph."),
                 ],
                 created_at: 1_700_000_000,
                 history_id: None,
+                speakers: None,
             },
             decoder: DecoderKind::Symphonia,
             chunks: 134,

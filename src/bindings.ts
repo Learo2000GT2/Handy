@@ -985,6 +985,83 @@ async exportFileTranscript(source: TranscriptSource, format: TranscriptFormat, p
 }
 },
 /**
+ * Lists the server's transcription models. Server problems are reported in
+ * `LemonadeCheck.error`; Err only for internal failures.
+ */
+async checkLemonadeServer(baseUrl: string, apiKey: string) : Promise<Result<LemonadeCheck, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("check_lemonade_server", { baseUrl, apiKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeFileTranscriptionEngineSetting(engine: FileTranscriptionEngine) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_file_transcription_engine_setting", { engine }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Validates `base_url` (Err "Invalid Lemonade Server address") and stores
+ * the trimmed values.
+ */
+async changeLemonadeSettings(lemonade: LemonadeSettings) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_lemonade_settings", { lemonade }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getSpeakerModelStatus() : Promise<Result<SpeakerModelStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_speaker_model_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async downloadSpeakerModel() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("download_speaker_model") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelSpeakerModelDownload() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_speaker_model_download") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteSpeakerModel() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_speaker_model") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Renames (or with name None/"" resets) speaker `speaker_id` in a job's result or
+ * a History entry; returns the updated transcript. For a job whose transcript has
+ * history_id, the History entry is updated too. Running jobs: Err("still running").
+ */
+async renameTranscriptSpeaker(source: TranscriptSource, speakerId: number, name: string | null) : Promise<Result<FileTranscript, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("rename_transcript_speaker", { source, speakerId, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Stub implementation for non-macOS platforms
  * Always returns false since laptop detection is macOS-specific
  */
@@ -1004,11 +1081,13 @@ async isLaptop() : Promise<Result<boolean, string>> {
 export const events = __makeEvents__<{
 fileTranscriptionEvent: FileTranscriptionEvent,
 historyUpdatePayload: HistoryUpdatePayload,
+speakerModelEvent: SpeakerModelEvent,
 streamPhaseEvent: StreamPhaseEvent,
 streamTextEvent: StreamTextEvent
 }>({
 fileTranscriptionEvent: "file-transcription-event",
 historyUpdatePayload: "history-update-payload",
+speakerModelEvent: "speaker-model-event",
 streamPhaseEvent: "stream-phase-event",
 streamTextEvent: "stream-text-event"
 })
@@ -1086,7 +1165,11 @@ vad_backend?: VadBackend;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle }
+overlay_style?: OverlayStyle; 
+/**
+ * Engine for file transcription (Transcribe page); dictation is unaffected.
+ */
+file_transcription_engine?: FileTranscriptionEngine; lemonade?: LemonadeSettings }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }
@@ -1121,18 +1204,42 @@ export type FileHistoryInfo = { source_path: string; source_name: string; durati
 /**
  * Whether source_path exists right now (checked when the entry is read).
  */
-source_exists: boolean }
+source_exists: boolean; 
+/**
+ * Number of labelled speakers; 0 when the transcript has none.
+ */
+speaker_count: number }
 export type FileJobError = { code: FileJobErrorCode; 
 /**
  * English detail for logs/tooltips; the UI shows a translated text per `code`.
  */
 message: string }
-export type FileJobErrorCode = "not_found" | "unsupported_format" | "needs_ffmpeg" | "no_model" | "model_changed" | "decode_failed" | "engine_failed" | "internal"
+export type FileJobErrorCode = "not_found" | "unsupported_format" | "needs_ffmpeg" | "no_model" | "model_changed" | "decode_failed" | "engine_failed" | 
+/**
+ * Lemonade Server: connection refused, DNS failure, reset before any answer.
+ */
+"server_unreachable" | 
+/**
+ * Lemonade Server: HTTP 401/403.
+ */
+"server_unauthorized" | 
+/**
+ * Lemonade Server does not know the requested model.
+ */
+"server_model_missing" | "internal"
 export type FileJobSnapshot = { job_id: number; path: string; file_name: string; status: FileJobStatus; duration_ms: number | null; 
 /**
  * End of the last finished (or skipped) chunk.
  */
-processed_ms: number; chunks_done: number; decoder: DecoderKind | null; model_id: string | null; error: FileJobError | null; 
+processed_ms: number; chunks_done: number; decoder: DecoderKind | null; model_id: string | null; 
+/**
+ * The engine the job runs on (fixed when it starts; settings' value while queued).
+ */
+engine: FileTranscriptionEngine; 
+/**
+ * None when speaker labels were not requested.
+ */
+speakers: SpeakerJobState | null; error: FileJobError | null; 
 /**
  * get_file_transcript(Job) returns something (final, partial or running).
  */
@@ -1180,7 +1287,23 @@ segments: TranscriptSegment[];
 /**
  * Unix seconds when transcription finished (or the snapshot was taken).
  */
-created_at: number; history_id: number | null }
+created_at: number; history_id: number | null; 
+/**
+ * Speaker labels ("who said what"); None when not requested or not made.
+ */
+speakers?: TranscriptSpeakers | null }
+/**
+ * Which engine transcribes files. Dictation always uses Handy's selected model.
+ */
+export type FileTranscriptionEngine = 
+/**
+ * Handy's selected model (dictation's engine).
+ */
+"handy" | 
+/**
+ * A local Lemonade Server over HTTP.
+ */
+"lemonade"
 export type FileTranscriptionEvent = 
 /**
  * Full job state after any change. Progress-only changes are throttled
@@ -1195,7 +1318,11 @@ export type FileTranscriptionEvent =
  * The job was dismissed (or evicted) and its result freed.
  */
 { kind: "removed"; job_id: number }
-export type FileTranscriptionOptions = { save_to_history: boolean }
+export type FileTranscriptionOptions = { save_to_history: boolean; 
+/**
+ * Label speakers with the local diarizer (needs the speaker model).
+ */
+label_speakers?: boolean }
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
 export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean; 
 /**
@@ -1218,6 +1345,38 @@ export type KeyboardDiagnosticReport = { secure_input_enabled: boolean; culprit_
 key_down: number; key_up: number; flags_changed: number; mouse: number; duration_ms: number }
 export type KeyboardImplementation = "tauri" | "handy_keys"
 export type LLMPrompt = { id: string; name: string; prompt: string }
+export type LemonadeCheck = { ok: boolean; error: LemonadeErrorKind | null; 
+/**
+ * English detail (HTTP status/body excerpt, OS error) for a tooltip.
+ */
+detail: string | null; 
+/**
+ * The URL actually used, e.g. "http://localhost:13305/api/v1".
+ */
+api_url: string | null; 
+/**
+ * Transcription models only, server order.
+ */
+models: LemonadeModel[]; other_models: number }
+export type LemonadeErrorKind = "invalid_url" | "unreachable" | "timeout" | "unauthorized" | "model_not_found" | "http" | "bad_response" | "cancelled"
+export type LemonadeModel = { id: string; recipe: string | null; labels: string[]; 
+/**
+ * None when the server did not say.
+ */
+downloaded: boolean | null }
+export type LemonadeSettings = { 
+/**
+ * As typed by the user; normalized at use (trailing "/", "/v1", "/api/v1" removed).
+ */
+base_url: string; 
+/**
+ * Lemonade model id, e.g. "Whisper-Base"; "" = none chosen.
+ */
+model: string; 
+/**
+ * "" = send no Authorization header.
+ */
+api_key: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; is_directory: boolean; engine_type: EngineType; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }
@@ -1314,6 +1473,25 @@ export type ShortcutActivation =
 export type ShortcutBinding = { id: string; name: string; description: string; default_binding: string; current_binding: string }
 export type SoundTheme = "marimba" | "pop" | "custom"
 /**
+ * Progress of speaker labelling for one file job.
+ */
+export type SpeakerJobState = { state: "pending" } | { state: "running" } | { state: "done"; speakers: number } | 
+/**
+ * The transcript was kept without labels.
+ */
+{ state: "failed"; message: string } | { state: "skipped"; reason: SpeakerSkipReason }
+export type SpeakerModelEvent = { kind: "progress"; downloaded: number; total: number } | { kind: "verifying" } | { kind: "completed" } | { kind: "failed"; message: string } | { kind: "cancelled" }
+export type SpeakerModelStatus = { downloaded: boolean; downloading: boolean; size_bytes: number; path: string | null }
+export type SpeakerSkipReason = 
+/**
+ * The speaker model isn't downloaded.
+ */
+"model_missing" | 
+/**
+ * The diarizer found no speech, or no transcript text matched a speaker.
+ */
+"no_speech"
+/**
  * Phase of the streaming overlay card, emitted to drive its UI state.
  */
 export type StreamPhase = 
@@ -1377,11 +1555,39 @@ export type TranscriptFormat = "txt" | "md" | "srt" | "vtt" | "json"
  * One timed piece of transcript text. Milliseconds from the start of the
  * source file; `end_ms > start_ms`; `text` is trimmed and non-empty.
  */
-export type TranscriptSegment = { start_ms: number; end_ms: number; text: string }
+export type TranscriptSegment = { start_ms: number; end_ms: number; text: string; 
+/**
+ * Display speaker id (1-based, an id in `FileTranscript.speakers`) when
+ * speaker labels were made; absent from JSON otherwise.
+ */
+speaker?: number | null }
 /**
  * Where a transcript to view or export comes from.
  */
 export type TranscriptSource = { kind: "job"; job_id: number } | { kind: "history"; history_id: number }
+export type TranscriptSpeaker = { 
+/**
+ * 1-based, in order of first appearance in the transcript.
+ */
+id: number; 
+/**
+ * User-given name; None shows "Speaker {id}".
+ */
+name: string | null }
+export type TranscriptSpeakers = { speakers: TranscriptSpeaker[]; 
+/**
+ * Labels were placed on sentences with interpolated times (the model
+ * gave no timestamps): expect mistakes near speaker changes.
+ */
+approximate: boolean; 
+/**
+ * Segments that overlapped no speaker turn and were left unlabeled.
+ */
+unassigned_segments: number; 
+/**
+ * Diarizer id, e.g. "sortformer-4spk-v2.1-q8_0".
+ */
+model: string }
 export type TranscriptStatus = "completed" | 
 /**
  * Something is missing (decoding stopped early, chunks failed, the job

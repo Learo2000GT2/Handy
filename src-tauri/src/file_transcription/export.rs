@@ -724,11 +724,7 @@ mod tests {
     use crate::file_transcription::types::TimingGrain;
 
     fn seg(start_ms: u64, end_ms: u64, text: &str) -> TranscriptSegment {
-        TranscriptSegment {
-            start_ms,
-            end_ms,
-            text: text.to_string(),
-        }
+        TranscriptSegment::new(start_ms, end_ms, text)
     }
 
     fn cue(start_ms: u64, end_ms: u64, lines: &[&str]) -> Cue {
@@ -773,6 +769,7 @@ mod tests {
             ],
             created_at: 1_700_000_000,
             history_id: None,
+            speakers: None,
         }
     }
 

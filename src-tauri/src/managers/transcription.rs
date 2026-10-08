@@ -2383,20 +2383,12 @@ fn place_segments(
                     continue;
                 }
             }
-            segments.push(TranscriptSegment {
-                start_ms,
-                end_ms,
-                text,
-            });
+            segments.push(TranscriptSegment::new(start_ms, end_ms, text));
         }
         segments.sort_by_key(|segment| segment.start_ms);
     }
     if segments.is_empty() {
-        let whole = TranscriptSegment {
-            start_ms: offset_ms,
-            end_ms: chunk_end.max(offset_ms + 1),
-            text: text.to_string(),
-        };
+        let whole = TranscriptSegment::new(offset_ms, chunk_end.max(offset_ms + 1), text);
         return (vec![whole], TimingGrain::Chunk);
     }
     (segments, TimingGrain::Segment)
@@ -3416,11 +3408,7 @@ mod tests {
     }
 
     fn segment(start_ms: u64, end_ms: u64, text: &str) -> TranscriptSegment {
-        TranscriptSegment {
-            start_ms,
-            end_ms,
-            text: text.to_string(),
-        }
+        TranscriptSegment::new(start_ms, end_ms, text)
     }
 
     fn unchanged(text: String) -> String {

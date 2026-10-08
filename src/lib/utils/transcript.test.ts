@@ -137,6 +137,9 @@ const expectedErrorKeys: Record<FileJobErrorCode, string> = {
   model_changed: "modelChanged",
   decode_failed: "decodeFailed",
   engine_failed: "engineFailed",
+  server_unreachable: "serverUnreachable",
+  server_unauthorized: "serverUnauthorized",
+  server_model_missing: "serverModelMissing",
   internal: "internal",
 };
 for (const [code, key] of Object.entries(expectedErrorKeys)) {

@@ -214,6 +214,8 @@ fn initialize_core_logic(app_handle: &AppHandle) {
         transcription_manager.clone(),
         history_manager.clone(),
     );
+    let speaker_model_manager =
+        file_transcription::speaker_model::SpeakerModelManager::new(app_handle);
 
     // Apply accelerator preferences before any model loads
     managers::transcription::apply_accelerator_settings(app_handle);
@@ -224,6 +226,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
     app_handle.manage(file_transcription_manager);
+    app_handle.manage(speaker_model_manager);
     app_handle.manage(tray::TrayState::new());
 
     // Note: Shortcuts are NOT initialized here.
@@ -585,6 +588,14 @@ pub fn run(cli_args: CliArgs) {
             commands::file_transcription::dismiss_file_transcription_job,
             commands::file_transcription::get_file_transcript,
             commands::file_transcription::export_file_transcript,
+            commands::lemonade::check_lemonade_server,
+            commands::lemonade::change_file_transcription_engine_setting,
+            commands::lemonade::change_lemonade_settings,
+            commands::speakers::get_speaker_model_status,
+            commands::speakers::download_speaker_model,
+            commands::speakers::cancel_speaker_model_download,
+            commands::speakers::delete_speaker_model,
+            commands::speakers::rename_transcript_speaker,
             helpers::clamshell::is_laptop,
         ])
         .events(collect_events![
@@ -592,6 +603,7 @@ pub fn run(cli_args: CliArgs) {
             managers::transcription::StreamTextEvent,
             managers::transcription::StreamPhaseEvent,
             file_transcription::types::FileTranscriptionEvent,
+            file_transcription::types::SpeakerModelEvent,
         ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds

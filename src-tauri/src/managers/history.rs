@@ -307,6 +307,7 @@ impl HistoryManager {
                 // Unknown here; `check_sources` looks without blocking the
                 // async runtime on a slow file system.
                 source_exists: true,
+                speaker_count: 0,
             }),
             None => None,
         };
@@ -910,6 +911,7 @@ impl HistoryManager {
                         segments: Vec::new(),
                         created_at: row.get("created_at")?,
                         history_id: Some(history_id),
+                        speakers: None,
                     };
                     let paragraphs_json: String = row.get("paragraphs_json")?;
                     let segments_json: String = row.get("segments_json")?;
@@ -1060,11 +1062,7 @@ mod tests {
     }
 
     fn segment(start_ms: u64, end_ms: u64, text: &str) -> TranscriptSegment {
-        TranscriptSegment {
-            start_ms,
-            end_ms,
-            text: text.to_string(),
-        }
+        TranscriptSegment::new(start_ms, end_ms, text)
     }
 
     fn file_transcript(source_path: &str) -> FileTranscript {
@@ -1090,6 +1088,7 @@ mod tests {
             ],
             created_at: 1_700_000_000,
             history_id: None,
+            speakers: None,
         }
     }
 
@@ -1233,6 +1232,7 @@ mod tests {
                 model_name: None,
                 status: TranscriptStatus::Completed,
                 source_exists: true,
+                speaker_count: 0,
             }),
         };
         let mut entries = vec![

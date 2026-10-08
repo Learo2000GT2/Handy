@@ -70,6 +70,8 @@ pub enum PipelineEvent {
         processed_ms: u64,
         skipped: bool,
     },
+    /// Speaker labelling changed state (only when labels were requested).
+    Speakers(SpeakerJobState),
 }
 
 #[derive(Debug)]
@@ -106,7 +108,8 @@ impl PipelineError {
         }
     }
 
-    /// 2 for NotFound | UnsupportedFormat | NeedsFfmpeg | DecodeFailed | NoModel; 1 otherwise.
+    /// 2 for NotFound | UnsupportedFormat | NeedsFfmpeg | DecodeFailed | NoModel |
+    /// ServerUnauthorized | ServerModelMissing; 1 otherwise.
     pub fn exit_code(&self) -> i32 {
         match self {
             Self::Failed {
@@ -115,7 +118,9 @@ impl PipelineError {
                     | FileJobErrorCode::UnsupportedFormat
                     | FileJobErrorCode::NeedsFfmpeg
                     | FileJobErrorCode::DecodeFailed
-                    | FileJobErrorCode::NoModel,
+                    | FileJobErrorCode::NoModel
+                    | FileJobErrorCode::ServerUnauthorized
+                    | FileJobErrorCode::ServerModelMissing,
                 ..
             } => 2,
             _ => 1,
@@ -508,11 +513,8 @@ fn transcribe_chunks(
                     grain,
                     language,
                 } = transcript;
-                let paragraph = (!text.is_empty()).then_some(TranscriptSegment {
-                    start_ms,
-                    end_ms,
-                    text,
-                });
+                let paragraph =
+                    (!text.is_empty()).then(|| TranscriptSegment::new(start_ms, end_ms, text));
                 run.transcript.push_chunk(
                     paragraph.clone(),
                     segments.clone(),
@@ -766,6 +768,7 @@ impl TranscriptBuilder {
             segments: self.segments.clone(),
             created_at: meta.created_at,
             history_id: None,
+            speakers: None,
         }
     }
 }
@@ -809,11 +812,7 @@ mod tests {
     use super::*;
 
     fn segment(start_ms: u64, end_ms: u64, text: &str) -> TranscriptSegment {
-        TranscriptSegment {
-            start_ms,
-            end_ms,
-            text: text.to_string(),
-        }
+        TranscriptSegment::new(start_ms, end_ms, text)
     }
 
     fn meta() -> TranscriptMeta<'static> {
@@ -1124,6 +1123,8 @@ mod tests {
             FileJobErrorCode::NeedsFfmpeg,
             FileJobErrorCode::DecodeFailed,
             FileJobErrorCode::NoModel,
+            FileJobErrorCode::ServerUnauthorized,
+            FileJobErrorCode::ServerModelMissing,
         ];
         for code in usage {
             assert_eq!(PipelineError::failed(code, "x").exit_code(), 2, "{code:?}");
@@ -1131,6 +1132,7 @@ mod tests {
         let runtime = [
             FileJobErrorCode::ModelChanged,
             FileJobErrorCode::EngineFailed,
+            FileJobErrorCode::ServerUnreachable,
             FileJobErrorCode::Internal,
         ];
         for code in runtime {

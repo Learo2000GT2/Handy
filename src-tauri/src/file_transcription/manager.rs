@@ -13,11 +13,12 @@ use crate::file_transcription::pipeline::{
 };
 use crate::file_transcription::types::{
     DecoderKind, FileJobError, FileJobErrorCode, FileJobSnapshot, FileJobStatus, FileTranscript,
-    FileTranscriptionEvent, FileTranscriptionOptions, TranscriptStatus,
+    FileTranscriptionEvent, FileTranscriptionOptions, SpeakerJobState, TranscriptStatus,
 };
 use crate::managers::history::HistoryManager;
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
+use crate::settings::FileTranscriptionEngine;
 use chrono::Utc;
 use log::{error, info, warn};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -158,6 +159,19 @@ impl FileTranscriptionManager {
     /// status_detail "Transcription in progress"). None if unknown or nothing yet.
     pub fn transcript(&self, job_id: u64) -> Option<FileTranscript> {
         self.lock_state().transcript(job_id, Utc::now().timestamp())
+    }
+
+    /// Applies `edit` to a finished job's stored result (`JobRecord.result`)
+    /// and returns the updated transcript. Err if the job is unknown, still
+    /// running, or has no result.
+    pub fn edit_job_transcript(
+        &self,
+        job_id: u64,
+        edit: impl FnOnce(&mut FileTranscript) -> Result<(), String>,
+    ) -> Result<FileTranscript, String> {
+        // Contract stub; the job-result edit lands with the Lemonade engine work.
+        let _ = (job_id, edit);
+        Err("not implemented".to_string())
     }
 
     fn lock_state(&self) -> MutexGuard<'_, JobTable> {
@@ -432,6 +446,7 @@ impl JobTable {
         enqueued_at: i64,
     ) -> FileJobSnapshot {
         let error = validation.err();
+        let speakers = options.label_speakers.then_some(SpeakerJobState::Pending);
         let snapshot = FileJobSnapshot {
             job_id,
             file_name: pipeline::source_display_name(Path::new(&path)),
@@ -446,6 +461,8 @@ impl JobTable {
             chunks_done: 0,
             decoder: None,
             model_id: None,
+            engine: FileTranscriptionEngine::Handy,
+            speakers,
             error,
             has_transcript: false,
             transcript_status: None,
@@ -583,6 +600,10 @@ impl JobTable {
                 true
             }
             PipelineEvent::Waiting => set_status(snapshot, FileJobStatus::Waiting),
+            PipelineEvent::Speakers(state) => {
+                snapshot.speakers = Some(state);
+                true
+            }
             PipelineEvent::Transcribing { processed_ms, .. } => {
                 snapshot.processed_ms = processed_ms;
                 set_status(snapshot, FileJobStatus::Transcribing)
@@ -691,14 +712,11 @@ mod tests {
 
     const WITH_HISTORY: FileTranscriptionOptions = FileTranscriptionOptions {
         save_to_history: true,
+        label_speakers: false,
     };
 
     fn segment(start_ms: u64, end_ms: u64, text: &str) -> TranscriptSegment {
-        TranscriptSegment {
-            start_ms,
-            end_ms,
-            text: text.to_string(),
-        }
+        TranscriptSegment::new(start_ms, end_ms, text)
     }
 
     fn table_with_queued(count: u64) -> JobTable {
@@ -744,6 +762,7 @@ mod tests {
             segments: vec![segment(0, 42_000, text)],
             created_at: 1_700_000_000,
             history_id: Some(9),
+            speakers: None,
         }
     }
 
@@ -1047,6 +1066,35 @@ mod tests {
         // Chunks without segments send no Chunk event.
         assert_eq!(events.len(), 1);
         assert_eq!(table.record(1).expect("job").snapshot.chunks_done, 3);
+    }
+
+    #[test]
+    fn speaker_state_starts_pending_only_when_requested_and_is_sent_at_once() {
+        let mut table = table_with_queued(1);
+        let labelled = FileTranscriptionOptions {
+            save_to_history: true,
+            label_speakers: true,
+        };
+        let snapshot = table.add(2, "/audio/talk.mp3".to_string(), labelled, Ok(()), 2_000);
+        assert_eq!(snapshot.speakers, Some(SpeakerJobState::Pending));
+        assert_eq!(snapshot.engine, FileTranscriptionEngine::Handy);
+        assert_eq!(table.record(1).expect("job").snapshot.speakers, None);
+
+        table.start_next().expect("start");
+        let now = Instant::now();
+        table.apply(1, "tiny", PipelineEvent::ModelReady, now);
+        // Within the progress throttle window, but a state change is never held back.
+        let events = table.apply(
+            1,
+            "tiny",
+            PipelineEvent::Speakers(SpeakerJobState::Running),
+            now,
+        );
+        assert_eq!(updated_count(&events), 1);
+        assert_eq!(
+            table.record(1).expect("job").snapshot.speakers,
+            Some(SpeakerJobState::Running)
+        );
     }
 
     #[test]
