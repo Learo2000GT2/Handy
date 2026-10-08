@@ -8,12 +8,18 @@
 //! window runs in turn on the same worker, and the speaker ids of a window
 //! are linked to those of the window before it by who speaks when in their
 //! overlap. A file of up to 21.5 minutes is a single window.
+//!
+//! A speaker who says little or nothing in an overlap cannot be linked
+//! there. So a few seconds of each speaker's clean speech (an exemplar) are
+//! kept as windows are diarized, and a later window is diarized with the
+//! exemplars of the speakers it may not otherwise recognise placed before
+//! it: whoever the diarizer hears in an exemplar is that speaker.
 
 use crate::engine_supervisor::{
     DeviceSelector, EngineError, EngineSupervisor, LoadSpec, WorkToken, WorkerOptions,
 };
 use crate::file_transcription::decode::{decode_to_16k_mono, DecodeError, DecodeOptions};
-use crate::file_transcription::speakers::SpeakerTurn;
+use crate::file_transcription::speakers::{normalize_turns, SpeakerTurn};
 use crate::file_transcription::types::{SpeakerJobState, SpeakerSkipReason};
 use log::{debug, info, warn};
 use std::collections::HashMap;
@@ -46,6 +52,31 @@ const LINK_MIN_MS: u64 = 3_000;
 /// ...and for at least this share (in percent) of the quieter one's speech
 /// there.
 const LINK_MIN_SHARE_PERCENT: u64 = 50;
+/// Speakers the model tells apart in one run.
+const MODEL_SPEAKERS: usize = 4;
+/// A speaker who talks this long in an overlap is linked there and needs no
+/// exemplar.
+const EXEMPLAR_CLEAR_MS: u64 = 10_000;
+/// An exemplar is cut from a speaker's longest clean turns until it is this
+/// long...
+const EXEMPLAR_TARGET_MS: u64 = 8_000;
+/// ...but no longer than this...
+const EXEMPLAR_MAX_MS: u64 = 10_000;
+/// ...and a speaker with less clean speech than this gets none.
+const EXEMPLAR_MIN_MS: u64 = 3_000;
+/// Pieces shorter than this are not worth cutting.
+const EXEMPLAR_MIN_PIECE_MS: u64 = 1_000;
+/// Cut away from each end of a turn, where speakers hand over.
+const EXEMPLAR_EDGE_MS: u64 = 200;
+/// Silence after each exemplar, so they never run into each other or into
+/// the window.
+const EXEMPLAR_GAP_MS: u64 = 1_000;
+/// A window speaker is linked to an exemplar's speaker when heard over at
+/// least this much of it (and half of it, as in the overlap).
+const EXEMPLAR_LINK_MIN_MS: u64 = 1_500;
+/// Exemplars kept at most (about 640 kB each); the speakers who talked
+/// least lose theirs first.
+const MAX_EXEMPLARS: usize = 16;
 const SAMPLES_PER_MS: u64 = 16;
 /// The architecture a speaker model must load as.
 const SORTFORMER_ARCH: &str = "sortformer";
@@ -351,10 +382,17 @@ impl Diarization {
         let max_samples = self.limits.max_ms * SAMPLES_PER_MS;
         let mut windows = Windows::new(self.limits, req.estimated_duration_ms);
         let mut stitcher = Stitcher::default();
+        let mut exemplars = Exemplars::default();
         let mut engine: Option<EngineSupervisor> = None;
-        let mut run_window = |start: u64, samples: Vec<f32>| -> Result<(), DiarizeError> {
-            self.run_window(req, &mut engine, &mut stitcher, start, samples)
-        };
+        let mut run_window =
+            |start: u64, samples: Vec<f32>, more: bool| -> Result<(), DiarizeError> {
+                let window = Window {
+                    start,
+                    samples,
+                    more,
+                };
+                self.run_window(req, &mut engine, &mut stitcher, &mut exemplars, window)
+            };
 
         let mut failure: Option<DiarizeError> = None;
         let mut decoded: u64 = 0;
@@ -407,16 +445,22 @@ impl Diarization {
         Ok(stitcher.finish())
     }
 
-    /// Diarizes one window (`samples`, starting `start` samples into the
-    /// file) once dictation is idle, and links its speakers.
+    /// Diarizes one window once dictation is idle, after the exemplars of
+    /// the speakers it may not otherwise recognise, links its speakers, and
+    /// keeps exemplars from it for the windows after it.
     fn run_window(
         &self,
         req: &DiarizeRequest,
         engine: &mut Option<EngineSupervisor>,
         stitcher: &mut Stitcher,
-        start: u64,
-        samples: Vec<f32>,
+        exemplars: &mut Exemplars,
+        window: Window,
     ) -> Result<(), DiarizeError> {
+        let Window {
+            start,
+            samples,
+            more,
+        } = window;
         let mut held = false;
         while (self.hold)() {
             if self.stopped() {
@@ -439,17 +483,31 @@ impl Diarization {
 
         let start_ms = start / SAMPLES_PER_MS;
         let end_ms = start_ms + samples.len() as u64 / SAMPLES_PER_MS;
+        let chosen = exemplars.choose(&stitcher.overlap_speech(start_ms));
+        let (mut input, spans) = exemplars.prefix(&chosen);
+        let prefix_ms = input.len() as u64 / SAMPLES_PER_MS;
+        // The window's own audio is kept only while a later window needs
+        // exemplars from it.
+        let samples = if input.is_empty() && !more {
+            input = samples;
+            None
+        } else {
+            input.extend_from_slice(&samples);
+            more.then_some(samples)
+        };
         let started = Instant::now();
-        let turns = diarize_samples(engine, &req.model_path, samples, &self.token)?;
+        let turns = diarize_samples(engine, &req.model_path, input, &self.token)?;
         debug!(
-            "Diarized {}–{} s of {} in {:.1}s: {} turns",
+            "Diarized {}–{} s of {} (after {} exemplar(s)) in {:.1}s: {} turns",
             start_ms / 1000,
             end_ms / 1000,
             req.path.display(),
+            spans.len(),
             started.elapsed().as_secs_f64(),
             turns.len()
         );
-        let turns = turns
+        let (prefix_turns, turns) = split_prefix(&turns, prefix_ms);
+        let turns: Vec<SpeakerTurn> = turns
             .into_iter()
             .map(|turn| SpeakerTurn {
                 start_ms: turn.start_ms + start_ms,
@@ -457,7 +515,14 @@ impl Diarization {
                 ..turn
             })
             .collect();
-        stitcher.add(start_ms, end_ms, turns);
+        let prefix = Prefix {
+            spans,
+            turns: prefix_turns,
+        };
+        let ids = stitcher.add(start_ms, end_ms, turns.clone(), &prefix);
+        if let Some(samples) = samples {
+            exemplars.update(&samples, start_ms, &turns, &ids);
+        }
         Ok(())
     }
 }
@@ -475,7 +540,18 @@ struct Windows {
     start: u64,
 }
 
-type RunWindow<'a> = dyn FnMut(u64, Vec<f32>) -> Result<(), DiarizeError> + 'a;
+/// Runs a window: its start in the file (in samples), its samples, and
+/// whether more windows follow.
+type RunWindow<'a> = dyn FnMut(u64, Vec<f32>, bool) -> Result<(), DiarizeError> + 'a;
+
+/// One window to diarize, as [`Windows`] hands it over.
+struct Window {
+    /// Position in the file, in samples.
+    start: u64,
+    samples: Vec<f32>,
+    /// Whether more windows follow.
+    more: bool,
+}
 
 impl Windows {
     fn new(limits: Limits, estimated_duration_ms: Option<u64>) -> Self {
@@ -502,7 +578,7 @@ impl Windows {
             rest.extend_from_slice(&self.buffer[stride..]);
             let mut window = std::mem::replace(&mut self.buffer, rest);
             window.truncate(self.window);
-            run(self.start, window)?;
+            run(self.start, window, true)?;
             self.start += stride as u64;
         }
         Ok(())
@@ -513,7 +589,7 @@ impl Windows {
         if self.buffer.is_empty() {
             return Ok(());
         }
-        run(self.start, self.buffer)
+        run(self.start, self.buffer, false)
     }
 }
 
@@ -534,24 +610,47 @@ struct Stitcher {
 }
 
 impl Stitcher {
-    /// `turns` are in file time with the window's own speaker ids.
-    fn add(&mut self, start_ms: u64, end_ms: u64, turns: Vec<SpeakerTurn>) {
-        let (links, cut_ms) = if self.windows == 0 {
+    /// How long each file-wide speaker talks in the overlap of the last
+    /// window with the next one, which starts at `start_ms`.
+    fn overlap_speech(&self, start_ms: u64) -> HashMap<u32, u64> {
+        let mut speech: HashMap<u32, u64> = HashMap::new();
+        for turn in clip(&self.pending, start_ms, self.pending_end_ms) {
+            *speech.entry(turn.speaker).or_default() += turn.end_ms - turn.start_ms;
+        }
+        speech
+    }
+
+    /// `turns` are in file time with the window's own speaker ids; `prefix`
+    /// is what the diarizer heard in the exemplars before the window. Links
+    /// the window's speakers by the overlap first, then by the exemplars,
+    /// and returns the window's id → file-wide id.
+    fn add(
+        &mut self,
+        start_ms: u64,
+        end_ms: u64,
+        turns: Vec<SpeakerTurn>,
+        prefix: &Prefix,
+    ) -> HashMap<u32, u32> {
+        let (mut links, cut_ms) = if self.windows == 0 {
             (HashMap::new(), start_ms)
         } else {
             let overlap_end = self.pending_end_ms.max(start_ms);
             (
-                link_speakers(&self.pending, &turns, start_ms, overlap_end),
+                link_speakers(&self.pending, &turns, start_ms, overlap_end, LINK_MIN_MS),
                 start_ms + (overlap_end - start_ms) / 2,
             )
         };
+        let by_exemplar = link_exemplars(prefix, &links);
         if self.windows > 0 {
             debug!(
-                "Speaker ids of the window from {} s linked as {:?}",
+                "Speaker ids of the window from {} s linked as {:?} by the overlap, \
+                 {:?} by exemplars",
                 start_ms / 1000,
-                links
+                links,
+                by_exemplar
             );
         }
+        links.extend(by_exemplar);
 
         // New ids for the window's other speakers, in order of first turn.
         let mut ids = links;
@@ -576,6 +675,7 @@ impl Stitcher {
         self.pending = clip(&global, cut_ms, u64::MAX);
         self.pending_end_ms = end_ms;
         self.windows += 1;
+        ids
     }
 
     fn finish(mut self) -> Vec<SpeakerTurn> {
@@ -600,13 +700,14 @@ fn clip(turns: &[SpeakerTurn], from: u64, to: u64) -> Vec<SpeakerTurn> {
 /// Links the speakers of a new window to those of the previous one by how
 /// long they talk at the same time in the shared span `from..to`: greedily,
 /// largest co-occurrence first, accepting a pair only when it covers at
-/// least `LINK_MIN_MS` and `LINK_MIN_SHARE_PERCENT` of the quieter one's
-/// speech there. Each id is linked at most once. Returns new id → old id.
+/// least `min_ms` and `LINK_MIN_SHARE_PERCENT` of the quieter one's speech
+/// there. Each id is linked at most once. Returns new id → old id.
 fn link_speakers(
     previous: &[SpeakerTurn],
     next: &[SpeakerTurn],
     from: u64,
     to: u64,
+    min_ms: u64,
 ) -> HashMap<u32, u32> {
     let previous = clip(previous, from, to);
     let next = clip(next, from, to);
@@ -642,7 +743,7 @@ fn link_speakers(
             continue;
         }
         let quieter = previous_speech[&old].min(next_speech[&new]);
-        if ms >= LINK_MIN_MS && ms * 100 >= quieter * LINK_MIN_SHARE_PERCENT {
+        if ms >= min_ms && ms * 100 >= quieter * LINK_MIN_SHARE_PERCENT {
             links.insert(new, old);
             linked_old.push(old);
         }
@@ -650,10 +751,223 @@ fn link_speakers(
     links
 }
 
+/// What came before a window in its diarizer run: the exemplars, and what
+/// the diarizer heard in them. Times are from the start of the run.
+#[derive(Default)]
+struct Prefix {
+    /// Each exemplar, as a turn of its file-wide speaker.
+    spans: Vec<SpeakerTurn>,
+    /// The diarizer's turns there, with the window's own speaker ids.
+    turns: Vec<SpeakerTurn>,
+}
+
+/// Links the window speakers that `links` (the overlap's) left out to the
+/// speakers of the exemplars they were heard in, the same way as in the
+/// overlap. Returns new id → old id.
+fn link_exemplars(prefix: &Prefix, links: &HashMap<u32, u32>) -> HashMap<u32, u32> {
+    let spans: Vec<SpeakerTurn> = prefix
+        .spans
+        .iter()
+        .filter(|span| !links.values().any(|&old| old == span.speaker))
+        .copied()
+        .collect();
+    let heard: Vec<SpeakerTurn> = prefix
+        .turns
+        .iter()
+        .filter(|turn| !links.contains_key(&turn.speaker))
+        .copied()
+        .collect();
+    link_speakers(&spans, &heard, 0, u64::MAX, EXEMPLAR_LINK_MIN_MS)
+}
+
+/// Splits a run's turns into those of its first `prefix_ms` (the
+/// exemplars) and those after it, timed from the end of the prefix.
+fn split_prefix(turns: &[SpeakerTurn], prefix_ms: u64) -> (Vec<SpeakerTurn>, Vec<SpeakerTurn>) {
+    let body = clip(turns, prefix_ms, u64::MAX)
+        .into_iter()
+        .map(|turn| SpeakerTurn {
+            start_ms: turn.start_ms - prefix_ms,
+            end_ms: turn.end_ms - prefix_ms,
+            ..turn
+        })
+        .collect();
+    (clip(turns, 0, prefix_ms), body)
+}
+
+/// A few seconds of clean speech of each file-wide speaker, from the windows
+/// diarized so far. At most `MAX_EXEMPLARS` of `EXEMPLAR_MAX_MS` each.
+#[derive(Default)]
+struct Exemplars {
+    /// File-wide id → exemplar audio.
+    audio: HashMap<u32, Vec<f32>>,
+    /// File-wide id → how long the speaker has talked so far.
+    speech: HashMap<u32, u64>,
+}
+
+impl Exemplars {
+    /// The speakers whose exemplars go before the next window, given how
+    /// long each speaker talks in its overlap: those not heard enough there
+    /// to be linked by it, as long as the run then holds no more voices
+    /// than the model tells apart. Speakers heard in the overlap come first
+    /// (they add no voice), then those who talked most.
+    fn choose(&self, overlap_speech: &HashMap<u32, u64>) -> Vec<u32> {
+        let mut candidates: Vec<u32> = self
+            .audio
+            .keys()
+            .copied()
+            .filter(|id| {
+                overlap_speech
+                    .get(id)
+                    .is_none_or(|&ms| ms < EXEMPLAR_CLEAR_MS)
+            })
+            .collect();
+        candidates.sort_by_key(|id| {
+            (
+                !overlap_speech.contains_key(id),
+                std::cmp::Reverse(self.speech.get(id).copied().unwrap_or(0)),
+                *id,
+            )
+        });
+        let mut voices: Vec<u32> = overlap_speech.keys().copied().collect();
+        let mut chosen = Vec::new();
+        for id in candidates {
+            if voices.contains(&id) {
+                chosen.push(id);
+            } else if voices.len() < MODEL_SPEAKERS {
+                voices.push(id);
+                chosen.push(id);
+            }
+        }
+        chosen
+    }
+
+    /// The audio to diarize before a window: each chosen exemplar followed
+    /// by `EXEMPLAR_GAP_MS` of silence, and where each exemplar lies in it.
+    fn prefix(&self, chosen: &[u32]) -> (Vec<f32>, Vec<SpeakerTurn>) {
+        let gap = (EXEMPLAR_GAP_MS * SAMPLES_PER_MS) as usize;
+        let mut audio = Vec::new();
+        let mut spans = Vec::new();
+        for id in chosen {
+            let Some(exemplar) = self.audio.get(id) else {
+                continue;
+            };
+            let start_ms = audio.len() as u64 / SAMPLES_PER_MS;
+            audio.extend_from_slice(exemplar);
+            spans.push(SpeakerTurn {
+                start_ms,
+                end_ms: audio.len() as u64 / SAMPLES_PER_MS,
+                speaker: *id,
+            });
+            audio.resize(audio.len() + gap, 0.0);
+        }
+        (audio, spans)
+    }
+
+    /// Takes exemplars from a window (`samples`, starting at `start_ms`),
+    /// given its `turns` in file time and its id → file-wide id. A new
+    /// exemplar replaces an older one at least as long, so they stay fresh.
+    fn update(
+        &mut self,
+        samples: &[f32],
+        start_ms: u64,
+        turns: &[SpeakerTurn],
+        ids: &HashMap<u32, u32>,
+    ) {
+        let turns: Vec<SpeakerTurn> = turns
+            .iter()
+            .filter_map(|turn| {
+                Some(SpeakerTurn {
+                    start_ms: turn.start_ms.saturating_sub(start_ms),
+                    end_ms: turn.end_ms.saturating_sub(start_ms),
+                    speaker: *ids.get(&turn.speaker)?,
+                })
+            })
+            .collect();
+        for turn in &turns {
+            *self.speech.entry(turn.speaker).or_default() += turn.end_ms - turn.start_ms;
+        }
+        for (speaker, pieces) in exemplar_pieces(&turns) {
+            let ms: u64 = pieces.iter().map(|(from, to)| to - from).sum();
+            if self
+                .audio
+                .get(&speaker)
+                .is_some_and(|old| old.len() as u64 > ms * SAMPLES_PER_MS)
+            {
+                continue;
+            }
+            let mut audio = Vec::with_capacity((ms * SAMPLES_PER_MS) as usize);
+            for (from, to) in pieces {
+                let from = ((from * SAMPLES_PER_MS) as usize).min(samples.len());
+                let to = ((to * SAMPLES_PER_MS) as usize).min(samples.len());
+                audio.extend_from_slice(&samples[from..to]);
+            }
+            if audio.len() as u64 >= EXEMPLAR_MIN_MS * SAMPLES_PER_MS {
+                self.audio.insert(speaker, audio);
+            }
+        }
+        while self.audio.len() > MAX_EXEMPLARS {
+            let Some(quietest) = self.audio.keys().copied().min_by_key(|id| {
+                (
+                    self.speech.get(id).copied().unwrap_or(0),
+                    std::cmp::Reverse(*id),
+                )
+            }) else {
+                break;
+            };
+            self.audio.remove(&quietest);
+        }
+    }
+}
+
+/// Where to cut each speaker's exemplar from `turns`: their longest turns
+/// that no one else talks over, `EXEMPLAR_EDGE_MS` in from each end, until
+/// `EXEMPLAR_TARGET_MS` (at most `EXEMPLAR_MAX_MS`). Speakers with less than
+/// `EXEMPLAR_MIN_MS` of such speech get none. Pieces are in time order.
+fn exemplar_pieces(turns: &[SpeakerTurn]) -> HashMap<u32, Vec<(u64, u64)>> {
+    let merged = normalize_turns(turns, 300);
+    let mut clean: Vec<SpeakerTurn> = merged
+        .iter()
+        .filter(|turn| {
+            !merged.iter().any(|other| {
+                other.speaker != turn.speaker
+                    && other.start_ms < turn.end_ms
+                    && turn.start_ms < other.end_ms
+            })
+        })
+        .map(|turn| SpeakerTurn {
+            start_ms: turn.start_ms + EXEMPLAR_EDGE_MS,
+            end_ms: turn.end_ms.saturating_sub(EXEMPLAR_EDGE_MS),
+            speaker: turn.speaker,
+        })
+        .filter(|turn| turn.end_ms >= turn.start_ms + EXEMPLAR_MIN_PIECE_MS)
+        .collect();
+    clean.sort_by_key(|turn| {
+        (
+            std::cmp::Reverse(turn.end_ms - turn.start_ms),
+            turn.start_ms,
+        )
+    });
+
+    let mut pieces: HashMap<u32, Vec<(u64, u64)>> = HashMap::new();
+    for turn in clean {
+        let taken = pieces.entry(turn.speaker).or_default();
+        let ms: u64 = taken.iter().map(|(from, to)| to - from).sum();
+        if ms >= EXEMPLAR_TARGET_MS {
+            continue;
+        }
+        let end = turn.end_ms.min(turn.start_ms + (EXEMPLAR_MAX_MS - ms));
+        taken.push((turn.start_ms, end));
+    }
+    pieces.retain(|_, taken| {
+        taken.sort_unstable();
+        taken.iter().map(|(from, to)| to - from).sum::<u64>() >= EXEMPLAR_MIN_MS
+    });
+    pieces
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file_transcription::speakers::normalize_turns;
 
     fn turn(start_ms: u64, end_ms: u64, speaker: u32) -> SpeakerTurn {
         SpeakerTurn {
@@ -745,7 +1059,7 @@ mod tests {
         let mut seen = Vec::new();
         let mut most = 0;
         let samples: Vec<f32> = (0..total).map(|i| i as f32).collect();
-        let mut record = |start: u64, window: Vec<f32>| -> Result<(), DiarizeError> {
+        let mut record = |start: u64, window: Vec<f32>, _more: bool| -> Result<(), DiarizeError> {
             seen.push((start, window[0], window.len()));
             Ok(())
         };
@@ -798,21 +1112,39 @@ mod tests {
             turn(40_000, 90_000, 1),
             turn(95_000, 99_000, 2),
         ];
-        let links = link_speakers(&previous, &next, 0, 90_000);
+        let links = link_speakers(&previous, &next, 0, 90_000, LINK_MIN_MS);
         assert_eq!(links, HashMap::from([(3, 1), (1, 2)]));
     }
 
     #[test]
     fn link_needs_3s_and_half_of_the_quieter_speech() {
         // 2.5 s together: too little.
-        let links = link_speakers(&[turn(0, 2_500, 1)], &[turn(0, 2_500, 4)], 0, 90_000);
+        let links = link_speakers(
+            &[turn(0, 2_500, 1)],
+            &[turn(0, 2_500, 4)],
+            0,
+            90_000,
+            LINK_MIN_MS,
+        );
         assert!(links.is_empty());
         // 4 s together, but the new speaker talks 20 s in the overlap and
         // the old one 30 s: 4 s is under half of 20 s.
-        let links = link_speakers(&[turn(0, 30_000, 1)], &[turn(26_000, 46_000, 4)], 0, 90_000);
+        let links = link_speakers(
+            &[turn(0, 30_000, 1)],
+            &[turn(26_000, 46_000, 4)],
+            0,
+            90_000,
+            LINK_MIN_MS,
+        );
         assert!(links.is_empty());
         // 12 s together of 20: linked.
-        let links = link_speakers(&[turn(0, 30_000, 1)], &[turn(18_000, 38_000, 4)], 0, 90_000);
+        let links = link_speakers(
+            &[turn(0, 30_000, 1)],
+            &[turn(18_000, 38_000, 4)],
+            0,
+            90_000,
+            LINK_MIN_MS,
+        );
         assert_eq!(links, HashMap::from([(4, 1)]));
         // Only the overlap counts.
         let links = link_speakers(
@@ -820,6 +1152,7 @@ mod tests {
             &[turn(0, 100_000, 2)],
             95_000,
             97_000,
+            LINK_MIN_MS,
         );
         assert!(links.is_empty());
     }
@@ -830,7 +1163,7 @@ mod tests {
         // and the other stays unlinked.
         let previous = [turn(0, 60_000, 1)];
         let next = [turn(0, 40_000, 2), turn(40_000, 60_000, 3)];
-        let links = link_speakers(&previous, &next, 0, 90_000);
+        let links = link_speakers(&previous, &next, 0, 90_000, LINK_MIN_MS);
         assert_eq!(links, HashMap::from([(2, 1)]));
     }
 
@@ -842,6 +1175,7 @@ mod tests {
             0,
             100_000,
             vec![turn(0, 50_000, 4), turn(50_000, 100_000, 1)],
+            &Prefix::default(),
         );
         // The second window calls the speaker of 50–100 s "2", and has a
         // new one ("3") from 120 s.
@@ -849,6 +1183,7 @@ mod tests {
             60_000,
             160_000,
             vec![turn(60_000, 110_000, 2), turn(120_000, 160_000, 3)],
+            &Prefix::default(),
         );
         let turns = normalize_turns(&stitcher.finish(), 300);
         assert_eq!(
@@ -883,7 +1218,7 @@ mod tests {
                     )
                 })
                 .collect();
-            stitcher.add(start, end, turns);
+            stitcher.add(start, end, turns, &Prefix::default());
         }
         let turns = normalize_turns(&stitcher.finish(), 300);
         let mut ids: HashMap<&str, u32> = HashMap::new();
@@ -898,6 +1233,170 @@ mod tests {
         for pair in turns.windows(2) {
             assert_eq!(pair[0].end_ms, pair[1].start_ms);
         }
+    }
+
+    /// Window 1 (0–100 s): A talks 0–30 s, B 30–50 s, A again 50–100 s.
+    /// Window 2 (60–160 s) calls A "3" and B "5"; only A talks in the
+    /// overlap (60–100 s), so only an exemplar of B can link B.
+    fn add_two_windows(prefix: &Prefix) -> (HashMap<u32, u32>, Vec<SpeakerTurn>) {
+        let mut stitcher = Stitcher::default();
+        let first = stitcher.add(
+            0,
+            100_000,
+            vec![
+                turn(0, 30_000, 1),
+                turn(30_000, 50_000, 2),
+                turn(50_000, 100_000, 1),
+            ],
+            &Prefix::default(),
+        );
+        assert_eq!(first, HashMap::from([(1, 1), (2, 2)]));
+        let ids = stitcher.add(
+            60_000,
+            160_000,
+            vec![turn(60_000, 110_000, 3), turn(110_000, 160_000, 5)],
+            prefix,
+        );
+        (ids, normalize_turns(&stitcher.finish(), 300))
+    }
+
+    #[test]
+    fn a_speaker_silent_in_the_overlap_keeps_their_id_through_an_exemplar() {
+        // B's exemplar (file-wide id 2) went before window 2, and the
+        // diarizer heard it as its speaker "5".
+        let prefix = Prefix {
+            spans: vec![turn(0, 8_000, 2)],
+            turns: vec![turn(100, 7_900, 5)],
+        };
+        let (ids, turns) = add_two_windows(&prefix);
+        assert_eq!(ids, HashMap::from([(3, 1), (5, 2)]));
+        assert_eq!(
+            turns,
+            vec![
+                turn(0, 30_000, 1),
+                turn(30_000, 50_000, 2),
+                turn(50_000, 110_000, 1),
+                turn(110_000, 160_000, 2),
+            ]
+        );
+
+        // Without the exemplar B would become a third speaker.
+        let (ids, _) = add_two_windows(&Prefix::default());
+        assert_eq!(ids, HashMap::from([(3, 1), (5, 3)]));
+    }
+
+    #[test]
+    fn exemplars_link_only_what_the_overlap_left() {
+        // The overlap linked the window's "3" to 1. Exemplars of 1 and 2.
+        let links = HashMap::from([(3, 1)]);
+        let spans = vec![turn(0, 8_000, 1), turn(9_000, 17_000, 2)];
+        // 1's exemplar heard as "4": 1 is taken, so no link. 2's heard as
+        // "3" (already linked) and, for 1 s, as "5": too little.
+        let prefix = Prefix {
+            spans: spans.clone(),
+            turns: vec![
+                turn(0, 8_000, 4),
+                turn(9_000, 16_000, 3),
+                turn(16_000, 17_000, 5),
+            ],
+        };
+        assert!(link_exemplars(&prefix, &links).is_empty());
+        // Heard as "5" for 6 of its 8 s: linked.
+        let prefix = Prefix {
+            spans,
+            turns: vec![turn(9_000, 11_000, 3), turn(11_000, 17_000, 5)],
+        };
+        assert_eq!(link_exemplars(&prefix, &links), HashMap::from([(5, 2)]));
+    }
+
+    #[test]
+    fn split_prefix_drops_the_exemplars_and_shifts_back() {
+        let turns = [
+            turn(0, 4_000, 1),
+            turn(5_000, 7_000, 2),
+            turn(6_500, 9_000, 3),
+        ];
+        let (prefix, body) = split_prefix(&turns, 6_000);
+        assert_eq!(prefix, vec![turn(0, 4_000, 1), turn(5_000, 6_000, 2)]);
+        assert_eq!(body, vec![turn(0, 1_000, 2), turn(500, 3_000, 3)]);
+        let (prefix, body) = split_prefix(&turns, 0);
+        assert!(prefix.is_empty());
+        assert_eq!(body, turns);
+    }
+
+    #[test]
+    fn exemplar_pieces_take_the_longest_clean_turns() {
+        let turns = [
+            turn(0, 4_000, 1),
+            turn(4_500, 6_000, 1),
+            turn(6_000, 20_000, 2),
+            turn(20_000, 26_000, 1),
+            turn(26_000, 27_000, 3),
+            // Talked over: neither is clean.
+            turn(30_000, 32_000, 1),
+            turn(31_000, 45_000, 4),
+            // Clean, but only 2.1 s once the edges are cut.
+            turn(50_000, 52_500, 5),
+        ];
+        let pieces = exemplar_pieces(&turns);
+        assert_eq!(
+            pieces,
+            HashMap::from([
+                // 5.6 s, then 3.6 s: past 8 s, so the 1.1 s piece is left.
+                (1, vec![(200, 3_800), (20_200, 25_800)]),
+                // 13.6 s of clean speech, cut to 10 s.
+                (2, vec![(6_200, 16_200)]),
+            ])
+        );
+    }
+
+    #[test]
+    fn exemplars_go_to_who_the_overlap_may_miss() {
+        let mut exemplars = Exemplars::default();
+        for (id, speech_s) in [(1, 100), (2, 50), (3, 80), (4, 10), (5, 5)] {
+            exemplars.audio.insert(id, vec![0.0; 16]);
+            exemplars.speech.insert(id, speech_s * 1_000);
+        }
+        // 1 talks enough in the overlap to be linked there; 4 says "mm-hmm".
+        let overlap = HashMap::from([(1, 40_000), (4, 1_000)]);
+        // 4 first (already heard), then by speech, up to four voices.
+        assert_eq!(exemplars.choose(&overlap), vec![4, 3, 2]);
+        // A silent overlap: the four who talked most.
+        assert_eq!(exemplars.choose(&HashMap::new()), vec![1, 3, 2, 4]);
+    }
+
+    #[test]
+    fn exemplars_are_cut_from_the_window_and_bounded() {
+        // Each sample holds its time in ms; the window starts at 60 s.
+        let samples: Vec<f32> = (0..20_000 * 16).map(|i| (i / 16) as f32).collect();
+        let mut exemplars = Exemplars::default();
+        let ids = HashMap::from([(7, 2)]);
+        exemplars.update(&samples, 60_000, &[turn(61_000, 66_000, 7)], &ids);
+        let audio = &exemplars.audio[&2];
+        assert_eq!(audio.len(), 4_600 * 16);
+        assert_eq!((audio[0], audio[audio.len() - 1]), (1_200.0, 5_799.0));
+        assert_eq!(exemplars.speech[&2], 5_000);
+
+        let (prefix, spans) = exemplars.prefix(&[2, 9]);
+        assert_eq!(prefix.len(), (4_600 + EXEMPLAR_GAP_MS as usize) * 16);
+        assert_eq!(spans, vec![turn(0, 4_600, 2)]);
+        assert!(prefix[4_600 * 16..].iter().all(|&s| s == 0.0));
+
+        // A shorter one does not replace it; a longer one does.
+        exemplars.update(&samples, 60_000, &[turn(70_000, 74_000, 7)], &ids);
+        assert_eq!(exemplars.audio[&2][0], 1_200.0);
+        exemplars.update(&samples, 60_000, &[turn(70_000, 79_000, 7)], &ids);
+        assert_eq!(exemplars.audio[&2][0], 10_200.0);
+
+        // Many speakers: the quietest lose their exemplars.
+        for id in 10..40u32 {
+            let ids = HashMap::from([(1, id)]);
+            let end = 64_000 + u64::from(id) * 100;
+            exemplars.update(&samples, 60_000, &[turn(60_000, end, 1)], &ids);
+        }
+        assert_eq!(exemplars.audio.len(), MAX_EXEMPLARS);
+        assert!(exemplars.audio.contains_key(&2) && exemplars.audio.contains_key(&39));
+        assert!(!exemplars.audio.contains_key(&10));
     }
 
     fn write_wav(path: &Path, seconds: f32) {
@@ -1161,6 +1660,24 @@ mod tests {
     #[test]
     #[ignore]
     fn measure_against_truth() {
+        measure();
+    }
+
+    /// The same, on a recording where one voice is silent through a window
+    /// overlap (e.g. 45 min of dialog2.wav's two voices, with only one of
+    /// them from 1050 to 1290 s): that voice must keep its id after it.
+    #[test]
+    #[ignore]
+    fn a_speaker_silent_through_an_overlap_keeps_their_id_with_the_real_model() {
+        let (ids, correct, total) = measure();
+        assert_eq!(ids.len(), 2, "{ids:?}");
+        assert!(correct * 100 >= total * 95, "{correct}/{total}");
+    }
+
+    /// Diarizes `HANDY_DIARIZE_WAV` and prints how well it matches its
+    /// truth. Returns the ids found and how many utterances got their
+    /// speaker's own id, of how many.
+    fn measure() -> (std::collections::BTreeSet<u32>, usize, usize) {
         #[derive(serde::Deserialize)]
         struct Truth {
             speaker: String,
@@ -1235,6 +1752,7 @@ mod tests {
         for (copy, row) in per_copy.iter().enumerate().take(3) {
             println!("copy {copy}: {row:?}");
         }
+        (ids, correct, copies * truth.len())
     }
 
     /// Cancels a run in progress: the worker is killed and `wait` returns

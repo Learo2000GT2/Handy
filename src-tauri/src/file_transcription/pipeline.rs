@@ -403,6 +403,8 @@ fn run_with(
 /// transcription, if labels were asked for. Dropping it stops the diarizer.
 struct SpeakerLabels {
     handle: Option<DiarizationHandle>,
+    /// The job's token: a cancel while waiting for labels cancels the job.
+    job: WorkToken,
 }
 
 impl SpeakerLabels {
@@ -429,12 +431,17 @@ impl SpeakerLabels {
             on_event(PipelineEvent::Speakers(SpeakerJobState::Running));
             handle
         });
-        Self { handle }
+        Self {
+            handle,
+            job: token.clone(),
+        }
     }
 
     /// Completes the job: waits for the diarizer and labels a finished
     /// transcript, reporting the final speaker state. A labelling failure
-    /// keeps the transcript, without labels, and its status. A cancelled or
+    /// keeps the transcript, without labels, and its status. A job cancelled
+    /// while waiting for labels ends cancelled, with its whole transcript as
+    /// the partial (kept for viewing, never saved to History). A cancelled or
     /// failed transcription stops the diarizer: partial transcripts are never
     /// labelled.
     fn finish(
@@ -450,6 +457,11 @@ impl SpeakerLabels {
                 let state = label_speakers(handle, &mut output);
                 on_event(PipelineEvent::Speakers(state.clone()));
                 output.speakers = Some(state);
+                if self.job.is_cancelled() {
+                    return Err(PipelineError::Cancelled {
+                        partial: Some(Box::new(output)),
+                    });
+                }
                 Ok(output)
             }
             Err(mut error) => {
@@ -519,6 +531,7 @@ fn label_speakers(handle: DiarizationHandle, output: &mut PipelineOutput) -> Spe
                 }
             }
         }
+        Err(DiarizeError::Cancelled) => DiarizeError::Cancelled.job_state(),
         Err(error) => {
             warn!("Speaker labels failed: {}", error);
             output.warnings.push(format!("Speaker labels: {}", error));
@@ -1960,6 +1973,57 @@ mod tests {
         };
         assert_eq!(partial.speakers, Some(cancelled.clone()));
         assert!(partial.transcript.speakers.is_none());
+        assert!(matches!(events.last(), Some(PipelineEvent::Speakers(s)) if *s == cancelled));
+    }
+
+    #[test]
+    fn cancelling_while_waiting_for_labels_cancels_the_job() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, audio) = (dir.path().join("model.gguf"), dir.path().join("a.wav"));
+        std::fs::write(&model, b"not a model").unwrap();
+        tone_bursts(&audio, 2, 1);
+        let token = WorkToken::new();
+        let mut events = Vec::new();
+        // Held as if dictation never ends, so labels are still pending when
+        // the transcript is done and the user cancels.
+        let mut labels = SpeakerLabels::start(
+            Some(&model),
+            &audio,
+            &DecodeOptions::default(),
+            Some(2_000),
+            &token,
+            Arc::new(|| true),
+            &mut |event| events.push(event),
+        );
+        let output = output_with(vec![segment(0, 2_000, "Hello.")]);
+        let before = output.transcript.clone();
+        let canceller = {
+            let token = token.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                token.cancel();
+            })
+        };
+
+        let error = labels
+            .finish(Ok(output), &mut |event| events.push(event))
+            .unwrap_err();
+        canceller.join().unwrap();
+
+        // Cancelled, not completed (so never saved to History), with the
+        // whole transcript kept for viewing.
+        let PipelineError::Cancelled {
+            partial: Some(partial),
+        } = error
+        else {
+            panic!("expected a cancelled job with its transcript, got {error:?}");
+        };
+        let cancelled = SpeakerJobState::Failed {
+            message: "cancelled".to_string(),
+        };
+        assert_eq!(partial.speakers, Some(cancelled.clone()));
+        assert_eq!(partial.transcript, before);
+        assert!(partial.warnings.is_empty(), "{:?}", partial.warnings);
         assert!(matches!(events.last(), Some(PipelineEvent::Speakers(s)) if *s == cancelled));
     }
 

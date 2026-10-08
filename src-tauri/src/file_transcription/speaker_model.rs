@@ -31,7 +31,11 @@ pub fn installed_speaker_model(app: &AppHandle) -> Option<PathBuf> {
 }
 
 fn is_installed(path: &Path) -> bool {
-    fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() == SPEAKER_MODEL_SIZE)
+    is_installed_at(path, SPEAKER_MODEL_SIZE)
+}
+
+fn is_installed_at(path: &Path, size: u64) -> bool {
+    fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() == size)
 }
 
 fn partial_path(dir: &Path) -> PathBuf {
@@ -87,7 +91,7 @@ impl SpeakerModelManager {
     /// Resumable download into <dir>/<file>.partial, sha256 verify, rename.
     /// Emits SpeakerModelEvent::{Progress (≤10/s), Verifying, Completed | Failed | Cancelled}.
     /// Err("already downloading") if one runs. A cancelled download is not an
-    /// error; its partial file is kept for the next attempt.
+    /// error. A download that does not complete removes its partial file.
     pub async fn download(&self) -> Result<(), String> {
         let token = {
             let mut cancel = self.lock_cancel();
@@ -121,37 +125,18 @@ impl SpeakerModelManager {
 
     async fn fetch(&self, token: &CancellationToken) -> anyhow::Result<Downloaded> {
         let dir = speaker_models_dir(&self.app)?;
-        let path = dir.join(SPEAKER_MODEL_FILE);
-        if is_installed(&path) {
-            return Ok(Downloaded::Completed);
-        }
-        fs::create_dir_all(&dir)?;
-        let partial = partial_path(&dir);
-        info!("Downloading the speaker model to {}", path.display());
-
         let app = self.app.clone();
         let on_progress = move |downloaded: u64, total: u64| {
             emit(&app, SpeakerModelEvent::Progress { downloaded, total });
         };
         let app = self.app.clone();
         let on_verifying = move || emit(&app, SpeakerModelEvent::Verifying);
-        let completed = ModelManager::download_verified_file(
-            SPEAKER_MODEL_URL,
-            &partial,
-            SPEAKER_MODEL_SIZE,
-            SPEAKER_MODEL_SHA256,
-            token,
-            &on_progress,
-            &on_verifying,
-        )
-        .await?;
-        if !completed {
-            info!("Speaker model download cancelled");
-            return Ok(Downloaded::Cancelled);
-        }
-        fs::rename(&partial, &path)?;
-        info!("Speaker model installed at {}", path.display());
-        Ok(Downloaded::Completed)
+        let source = Source {
+            url: SPEAKER_MODEL_URL,
+            size: SPEAKER_MODEL_SIZE,
+            sha256: SPEAKER_MODEL_SHA256,
+        };
+        download_into(&dir, &source, token, &on_progress, &on_verifying).await
     }
 
     pub fn cancel_download(&self) {
@@ -171,6 +156,74 @@ impl SpeakerModelManager {
         remove_model_files(&dir).map_err(|e| e.to_string())?;
         info!("Removed the speaker model from {}", dir.display());
         Ok(())
+    }
+}
+
+/// Where the model is downloaded from.
+struct Source<'a> {
+    url: &'a str,
+    size: u64,
+    sha256: &'a str,
+}
+
+/// Downloads `source` into `dir` as the model (through `<file>.partial`,
+/// resuming one already there). A download that is cancelled or fails
+/// removes its partial file: the app offers no way to remove it while the
+/// model is not installed, and resuming is not worth leaving up to 139 MB
+/// behind.
+async fn download_into(
+    dir: &Path,
+    source: &Source<'_>,
+    token: &CancellationToken,
+    on_progress: &(dyn Fn(u64, u64) + Send + Sync),
+    on_verifying: &(dyn Fn() + Send + Sync),
+) -> anyhow::Result<Downloaded> {
+    let path = dir.join(SPEAKER_MODEL_FILE);
+    if is_installed_at(&path, source.size) {
+        return Ok(Downloaded::Completed);
+    }
+    fs::create_dir_all(dir)?;
+    let partial = partial_path(dir);
+    info!("Downloading the speaker model to {}", path.display());
+
+    let completed = ModelManager::download_verified_file(
+        source.url,
+        &partial,
+        source.size,
+        source.sha256,
+        token,
+        on_progress,
+        on_verifying,
+    )
+    .await;
+    match completed {
+        Ok(true) => {
+            fs::rename(&partial, &path)?;
+            info!("Speaker model installed at {}", path.display());
+            Ok(Downloaded::Completed)
+        }
+        Ok(false) => {
+            info!("Speaker model download cancelled");
+            remove_partial(&partial);
+            Ok(Downloaded::Cancelled)
+        }
+        Err(e) => {
+            remove_partial(&partial);
+            Err(e)
+        }
+    }
+}
+
+fn remove_partial(partial: &Path) {
+    match fs::remove_file(partial) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => {
+            error!(
+                "Could not remove the partial download {}: {}",
+                partial.display(),
+                e
+            )
+        }
+        _ => {}
     }
 }
 
@@ -227,6 +280,119 @@ mod tests {
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         assert_eq!(left, ["other.gguf"]);
+    }
+
+    /// Serves one connection: the head of a `length`-byte 200 response and
+    /// `body`, then hangs up (`close`) or stalls.
+    async fn serve(length: usize, body: &'static [u8], close: bool) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut head = Vec::new();
+            let mut byte = [0u8; 1];
+            while !head.ends_with(b"\r\n\r\n") && sock.read_exact(&mut byte).await.is_ok() {
+                head.push(byte[0]);
+            }
+            let reply = format!("HTTP/1.1 200 OK\r\nContent-Length: {length}\r\n\r\n");
+            let _ = sock.write_all(reply.as_bytes()).await;
+            let _ = sock.write_all(body).await;
+            if close {
+                let _ = sock.shutdown().await;
+            } else {
+                tokio::time::sleep(std::time::Duration::from_secs(600)).await;
+            }
+        });
+        format!("http://{addr}/model.gguf")
+    }
+
+    fn files_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_download_leaves_no_partial() {
+        let dir = tempfile::tempdir().unwrap();
+        let url = serve(100, b"abc", false).await;
+        let token = CancellationToken::new();
+        let trigger = token.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            trigger.cancel();
+        });
+        let source = Source {
+            url: &url,
+            size: 100,
+            sha256: "00",
+        };
+
+        let outcome = download_into(dir.path(), &source, &token, &|_, _| {}, &|| {}).await;
+
+        assert!(matches!(outcome, Ok(Downloaded::Cancelled)));
+        assert!(
+            files_in(dir.path()).is_empty(),
+            "{:?}",
+            files_in(dir.path())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_download_leaves_no_partial() {
+        let dir = tempfile::tempdir().unwrap();
+        // The server hangs up after 3 of 100 bytes.
+        let url = serve(100, b"abc", true).await;
+        let source = Source {
+            url: &url,
+            size: 100,
+            sha256: "00",
+        };
+
+        let outcome = download_into(
+            dir.path(),
+            &source,
+            &CancellationToken::new(),
+            &|_, _| {},
+            &|| {},
+        )
+        .await;
+
+        assert!(outcome.is_err());
+        assert!(
+            files_in(dir.path()).is_empty(),
+            "{:?}",
+            files_in(dir.path())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_completed_download_installs_the_model() {
+        use sha2::{Digest, Sha256};
+        let dir = tempfile::tempdir().unwrap();
+        let url = serve(5, b"model", true).await;
+        let sha256 = format!("{:x}", Sha256::digest(b"model"));
+        let source = Source {
+            url: &url,
+            size: 5,
+            sha256: &sha256,
+        };
+
+        let outcome = download_into(
+            dir.path(),
+            &source,
+            &CancellationToken::new(),
+            &|_, _| {},
+            &|| {},
+        )
+        .await;
+
+        assert!(matches!(outcome, Ok(Downloaded::Completed)));
+        assert_eq!(files_in(dir.path()), [SPEAKER_MODEL_FILE]);
     }
 
     #[test]
