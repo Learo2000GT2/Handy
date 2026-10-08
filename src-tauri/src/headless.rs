@@ -1,25 +1,37 @@
 //! The headless CLI path (`--transcribe-file`, `--list-devices`,
-//! `--list-models`), run on a worker thread when Handy starts in headless mode.
+//! `--list-models`, `--list-lemonade-models`), run on a worker thread when
+//! Handy starts in headless mode.
 
 use crate::cli::CliArgs;
 use crate::engine_supervisor::WorkToken;
 use crate::file_transcription::decode::{self, DecodeError, DecodeOptions};
 use crate::file_transcription::export;
-use crate::file_transcription::pipeline::{
-    self, PipelineError, PipelineEvent, PipelineOptions, PipelineOutput,
+use crate::file_transcription::lemonade::{
+    self, LemonadeClient, LemonadeError, LemonadeJobConfig, LemonadeTimeouts, LemonadeTranscriber,
+    LEMONADE_MODEL_PREFIX,
 };
-use crate::file_transcription::types::TranscriptFormat;
+use crate::file_transcription::pipeline::{
+    self, PipelineEngine, PipelineError, PipelineEvent, PipelineOptions, PipelineOutput,
+};
+use crate::file_transcription::speaker_model;
+use crate::file_transcription::types::{SpeakerJobState, SpeakerSkipReason, TranscriptFormat};
 use crate::managers::model::ModelManager;
-use crate::managers::transcription::TranscriptionManager;
-use crate::settings::get_settings;
+use crate::managers::transcription::{FileJobLease, TranscriptionManager};
+use crate::settings::{
+    get_settings, AppSettings, FileTranscriptionEngine, LemonadeSettings, DEFAULT_LEMONADE_URL,
+};
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
 /// Shortest time between two redraws of the progress line.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
+/// Environment variable with the Lemonade API key (safer than --lemonade-key,
+/// which other processes can see).
+const LEMONADE_KEY_ENV: &str = "HANDY_LEMONADE_API_KEY";
 
 /// Headless one-shot transcription for the `--transcribe-file` / `--list-devices`
 /// path. Runs the same file transcription pipeline as the app; no mic, no
@@ -91,10 +103,246 @@ pub(crate) fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32
         }
     }
 
+    // --list-lemonade-models: the transcription models of the Lemonade
+    // Server (--lemonade-url/--lemonade-key, else the app's settings).
+    if args.list_lemonade_models {
+        let code = list_lemonade_models(app, args);
+        if code != 0 || args.transcribe_file.is_none() {
+            return code;
+        }
+    }
+
     match args.transcribe_file.as_deref() {
         Some(path) => transcribe_file(app, args, path),
         None => 0,
     }
+}
+
+/// `--list-lemonade-models`: prints the server's transcription models (or,
+/// with `--json`, them as a JSON array). Returns the exit code.
+fn list_lemonade_models(app: &AppHandle, args: &CliArgs) -> i32 {
+    let settings = get_settings(app);
+    let server = lemonade_server(args, &settings.lemonade, lemonade_key_from_env());
+    let client = match LemonadeClient::new(
+        &server.base_url,
+        server.api_key.as_deref(),
+        LemonadeTimeouts::default(),
+    ) {
+        Ok(client) => client,
+        Err(e) => {
+            eprintln!("error: {}", e);
+            return 2;
+        }
+    };
+    let models = match client.list_models_blocking(&AtomicBool::new(false)) {
+        Ok(models) => models,
+        Err(e) => {
+            eprintln!("error: {}", e);
+            return match e {
+                LemonadeError::InvalidUrl(_) | LemonadeError::Unauthorized { .. } => 2,
+                _ => 1,
+            };
+        }
+    };
+    let (models, others): (Vec<_>, Vec<_>) = models
+        .into_iter()
+        .partition(lemonade::LemonadeModel::is_transcription);
+    if args.json {
+        match serde_json::to_string_pretty(&models) {
+            Ok(s) => println!("{}", s),
+            Err(e) => {
+                eprintln!("error: failed to serialize models: {}", e);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if models.is_empty() {
+        println!(
+            "No transcription models on the Lemonade Server at {}.",
+            client.api_url()
+        );
+    } else {
+        println!(
+            "Transcription models on {} (✓ = downloaded, ? = unknown):",
+            client.api_url()
+        );
+        let width = models.iter().map(|m| m.id.len()).max().unwrap_or(0);
+        for m in &models {
+            let mark = match m.downloaded {
+                Some(true) => "✓",
+                Some(false) => " ",
+                None => "?",
+            };
+            println!(
+                "  {}  {:<width$}  {}",
+                mark,
+                m.id,
+                m.recipe.as_deref().unwrap_or(""),
+                width = width
+            );
+        }
+    }
+    if !others.is_empty() {
+        println!("({} other models not shown)", others.len());
+    }
+    0
+}
+
+/// The Lemonade API key from the environment, if set and not blank.
+fn lemonade_key_from_env() -> Option<String> {
+    std::env::var(LEMONADE_KEY_ENV)
+        .ok()
+        .filter(|key| !key.trim().is_empty())
+}
+
+/// The Lemonade Server to use: each value from its flag, else (the key) the
+/// environment, else the app's setting, else the default address.
+fn lemonade_server(
+    args: &CliArgs,
+    settings: &LemonadeSettings,
+    env_key: Option<String>,
+) -> LemonadeJobConfig {
+    let base_url = args
+        .lemonade_url
+        .clone()
+        .filter(|url| !url.trim().is_empty())
+        .or_else(|| Some(settings.base_url.clone()).filter(|url| !url.trim().is_empty()))
+        .unwrap_or_else(|| DEFAULT_LEMONADE_URL.to_string());
+    LemonadeJobConfig::from_settings(&LemonadeSettings {
+        base_url,
+        model: args
+            .lemonade_model
+            .clone()
+            .unwrap_or_else(|| settings.model.clone()),
+        api_key: args
+            .lemonade_key
+            .clone()
+            .or(env_key)
+            .unwrap_or_else(|| settings.api_key.clone()),
+    })
+}
+
+/// The engine `--transcribe-file` runs on.
+#[derive(Debug, Clone)]
+enum CliEngine {
+    Handy {
+        model_id: String,
+        device_index: Option<usize>,
+    },
+    Lemonade(LemonadeJobConfig),
+}
+
+impl CliEngine {
+    fn kind(&self) -> FileTranscriptionEngine {
+        match self {
+            Self::Handy { .. } => FileTranscriptionEngine::Handy,
+            Self::Lemonade(_) => FileTranscriptionEngine::Lemonade,
+        }
+    }
+}
+
+/// Picks the engine from the flags and settings. Returns it with warnings
+/// to print; an `Err` is a usage error (exit 2).
+fn cli_engine(
+    args: &CliArgs,
+    settings: &AppSettings,
+    env_key: Option<String>,
+) -> Result<(CliEngine, Vec<String>), String> {
+    let mut warnings = Vec::new();
+    // --model and --device-index pick one of Handy's models, so they imply
+    // the Handy engine unless --engine says otherwise.
+    let picks_handy_model = args.model.is_some() || args.device_index.is_some();
+    let engine = args.engine.unwrap_or(if picks_handy_model {
+        FileTranscriptionEngine::Handy
+    } else {
+        settings.file_transcription_engine
+    });
+    match engine {
+        FileTranscriptionEngine::Handy => {
+            if args.lemonade_url.is_some()
+                || args.lemonade_model.is_some()
+                || args.lemonade_key.is_some()
+            {
+                warnings.push(
+                    "--lemonade-url, --lemonade-model and --lemonade-key only apply to --engine lemonade; ignored"
+                        .to_string(),
+                );
+            }
+            let model_id = args
+                .model
+                .clone()
+                .unwrap_or_else(|| settings.selected_model.clone());
+            if model_id.is_empty() {
+                return Err("no model selected (pass --model or pick one in the app)".to_string());
+            }
+            Ok((
+                CliEngine::Handy {
+                    model_id,
+                    device_index: args.device_index,
+                },
+                warnings,
+            ))
+        }
+        FileTranscriptionEngine::Lemonade => {
+            if picks_handy_model {
+                return Err(
+                    "--model and --device-index choose Handy's model; they can't be used with --engine lemonade"
+                        .to_string(),
+                );
+            }
+            let config = lemonade_server(args, &settings.lemonade, env_key);
+            if config.model.is_empty() {
+                return Err(
+                    "no Lemonade model (pass --lemonade-model or pick one in the app)".to_string(),
+                );
+            }
+            if lemonade::normalize_base_url(&config.base_url).is_err() {
+                return Err(format!(
+                    "invalid Lemonade Server address: {} (expected something like {})",
+                    config.base_url, DEFAULT_LEMONADE_URL
+                ));
+            }
+            Ok((CliEngine::Lemonade(config), warnings))
+        }
+    }
+}
+
+/// The Sortformer model for `--speakers`: `--speaker-model`, else the one the
+/// app downloaded. None without `--speakers`; an `Err` is a usage error.
+fn cli_speaker_model(
+    args: &CliArgs,
+    installed: impl FnOnce() -> Option<PathBuf>,
+) -> Result<Option<PathBuf>, String> {
+    if !args.speakers {
+        return Ok(None);
+    }
+    match args.speaker_model.clone() {
+        Some(path) if path.is_file() => Ok(Some(path)),
+        Some(path) => Err(format!("speaker model not found: {}", path.display())),
+        None => installed().map(Some).ok_or_else(|| {
+            "the speaker model isn't installed (enable Label speakers in the app, or pass --speaker-model)"
+                .to_string()
+        }),
+    }
+}
+
+/// Why speaker labels were not made, for a `warning:` line; None when they
+/// were (or a failure was already reported among the run's warnings).
+fn speaker_skip_warning(state: Option<&SpeakerJobState>) -> Option<String> {
+    let reason = match state? {
+        SpeakerJobState::Skipped { reason } => reason,
+        _ => return None,
+    };
+    Some(
+        match reason {
+            SpeakerSkipReason::ModelMissing => {
+                "speaker labels skipped: the speaker model is missing"
+            }
+            SpeakerSkipReason::NoSpeech => "speaker labels skipped: no speech found",
+        }
+        .to_string(),
+    )
 }
 
 /// `--transcribe-file`: probe, load the model, run the pipeline `--repeat`
@@ -127,59 +375,47 @@ fn transcribe_file(app: &AppHandle, args: &CliArgs, path: &Path) -> i32 {
         }
     };
 
-    let tm = app.state::<Arc<TranscriptionManager>>();
-
-    let model_id = args
-        .model
-        .clone()
-        .unwrap_or_else(|| get_settings(app).selected_model);
-    if model_id.is_empty() {
-        eprintln!("error: no model selected (pass --model or pick one in the app)");
-        return 2;
-    }
-
-    // --device-index hard-selects a compute device by its --list-devices registry
-    // index (transcribe-cpp / whisper-family models only; not persisted). Omit it
-    // to use the persisted accelerator setting.
-    let device_index = args.device_index;
-    let requested_device = match device_index {
-        Some(idx) => format!("index {}", idx),
-        None => "settings".to_string(),
-    };
-
-    // Cold load (timed).
-    let load_start = Instant::now();
-    if let Err(e) = tm.load_model_with_device(&model_id, device_index) {
-        eprintln!("error: load_model('{}') failed: {}", model_id, e);
-        return 1;
-    }
-    let load_ms = load_start.elapsed().as_millis() as u64;
-    let bound_backend = tm.current_backend();
-
-    // Hold the model for the whole command, so an "Immediately" unload timeout
-    // doesn't unload (and the next run reload) it between --repeat runs. The
-    // lease also reports the model's chunk limits.
-    let lease = match tm.begin_file_job(&model_id, device_index, WorkToken::new()) {
-        Ok(lease) => lease,
+    let settings = get_settings(app);
+    let (engine, engine_warnings) = match cli_engine(args, &settings, lemonade_key_from_env()) {
+        Ok(engine) => engine,
         Err(e) => {
-            eprintln!("error: preparing model '{}' failed: {}", model_id, e);
-            return 1;
+            eprintln!("error: {}", e);
+            return 2;
         }
     };
-    if let Some(warning) = chunk_warning(
-        plan.max_chunk_ms,
-        lease.limits().hard_max_ms,
-        probe.duration_ms,
-    ) {
+    for warning in &engine_warnings {
         eprintln!("warning: {}", warning);
     }
+    let speaker_model =
+        match cli_speaker_model(args, || speaker_model::installed_speaker_model(app)) {
+            Ok(path) => path,
+            Err(e) => {
+                eprintln!("error: {}", e);
+                return 2;
+            }
+        };
+
+    let engine_kind = engine.kind();
+    let tm = app.state::<Arc<TranscriptionManager>>();
+    let prepared = match prepare_engine(&tm, engine, &settings, &plan, probe.duration_ms) {
+        Ok(prepared) => prepared,
+        Err(code) => return code,
+    };
+    let PreparedEngine {
+        model_id,
+        requested_device,
+        load_ms,
+        bound_backend,
+        lease,
+        engine,
+    } = prepared;
 
     let options = PipelineOptions {
-        model_id: model_id.clone(),
-        device_index,
+        engine,
         max_chunk_ms: plan.max_chunk_ms,
         ffmpeg: args.ffmpeg.clone(),
         skip_silent_chunks: true,
+        speaker_model,
     };
     let show_progress = !args.quiet && std::io::stderr().is_terminal();
     let runs = args.repeat.unwrap_or(1).max(1);
@@ -188,10 +424,12 @@ fn transcribe_file(app: &AppHandle, args: &CliArgs, path: &Path) -> i32 {
     for i in 0..runs {
         // The lease keeps the model loaded, but an engine failure can still
         // drop it; reload (untimed) so the timing below stays clean.
-        if !tm.is_model_loaded() {
-            if let Err(e) = tm.load_model_with_device(&model_id, device_index) {
-                eprintln!("error: reload before run {} failed: {}", i + 1, e);
-                return 1;
+        if let PipelineEngine::Handy { device_index, .. } = &options.engine {
+            if !tm.is_model_loaded() {
+                if let Err(e) = tm.load_model_with_device(&model_id, *device_index) {
+                    eprintln!("error: reload before run {} failed: {}", i + 1, e);
+                    return 1;
+                }
             }
         }
         let mut progress = Progress::new(show_progress);
@@ -222,16 +460,21 @@ fn transcribe_file(app: &AppHandle, args: &CliArgs, path: &Path) -> i32 {
         return 1;
     };
     // As the app does: the Markdown header shows the model's name.
-    output.transcript.model_name = app
-        .try_state::<Arc<ModelManager>>()
-        .and_then(|models| models.get_model_info(&model_id))
-        .map(|info| info.name);
+    output.transcript.model_name = lemonade::display_model_name(&model_id).or_else(|| {
+        app.try_state::<Arc<ModelManager>>()
+            .and_then(|models| models.get_model_info(&model_id))
+            .map(|info| info.name)
+    });
 
     for warning in &output.warnings {
         eprintln!("warning: {}", warning);
     }
+    if let Some(warning) = speaker_skip_warning(output.speakers.as_ref()) {
+        eprintln!("warning: {}", warning);
+    }
 
     let report = RunReport {
+        engine: engine_kind,
         model_id: &model_id,
         requested_device: &requested_device,
         bound_backend: bound_backend.as_deref(),
@@ -275,6 +518,104 @@ fn transcribe_file(app: &AppHandle, args: &CliArgs, path: &Path) -> i32 {
         }
     }
     0
+}
+
+/// An engine ready for `--transcribe-file`'s runs, with what the metrics
+/// report about it.
+struct PreparedEngine {
+    /// "small", or "lemonade:Whisper-Base".
+    model_id: String,
+    requested_device: String,
+    /// The model's cold load, or Lemonade's preflight.
+    load_ms: u64,
+    bound_backend: Option<String>,
+    /// Holds Handy's model for the whole command; None for Lemonade.
+    lease: Option<FileJobLease>,
+    engine: PipelineEngine,
+}
+
+/// Loads Handy's model (timed) and leases it, or checks the Lemonade Server
+/// (timed preflight). Prints the error and returns the exit code on failure.
+fn prepare_engine(
+    tm: &TranscriptionManager,
+    engine: CliEngine,
+    settings: &AppSettings,
+    plan: &OutputPlan,
+    duration_ms: Option<u64>,
+) -> Result<PreparedEngine, i32> {
+    match engine {
+        CliEngine::Handy {
+            model_id,
+            device_index,
+        } => {
+            // --device-index hard-selects a compute device by its --list-devices registry
+            // index (transcribe-cpp / whisper-family models only; not persisted). Omit it
+            // to use the persisted accelerator setting.
+            let requested_device = match device_index {
+                Some(idx) => format!("index {}", idx),
+                None => "settings".to_string(),
+            };
+
+            // Cold load (timed).
+            let load_start = Instant::now();
+            if let Err(e) = tm.load_model_with_device(&model_id, device_index) {
+                eprintln!("error: load_model('{}') failed: {}", model_id, e);
+                return Err(1);
+            }
+            let load_ms = load_start.elapsed().as_millis() as u64;
+            let bound_backend = tm.current_backend();
+
+            // Hold the model for the whole command, so an "Immediately" unload timeout
+            // doesn't unload (and the next run reload) it between --repeat runs. The
+            // lease also reports the model's chunk limits.
+            let lease = match tm.begin_file_job(&model_id, device_index, WorkToken::new()) {
+                Ok(lease) => lease,
+                Err(e) => {
+                    eprintln!("error: preparing model '{}' failed: {}", model_id, e);
+                    return Err(1);
+                }
+            };
+            if let Some(warning) =
+                chunk_warning(plan.max_chunk_ms, lease.limits().hard_max_ms, duration_ms)
+            {
+                eprintln!("warning: {}", warning);
+            }
+            Ok(PreparedEngine {
+                engine: PipelineEngine::Handy {
+                    model_id: model_id.clone(),
+                    device_index,
+                },
+                model_id,
+                requested_device,
+                load_ms,
+                bound_backend,
+                lease: Some(lease),
+            })
+        }
+        CliEngine::Lemonade(config) => {
+            // None of Handy's models is loaded: the preflight (server, key
+            // and model list) stands in for the load, and fails fast.
+            let load_start = Instant::now();
+            if let Err(e) = LemonadeTranscriber::begin(&config, settings.clone(), WorkToken::new())
+            {
+                let e = pipeline::engine_start_error(e);
+                eprintln!("error: {}", e);
+                return Err(e.exit_code());
+            }
+            let load_ms = load_start.elapsed().as_millis() as u64;
+            Ok(PreparedEngine {
+                model_id: format!("{}{}", LEMONADE_MODEL_PREFIX, config.model),
+                requested_device: "server".to_string(),
+                load_ms,
+                bound_backend: Some("lemonade".to_string()),
+                lease: None,
+                engine: PipelineEngine::Lemonade {
+                    config,
+                    settings: settings.clone(),
+                },
+            })
+        }
+    }
 }
 
 /// What `--transcribe-file` produces, decided from the flags alone.
@@ -399,6 +740,7 @@ fn chunk_warning(
 
 /// The metrics of a `--transcribe-file` command, as printed on stdout.
 struct RunReport<'a> {
+    engine: FileTranscriptionEngine,
     model_id: &'a str,
     requested_device: &'a str,
     bound_backend: Option<&'a str>,
@@ -470,6 +812,9 @@ fn legacy_json(report: &RunReport, output_path: Option<&Path>) -> serde_json::Va
         "status": transcript.status,
         "warnings": output.warnings,
         "segments": transcript.segments,
+        "engine": report.engine,
+        "speakers": transcript.speakers,
+        "speaker_state": output.speakers,
     });
     if let (Some(path), Some(object)) = (output_path, json.as_object_mut()) {
         object.insert(
@@ -588,7 +933,8 @@ impl Progress {
 mod tests {
     use super::*;
     use crate::file_transcription::types::{
-        DecoderKind, FileTranscript, TimingGrain, TranscriptSegment, TranscriptStatus,
+        DecoderKind, FileTranscript, TimingGrain, TranscriptSegment, TranscriptSpeaker,
+        TranscriptSpeakers, TranscriptStatus,
     };
     use clap::Parser;
 
@@ -790,6 +1136,7 @@ mod tests {
             warnings: vec!["Could not transcribe 00:41:10–00:41:38: boom".to_string()],
             source_size_bytes: 1_234,
             source_modified_at: Some(1_699_000_000),
+            speakers: None,
         }
     }
 
@@ -799,6 +1146,7 @@ mod tests {
         times_ms: &'a [u64],
     ) -> RunReport<'a> {
         RunReport {
+            engine: FileTranscriptionEngine::Handy,
             model_id: "small",
             requested_device: "settings",
             bound_backend: backend,
@@ -883,7 +1231,240 @@ mod tests {
             ])
         );
         assert!(json.get("output").is_none());
-        assert_eq!(json.as_object().unwrap().len(), 20);
+
+        // Engine and speaker labels.
+        assert_eq!(json["engine"], "handy");
+        assert!(json["speakers"].is_null());
+        assert!(json["speaker_state"].is_null());
+        assert_eq!(json.as_object().unwrap().len(), 23);
+    }
+
+    #[test]
+    fn legacy_json_reports_lemonade_and_speaker_labels() {
+        let mut output = sample_output();
+        output.transcript.segments[1].speaker = Some(2);
+        output.transcript.speakers = Some(TranscriptSpeakers {
+            speakers: vec![
+                TranscriptSpeaker { id: 1, name: None },
+                TranscriptSpeaker {
+                    id: 2,
+                    name: Some("Doug".to_string()),
+                },
+            ],
+            approximate: false,
+            unassigned_segments: 0,
+            model: "sortformer-4spk-v2.1-q8_0".to_string(),
+        });
+        output.speakers = Some(SpeakerJobState::Done { speakers: 2 });
+        let mut report = report(&output, Some("lemonade"), &[1_000]);
+        report.engine = FileTranscriptionEngine::Lemonade;
+        report.model_id = "lemonade:Whisper-Tiny";
+        report.requested_device = "server";
+
+        let json = legacy_json(&report, None);
+
+        assert_eq!(json["engine"], "lemonade");
+        assert_eq!(json["model"], "lemonade:Whisper-Tiny");
+        assert_eq!(json["bound_backend"], "lemonade");
+        assert_eq!(json["speakers"]["speakers"][1]["name"], "Doug");
+        assert_eq!(json["speakers"]["model"], "sortformer-4spk-v2.1-q8_0");
+        assert_eq!(
+            json["speaker_state"],
+            serde_json::json!({"state": "done", "speakers": 2})
+        );
+        assert!(json["segments"][0].get("speaker").is_none());
+        assert_eq!(json["segments"][1]["speaker"], 2);
+        assert_eq!(
+            metrics_line(&report),
+            "model=lemonade:Whisper-Tiny device=server backend=lemonade audio=3725.00s load=1200ms best=1000ms rtf=3725.00x"
+        );
+    }
+
+    fn settings_with(engine: FileTranscriptionEngine) -> AppSettings {
+        let mut settings = crate::settings::get_default_settings();
+        settings.selected_model = "small".to_string();
+        settings.file_transcription_engine = engine;
+        settings.lemonade = LemonadeSettings {
+            base_url: "http://lemon.local:8000/api/v1".to_string(),
+            model: "Whisper-Base".to_string(),
+            api_key: "from-settings".to_string(),
+        };
+        settings
+    }
+
+    fn lemonade_config(engine: CliEngine) -> LemonadeJobConfig {
+        match engine {
+            CliEngine::Lemonade(config) => config,
+            CliEngine::Handy { .. } => panic!("expected Lemonade, got {engine:?}"),
+        }
+    }
+
+    #[test]
+    fn engine_follows_the_flag_then_the_setting() {
+        let handy = settings_with(FileTranscriptionEngine::Handy);
+        let lemon = settings_with(FileTranscriptionEngine::Lemonade);
+
+        let (engine, warnings) = cli_engine(&args(&[]), &handy, None).unwrap();
+        assert!(warnings.is_empty());
+        assert!(matches!(
+            engine,
+            CliEngine::Handy { ref model_id, device_index: None } if model_id == "small"
+        ));
+        let (engine, _) = cli_engine(&args(&[]), &lemon, None).unwrap();
+        assert_eq!(engine.kind(), FileTranscriptionEngine::Lemonade);
+        let (engine, _) = cli_engine(&args(&["--engine", "handy"]), &lemon, None).unwrap();
+        assert_eq!(engine.kind(), FileTranscriptionEngine::Handy);
+        let (engine, _) = cli_engine(&args(&["--engine", "lemonade"]), &handy, None).unwrap();
+        assert_eq!(engine.kind(), FileTranscriptionEngine::Lemonade);
+
+        // Choosing one of Handy's models implies Handy's engine.
+        let (engine, _) = cli_engine(&args(&["--model", "tiny"]), &lemon, None).unwrap();
+        assert!(matches!(
+            engine,
+            CliEngine::Handy { ref model_id, .. } if model_id == "tiny"
+        ));
+        let (engine, _) = cli_engine(&args(&["--device-index", "1"]), &lemon, None).unwrap();
+        assert!(matches!(
+            engine,
+            CliEngine::Handy {
+                device_index: Some(1),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn engine_usage_errors_and_warnings() {
+        let handy = settings_with(FileTranscriptionEngine::Handy);
+        for flags in [
+            &["--engine", "lemonade", "--model", "tiny"][..],
+            &["--engine", "lemonade", "--device-index", "0"][..],
+        ] {
+            let err = cli_engine(&args(flags), &handy, None).unwrap_err();
+            assert!(
+                err.contains("can't be used with --engine lemonade"),
+                "{err}"
+            );
+        }
+
+        let mut no_model = settings_with(FileTranscriptionEngine::Lemonade);
+        no_model.lemonade.model = String::new();
+        assert_eq!(
+            cli_engine(&args(&[]), &no_model, None).unwrap_err(),
+            "no Lemonade model (pass --lemonade-model or pick one in the app)"
+        );
+        let err = cli_engine(
+            &args(&["--engine", "lemonade", "--lemonade-url", "localhost:13305"]),
+            &handy,
+            None,
+        )
+        .unwrap_err();
+        assert!(err.starts_with("invalid Lemonade Server address"), "{err}");
+
+        let mut unselected = settings_with(FileTranscriptionEngine::Handy);
+        unselected.selected_model = String::new();
+        assert_eq!(
+            cli_engine(&args(&[]), &unselected, None).unwrap_err(),
+            "no model selected (pass --model or pick one in the app)"
+        );
+
+        let (_, warnings) =
+            cli_engine(&args(&["--lemonade-model", "Whisper-Tiny"]), &handy, None).unwrap();
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("only apply to --engine lemonade"));
+    }
+
+    #[test]
+    fn lemonade_values_come_from_flags_then_environment_then_settings() {
+        let settings = settings_with(FileTranscriptionEngine::Lemonade);
+
+        let config = lemonade_config(cli_engine(&args(&[]), &settings, None).unwrap().0);
+        assert_eq!(config.base_url, "http://lemon.local:8000/api/v1");
+        assert_eq!(config.model, "Whisper-Base");
+        assert_eq!(config.api_key.as_deref(), Some("from-settings"));
+
+        let env = Some("from-env".to_string());
+        let config = lemonade_config(cli_engine(&args(&[]), &settings, env.clone()).unwrap().0);
+        assert_eq!(config.api_key.as_deref(), Some("from-env"));
+
+        let flags = [
+            "--lemonade-url",
+            " http://127.0.0.1:13399 ",
+            "--lemonade-model",
+            "Whisper-Tiny",
+            "--lemonade-key",
+            "from-flag",
+        ];
+        let config = lemonade_config(cli_engine(&args(&flags), &settings, env).unwrap().0);
+        assert_eq!(config.base_url, "http://127.0.0.1:13399");
+        assert_eq!(config.model, "Whisper-Tiny");
+        assert_eq!(config.api_key.as_deref(), Some("from-flag"));
+
+        // No address anywhere: the default one; a blank key is no key.
+        let mut blank = settings_with(FileTranscriptionEngine::Lemonade);
+        blank.lemonade.base_url = " ".to_string();
+        blank.lemonade.api_key = String::new();
+        let config = lemonade_config(cli_engine(&args(&[]), &blank, None).unwrap().0);
+        assert_eq!(config.base_url, DEFAULT_LEMONADE_URL);
+        assert_eq!(config.api_key, None);
+    }
+
+    #[test]
+    fn speaker_model_comes_from_the_flag_or_the_app() {
+        let dir = tempfile::tempdir().unwrap();
+        let model = dir.path().join("sortformer.gguf");
+        std::fs::write(&model, b"GGUF").unwrap();
+        let installed = || Some(PathBuf::from("/app/speaker-models/x.gguf"));
+
+        assert_eq!(cli_speaker_model(&args(&[]), installed), Ok(None));
+        assert_eq!(
+            cli_speaker_model(&args(&["--speakers"]), installed),
+            Ok(installed())
+        );
+        let flag = model.to_string_lossy().into_owned();
+        assert_eq!(
+            cli_speaker_model(&args(&["--speakers", "--speaker-model", &flag]), || None),
+            Ok(Some(model.clone()))
+        );
+        let err = cli_speaker_model(&args(&["--speakers"]), || None).unwrap_err();
+        assert!(
+            err.starts_with("the speaker model isn't installed"),
+            "{err}"
+        );
+        let missing = dir
+            .path()
+            .join("missing.gguf")
+            .to_string_lossy()
+            .into_owned();
+        let err = cli_speaker_model(
+            &args(&["--speakers", "--speaker-model", &missing]),
+            installed,
+        )
+        .unwrap_err();
+        assert!(err.starts_with("speaker model not found: "), "{err}");
+    }
+
+    #[test]
+    fn only_skipped_speaker_labels_add_a_warning() {
+        assert_eq!(speaker_skip_warning(None), None);
+        assert_eq!(
+            speaker_skip_warning(Some(&SpeakerJobState::Done { speakers: 2 })),
+            None
+        );
+        // Failures are already among the run's warnings.
+        assert_eq!(
+            speaker_skip_warning(Some(&SpeakerJobState::Failed {
+                message: "boom".to_string()
+            })),
+            None
+        );
+        assert_eq!(
+            speaker_skip_warning(Some(&SpeakerJobState::Skipped {
+                reason: SpeakerSkipReason::NoSpeech
+            }))
+            .as_deref(),
+            Some("speaker labels skipped: no speech found")
+        );
     }
 
     #[test]

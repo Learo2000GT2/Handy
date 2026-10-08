@@ -1942,58 +1942,70 @@ impl FileJobLease {
     }
 
     /// Post-process a finished run like a dictation, and place its timed
-    /// segments in the file. Logs at debug only: the CLI shows the log.
+    /// segments in the file.
     fn shape(&self, run: RunOutcome, offset_ms: u64, real_len_ms: u64) -> ChunkTranscript {
-        let settings = &self.settings;
-        let run_evidence = with_model_detected_language(
-            resolve_output_language_evidence(
-                settings,
-                run.applied_language_hint.as_deref(),
-                &run.languages,
-                run.output_was_translated,
-            ),
-            run.model_detected_language,
-        );
-        let evidence = {
-            let mut stored = self.evidence.lock().unwrap_or_else(|e| e.into_inner());
-            resolve_chunk_evidence(run_evidence, &mut stored, || {
-                if wants_text_language_detection(settings) {
-                    detect_language_fail_open(&run.text, &run.languages)
-                } else {
-                    None
-                }
-            })
-        };
+        shape_run(&self.settings, &self.evidence, run, offset_ms, real_len_ms)
+    }
+}
 
-        // The language is resolved once for the whole chunk; segments are
-        // never detected one by one.
-        let process = |raw: String| {
-            post_process_resolved_text(raw, settings, run.model_is_whisper, &evidence)
-        };
-        let text = process(run.text.clone()).trim().to_string();
-        let (segments, grain) = place_segments(
-            &text,
-            &run.text,
-            run.segments,
-            offset_ms,
-            real_len_ms,
-            process,
-        );
-        debug!(
-            "File chunk at {}ms ({}ms): {} chars, {} segment(s), {:?} timing, language evidence {:?}",
-            offset_ms,
-            real_len_ms,
-            text.chars().count(),
-            segments.len(),
-            grain,
-            evidence
-        );
-        ChunkTranscript {
-            text,
-            segments,
-            grain,
-            language: evidence.language().map(str::to_string),
-        }
+/// Post-process a finished file chunk run like a dictation, resolving its
+/// output language with the job's `evidence`, and place its timed segments
+/// in the file. Shared by every file transcription engine. Logs at debug
+/// only: the CLI shows the log.
+fn shape_run(
+    settings: &AppSettings,
+    evidence: &Mutex<Option<OutputLanguageEvidence>>,
+    run: RunOutcome,
+    offset_ms: u64,
+    real_len_ms: u64,
+) -> ChunkTranscript {
+    let run_evidence = with_model_detected_language(
+        resolve_output_language_evidence(
+            settings,
+            run.applied_language_hint.as_deref(),
+            &run.languages,
+            run.output_was_translated,
+        ),
+        run.model_detected_language,
+    );
+    let evidence = {
+        let mut stored = evidence.lock().unwrap_or_else(|e| e.into_inner());
+        resolve_chunk_evidence(run_evidence, &mut stored, || {
+            if wants_text_language_detection(settings) {
+                detect_language_fail_open(&run.text, &run.languages)
+            } else {
+                None
+            }
+        })
+    };
+
+    // The language is resolved once for the whole chunk; segments are
+    // never detected one by one.
+    let process =
+        |raw: String| post_process_resolved_text(raw, settings, run.model_is_whisper, &evidence);
+    let text = process(run.text.clone()).trim().to_string();
+    let (segments, grain) = place_segments(
+        &text,
+        &run.text,
+        run.segments,
+        offset_ms,
+        real_len_ms,
+        process,
+    );
+    debug!(
+        "File chunk at {}ms ({}ms): {} chars, {} segment(s), {:?} timing, language evidence {:?}",
+        offset_ms,
+        real_len_ms,
+        text.chars().count(),
+        segments.len(),
+        grain,
+        evidence
+    );
+    ChunkTranscript {
+        text,
+        segments,
+        grain,
+        language: evidence.language().map(str::to_string),
     }
 }
 
@@ -2005,6 +2017,69 @@ impl Drop for FileJobLease {
         if previous == 1 && !self.tm.dictation_active() {
             self.tm.maybe_unload_immediately("file transcription");
         }
+    }
+}
+
+/// Timed row of an external engine, ms relative to the chunk's audio.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExternalTimed {
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub text: String,
+}
+
+/// A chunk transcribed outside Handy's engines (Lemonade Server).
+#[derive(Clone, Debug, Default)]
+pub struct ExternalRun {
+    pub text: String,
+    pub segments: Vec<ExternalTimed>,
+    /// ISO 639-1 language sent with the request, if any.
+    pub applied_language_hint: Option<String>,
+    /// Language the server reported, already normalized to ISO 639-1.
+    pub detected_language: Option<String>,
+}
+
+/// Per-job post-processing for external chunks: the same steps as a local
+/// file chunk (Chinese script, custom words by fuzzy correction since nothing
+/// was prompted, filler words, normalization, language evidence carried
+/// across chunks).
+pub struct ExternalChunkShaper {
+    settings: AppSettings,
+    evidence: Mutex<Option<OutputLanguageEvidence>>,
+}
+
+impl ExternalChunkShaper {
+    pub fn new(settings: AppSettings) -> Self {
+        Self {
+            settings,
+            evidence: Mutex::new(None),
+        }
+    }
+
+    /// `offset_ms` is where the chunk starts in the file and `real_len_ms`
+    /// its length before padding, as for [`FileJobLease::transcribe_chunk`].
+    pub fn shape(&self, run: ExternalRun, offset_ms: u64, real_len_ms: u64) -> ChunkTranscript {
+        let run = RunOutcome {
+            text: run.text,
+            segments: run
+                .segments
+                .into_iter()
+                .map(|row| RawTimed {
+                    start_ms: row.start_ms,
+                    end_ms: row.end_ms,
+                    text: row.text,
+                })
+                .collect(),
+            // The server's languages are unknown: text detection is unconstrained.
+            languages: Vec::new(),
+            applied_language_hint: run.applied_language_hint,
+            // Translation is not offered through external engines.
+            output_was_translated: false,
+            model_detected_language: run.detected_language,
+            // Nothing was prompted: custom words are applied by correction.
+            model_is_whisper: false,
+        };
+        shape_run(&self.settings, &self.evidence, run, offset_ms, real_len_ms)
     }
 }
 
@@ -3912,6 +3987,102 @@ mod tests {
             claim_load_unless_loaded(&is_loading, &condvar, || loaded.load(Ordering::SeqCst));
         assert!(claimed.is_none());
         loader.join().unwrap();
+    }
+
+    fn external(text: &str, rows: &[(i64, i64, &str)]) -> ExternalRun {
+        ExternalRun {
+            text: text.to_string(),
+            segments: rows
+                .iter()
+                .map(|&(start_ms, end_ms, text)| ExternalTimed {
+                    start_ms,
+                    end_ms,
+                    text: text.to_string(),
+                })
+                .collect(),
+            applied_language_hint: None,
+            detected_language: None,
+        }
+    }
+
+    #[test]
+    fn external_shaper_applies_custom_words_and_fillers() {
+        let settings = AppSettings {
+            custom_words: vec!["Kubernetes".to_string()],
+            filler_word_removal_enabled: true,
+            custom_filler_words: None,
+            ..Default::default()
+        };
+        let shaper = ExternalChunkShaper::new(settings);
+        let run = ExternalRun {
+            detected_language: Some("en".to_string()),
+            ..external(
+                " Um, we deployed it on Kubernetis today.",
+                &[
+                    (0, 2_000, " Um, we deployed it"),
+                    (2_000, 4_500, " on Kubernetis today."),
+                ],
+            )
+        };
+
+        let chunk = shaper.shape(run, 28_000, 27_000);
+
+        assert_eq!(chunk.text, "We deployed it on Kubernetes today.");
+        assert_eq!(chunk.grain, TimingGrain::Segment);
+        assert_eq!(chunk.language.as_deref(), Some("en"));
+        assert_eq!(
+            chunk.segments,
+            vec![
+                segment(28_000, 30_000, "We deployed it"),
+                segment(30_000, 32_500, "on Kubernetes today."),
+            ]
+        );
+    }
+
+    #[test]
+    fn external_shaper_without_rows_times_the_whole_chunk() {
+        let shaper = ExternalChunkShaper::new(AppSettings::default());
+
+        let chunk = shaper.shape(external("Hello there.", &[]), 56_000, 9_000);
+
+        assert_eq!(chunk.grain, TimingGrain::Chunk);
+        assert_eq!(
+            chunk.segments,
+            vec![segment(56_000, 65_000, "Hello there.")]
+        );
+        let empty = shaper.shape(external("  ", &[]), 65_000, 1_000);
+        assert_eq!(empty.text, "");
+        assert!(empty.segments.is_empty());
+    }
+
+    #[test]
+    fn external_shaper_carries_first_language_evidence() {
+        let shaper = ExternalChunkShaper::new(AppSettings::default());
+        let first = ExternalRun {
+            detected_language: Some("de".to_string()),
+            ..external("Guten Morgen, wie geht es Ihnen heute?", &[])
+        };
+        assert_eq!(
+            shaper.shape(first, 0, 5_000).language.as_deref(),
+            Some("de")
+        );
+        // The server said nothing about this chunk: the job's language holds.
+        let second = shaper.shape(external("Okay.", &[]), 5_000, 5_000);
+        assert_eq!(second.language.as_deref(), Some("de"));
+
+        // A language sent with the request is the user's choice and wins
+        // over what the server reports.
+        let settings = AppSettings {
+            selected_language: "zh-Hans".to_string(),
+            ..Default::default()
+        };
+        let hinted = ExternalChunkShaper::new(settings);
+        let run = ExternalRun {
+            applied_language_hint: Some("zh".to_string()),
+            detected_language: Some("ja".to_string()),
+            ..external("你好", &[])
+        };
+        assert_eq!(hinted.shape(run, 0, 1_000).language.as_deref(), Some("zh"));
     }
 }
 

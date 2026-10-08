@@ -86,6 +86,36 @@ pub struct CliArgs {
     /// Don't print progress (or, with --format, the metrics line) to stderr.
     #[arg(short = 'q', long)]
     pub quiet: bool,
+
+    /// Engine for --transcribe-file: handy (the selected model) or lemonade
+    /// (Lemonade Server). Default: the app's setting.
+    #[arg(long, value_enum, value_name = "ENGINE", requires = "transcribe_file")]
+    pub engine: Option<crate::settings::FileTranscriptionEngine>,
+
+    /// Lemonade Server address (default: the app's setting, else http://localhost:13305).
+    #[arg(long, value_name = "URL")]
+    pub lemonade_url: Option<String>,
+
+    /// Lemonade model id, e.g. Whisper-Base (default: the app's setting).
+    #[arg(long, value_name = "ID")]
+    pub lemonade_model: Option<String>,
+
+    /// Lemonade API key. Prefer $HANDY_LEMONADE_API_KEY: arguments are visible
+    /// to other processes.
+    #[arg(long, value_name = "KEY")]
+    pub lemonade_key: Option<String>,
+
+    /// Label speakers ("who said what") with the local speaker model.
+    #[arg(long, requires = "transcribe_file")]
+    pub speakers: bool,
+
+    /// Sortformer GGUF for --speakers (default: the one Handy downloaded).
+    #[arg(long, value_name = "PATH", requires = "speakers")]
+    pub speaker_model: Option<PathBuf>,
+
+    /// List the transcription models on the Lemonade Server and exit (honors --json).
+    #[arg(long)]
+    pub list_lemonade_models: bool,
 }
 
 #[cfg(test)]
@@ -156,6 +186,73 @@ mod tests {
         // --quiet stands alone, like --json.
         assert!(parse(&["-q"]).is_ok());
         assert!(parse(&[]).is_ok());
+    }
+
+    #[test]
+    fn parses_engine_and_lemonade_flags() {
+        use crate::settings::FileTranscriptionEngine;
+        let args = parse(&[
+            "-f",
+            "a.mp3",
+            "--engine",
+            "lemonade",
+            "--lemonade-url",
+            "http://127.0.0.1:8000/api/v1",
+            "--lemonade-model",
+            "Whisper-Base",
+            "--lemonade-key",
+            "k1",
+            "--speakers",
+            "--speaker-model",
+            "/models/sortformer.gguf",
+        ])
+        .unwrap();
+        assert_eq!(args.engine, Some(FileTranscriptionEngine::Lemonade));
+        assert_eq!(
+            args.lemonade_url.as_deref(),
+            Some("http://127.0.0.1:8000/api/v1")
+        );
+        assert_eq!(args.lemonade_model.as_deref(), Some("Whisper-Base"));
+        assert_eq!(args.lemonade_key.as_deref(), Some("k1"));
+        assert!(args.speakers);
+        assert_eq!(
+            args.speaker_model,
+            Some(PathBuf::from("/models/sortformer.gguf"))
+        );
+
+        let args = parse(&["-f", "a.mp3", "--engine", "handy"]).unwrap();
+        assert_eq!(args.engine, Some(FileTranscriptionEngine::Handy));
+        assert!(!args.speakers);
+        assert!(parse(&["-f", "a.mp3", "--engine", "whisper"]).is_err());
+    }
+
+    #[test]
+    fn speaker_model_requires_speakers() {
+        assert!(parse(&["-f", "a.mp3", "--speaker-model", "s.gguf"]).is_err());
+        assert!(parse(&["-f", "a.mp3", "--speakers", "--speaker-model", "s.gguf"]).is_ok());
+        assert!(parse(&["--speakers"]).is_err());
+    }
+
+    #[test]
+    fn engine_requires_a_file() {
+        assert!(parse(&["--engine", "lemonade"]).is_err());
+        assert!(parse(&["--engine", "lemonade", "-f", "a.wav"]).is_ok());
+    }
+
+    #[test]
+    fn list_lemonade_models_stands_alone() {
+        let args = parse(&["--list-lemonade-models", "--json"]).unwrap();
+        assert!(args.list_lemonade_models && args.json);
+        assert!(args.transcribe_file.is_none());
+        let args = parse(&[
+            "--list-lemonade-models",
+            "--lemonade-url",
+            "http://localhost:13305",
+            "--lemonade-key",
+            "k1",
+        ])
+        .unwrap();
+        assert_eq!(args.lemonade_url.as_deref(), Some("http://localhost:13305"));
     }
 
     #[test]

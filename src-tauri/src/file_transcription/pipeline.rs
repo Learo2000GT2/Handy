@@ -4,26 +4,37 @@
 //! A `file-decode` thread decodes the file to 16 kHz mono and splits it into
 //! silence-aware chunks, which reach the calling thread through a small
 //! bounded channel, so memory stays flat whatever the file length. The
-//! calling thread sends one chunk at a time to the engine and waits while a
+//! calling thread sends one chunk at a time to the engine (Handy's model or
+//! Lemonade Server, see `engine`); with Handy's model it waits while a
 //! dictation is active.
+//!
+//! When speaker labels are asked for, the diarizer runs alongside on its own
+//! thread and worker (see `diarize`); its turns are merged onto the finished
+//! transcript. A labelling failure never fails the transcription.
 
 use crate::engine_supervisor::WorkToken;
 use crate::file_transcription::chunker::{
     AudioChunk, ChunkVerdict, SilenceChunker, SpeechGate, SAMPLES_PER_MS,
 };
-use crate::file_transcription::decode::{self, DecodeError, DecodeOptions, DecodeOutcome};
+use crate::file_transcription::decode::{
+    self, AudioProbe, DecodeError, DecodeOptions, DecodeOutcome,
+};
+use crate::file_transcription::diarize::{self, DiarizationHandle, DiarizeError, DiarizeRequest};
+use crate::file_transcription::engine::{ChunkTranscriber, TranscribeError};
 use crate::file_transcription::export::format_clock;
 use crate::file_transcription::formats::DecodeRoute;
+use crate::file_transcription::lemonade::{LemonadeJobConfig, LemonadeTranscriber};
+use crate::file_transcription::speakers::{self, MergeOptions};
 use crate::file_transcription::types::*;
-use crate::managers::transcription::{
-    ChunkError, ChunkLimits, ChunkTranscript, FileJobLease, TranscriptionManager,
-};
+use crate::managers::transcription::{ChunkLimits, ChunkTranscript, TranscriptionManager};
+use crate::settings::AppSettings;
 use anyhow::anyhow;
-use log::debug;
+use log::{debug, warn};
 use std::cell::Cell;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -38,15 +49,31 @@ const ATTEMPTS_PER_CHUNK: u32 = 2;
 /// Chunks in a row that may fail before the whole job is abandoned.
 const MAX_CONSECUTIVE_FAILED_CHUNKS: u32 = 3;
 
+/// The engine a job transcribes with.
+#[derive(Clone, Debug)]
+pub enum PipelineEngine {
+    /// Handy's model through TranscriptionManager (today's behaviour).
+    Handy {
+        model_id: String,
+        device_index: Option<usize>,
+    },
+    /// Lemonade Server; never takes the lease, the run gate or the loaded model.
+    Lemonade {
+        config: LemonadeJobConfig,
+        settings: AppSettings,
+    },
+}
+
 #[derive(Clone, Debug)]
 pub struct PipelineOptions {
-    pub model_id: String,
-    pub device_index: Option<usize>,
-    /// None = lease.limits().max_chunk_ms. Some(0) = whole file in one engine
-    /// call. Some(n): n >= 5000, used as-is (callers warn if > hard_max_ms).
+    pub engine: PipelineEngine,
+    /// None = the engine's limits().max_chunk_ms. Some(0) = whole file in one
+    /// engine call. Some(n): n >= 5000, used as-is (callers warn if > hard_max_ms).
     pub max_chunk_ms: Option<u32>,
     pub ffmpeg: Option<PathBuf>,
     pub skip_silent_chunks: bool,
+    /// Some: label speakers with this Sortformer GGUF (must exist).
+    pub speaker_model: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -85,6 +112,8 @@ pub struct PipelineOutput {
     pub warnings: Vec<String>,
     pub source_size_bytes: u64,
     pub source_modified_at: Option<i64>,
+    /// Final speaker state when labels were requested (Done/Failed/Skipped).
+    pub speakers: Option<SpeakerJobState>,
 }
 
 #[derive(Debug)]
@@ -154,30 +183,125 @@ pub fn run_pipeline(
         duration_ms: probe.duration_ms,
     });
 
-    if opts.model_id.is_empty() {
-        return Err(PipelineError::failed(
-            FileJobErrorCode::NoModel,
-            "No transcription model is selected",
-        ));
-    }
+    check_engine_config(&opts.engine)?;
     if token.is_cancelled() {
         return Err(PipelineError::Cancelled { partial: None });
     }
-    let lease = tm
-        .begin_file_job(&opts.model_id, opts.device_index, token.clone())
-        .map_err(|e| {
-            if token.is_cancelled() {
-                PipelineError::Cancelled { partial: None }
-            } else {
-                PipelineError::failed(
-                    model_load_error_code(&e),
-                    format!("Could not load model {}: {:#}", opts.model_id, e),
-                )
-            }
-        })?;
+
+    // The diarizer decodes the file on its own, so it starts before the
+    // model loads and runs alongside the transcription.
+    let mut labels = SpeakerLabels::start(
+        opts.speaker_model.as_deref(),
+        path,
+        &decode_options,
+        probe.duration_ms,
+        token,
+        {
+            let tm = tm.clone();
+            Arc::new(move || tm.dictation_active())
+        },
+        on_event,
+    );
+    let result = transcribe_file(tm, path, opts, &decode_options, &probe, token, on_event);
+    labels.finish(result, on_event)
+}
+
+/// The usage errors of an engine choice that need no engine to find.
+fn check_engine_config(engine: &PipelineEngine) -> Result<(), PipelineError> {
+    match engine {
+        PipelineEngine::Handy { model_id, .. } if model_id.is_empty() => {
+            Err(PipelineError::failed(
+                FileJobErrorCode::NoModel,
+                "No transcription model is selected",
+            ))
+        }
+        PipelineEngine::Lemonade { config, .. } if config.model.is_empty() => Err(
+            PipelineError::failed(FileJobErrorCode::NoModel, "No Lemonade model is selected"),
+        ),
+        _ => Ok(()),
+    }
+}
+
+/// Prepares the job's engine and transcribes the file with it. The engine
+/// (and with it a Handy model lease) is released when this returns.
+fn transcribe_file(
+    tm: &TranscriptionManager,
+    path: &Path,
+    opts: &PipelineOptions,
+    decode_options: &DecodeOptions,
+    probe: &AudioProbe,
+    token: &WorkToken,
+    on_event: &mut dyn FnMut(PipelineEvent),
+) -> Result<PipelineOutput, PipelineError> {
+    let engine: Box<dyn ChunkTranscriber> = match &opts.engine {
+        PipelineEngine::Handy {
+            model_id,
+            device_index,
+        } => {
+            let lease = tm
+                .begin_file_job(model_id, *device_index, token.clone())
+                .map_err(|e| {
+                    if token.is_cancelled() {
+                        PipelineError::Cancelled { partial: None }
+                    } else {
+                        PipelineError::failed(
+                            model_load_error_code(&e),
+                            format!("Could not load model {}: {:#}", model_id, e),
+                        )
+                    }
+                })?;
+            Box::new(lease)
+        }
+        PipelineEngine::Lemonade { config, settings } => Box::new(
+            LemonadeTranscriber::begin(config, settings.clone(), token.clone())
+                .map_err(engine_start_error)?,
+        ),
+    };
     on_event(PipelineEvent::ModelReady);
 
-    let (max_chunk_ms, search_window_ms) = chunk_plan(opts.max_chunk_ms, lease.limits());
+    let dictation_active = || tm.dictation_active();
+    run_with(
+        engine.as_ref(),
+        &dictation_active,
+        path,
+        decode_options,
+        probe,
+        opts,
+        token,
+        on_event,
+    )
+}
+
+/// The pipeline error for an engine that could not start.
+pub(crate) fn engine_start_error(error: TranscribeError) -> PipelineError {
+    match error {
+        TranscribeError::Cancelled => PipelineError::Cancelled { partial: None },
+        TranscribeError::Stop { code, message } => PipelineError::failed(code, message),
+        TranscribeError::Failed(error) => {
+            PipelineError::failed(FileJobErrorCode::EngineFailed, format!("{:#}", error))
+        }
+        TranscribeError::Yield => PipelineError::failed(
+            FileJobErrorCode::Internal,
+            "The engine asked to wait before it started",
+        ),
+    }
+}
+
+/// Decodes `path` and transcribes it with `engine`, chunk by chunk.
+/// `dictation_active` is polled before each chunk of an engine that yields
+/// to dictation.
+#[allow(clippy::too_many_arguments)]
+fn run_with(
+    engine: &dyn ChunkTranscriber,
+    dictation_active: &dyn Fn() -> bool,
+    path: &Path,
+    decode_options: &DecodeOptions,
+    probe: &AudioProbe,
+    opts: &PipelineOptions,
+    token: &WorkToken,
+    on_event: &mut dyn FnMut(PipelineEvent),
+) -> Result<PipelineOutput, PipelineError> {
+    let (max_chunk_ms, search_window_ms) = chunk_plan(opts.max_chunk_ms, engine.limits());
     let mut gate = SpeechGate::new(opts.skip_silent_chunks).map_err(|e| {
         PipelineError::failed(
             FileJobErrorCode::Internal,
@@ -187,29 +311,28 @@ pub fn run_pipeline(
     debug!(
         "Transcribing {} with {} in chunks of at most {} ms",
         path.display(),
-        opts.model_id,
+        engine.model_id(),
         max_chunk_ms
     );
 
     let job = JobInfo {
         source_path: source_path_string(path),
         source_name: source_display_name(path),
-        model_id: &opts.model_id,
+        model_id: engine.model_id(),
         estimated_duration_ms: probe.duration_ms,
         fallback_decoder: route_decoder(probe.route),
         source_size_bytes: probe.source_size_bytes,
         source_modified_at: probe.source_modified_at,
     };
     let engine = ChunkEngine {
-        tm,
-        lease: &lease,
+        engine,
+        dictation_active,
         token,
     };
     let mut run = ChunkRun::default();
     let (tx, rx) = mpsc::sync_channel::<AudioChunk>(CHUNK_QUEUE_LEN);
 
     thread::scope(|scope| {
-        let decode_options = &decode_options;
         let producer = thread::Builder::new()
             .name("file-decode".to_string())
             .spawn_scoped(scope, move || {
@@ -276,6 +399,134 @@ pub fn run_pipeline(
     })
 }
 
+/// Speaker labelling of one job: the diarization running alongside the
+/// transcription, if labels were asked for. Dropping it stops the diarizer.
+struct SpeakerLabels {
+    handle: Option<DiarizationHandle>,
+}
+
+impl SpeakerLabels {
+    /// Starts diarizing with `model` (Some when labels were asked for) and
+    /// reports `Speakers(Running)`. `hold` tells the diarizer to wait before
+    /// it starts its worker (a dictation is active).
+    fn start(
+        model: Option<&Path>,
+        path: &Path,
+        decode_options: &DecodeOptions,
+        estimated_duration_ms: Option<u64>,
+        token: &WorkToken,
+        hold: Arc<dyn Fn() -> bool + Send + Sync>,
+        on_event: &mut dyn FnMut(PipelineEvent),
+    ) -> Self {
+        let handle = model.map(|model_path| {
+            let request = DiarizeRequest {
+                path: path.to_path_buf(),
+                decode: decode_options.clone(),
+                model_path: model_path.to_path_buf(),
+                estimated_duration_ms,
+            };
+            let handle = diarize::start_diarization(request, token.clone(), hold);
+            on_event(PipelineEvent::Speakers(SpeakerJobState::Running));
+            handle
+        });
+        Self { handle }
+    }
+
+    /// Completes the job: waits for the diarizer and labels a finished
+    /// transcript, reporting the final speaker state. A labelling failure
+    /// keeps the transcript, without labels, and its status. A cancelled or
+    /// failed transcription stops the diarizer: partial transcripts are never
+    /// labelled.
+    fn finish(
+        &mut self,
+        result: Result<PipelineOutput, PipelineError>,
+        on_event: &mut dyn FnMut(PipelineEvent),
+    ) -> Result<PipelineOutput, PipelineError> {
+        let Some(handle) = self.handle.take() else {
+            return result;
+        };
+        match result {
+            Ok(mut output) => {
+                let state = label_speakers(handle, &mut output);
+                on_event(PipelineEvent::Speakers(state.clone()));
+                output.speakers = Some(state);
+                Ok(output)
+            }
+            Err(mut error) => {
+                handle.cancel();
+                let state = match &error {
+                    PipelineError::Cancelled { .. } => DiarizeError::Cancelled.job_state(),
+                    PipelineError::Failed { .. } => SpeakerJobState::Failed {
+                        message: "the transcription failed".to_string(),
+                    },
+                };
+                on_event(PipelineEvent::Speakers(state.clone()));
+                if let PipelineError::Cancelled {
+                    partial: Some(partial),
+                }
+                | PipelineError::Failed {
+                    partial: Some(partial),
+                    ..
+                } = &mut error
+                {
+                    partial.speakers = Some(state);
+                }
+                Err(error)
+            }
+        }
+    }
+}
+
+impl Drop for SpeakerLabels {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.cancel();
+        }
+    }
+}
+
+/// Waits for the diarizer and merges its turns onto `output`'s transcript.
+/// Returns the final speaker state.
+fn label_speakers(handle: DiarizationHandle, output: &mut PipelineOutput) -> SpeakerJobState {
+    if output.transcript.paragraphs.is_empty() {
+        // Nothing to label. The job is over, so cancelling its token only
+        // stops the diarizer.
+        handle.cancel();
+        return SpeakerJobState::Skipped {
+            reason: SpeakerSkipReason::NoSpeech,
+        };
+    }
+    match handle.wait() {
+        Ok(turns) => {
+            let options = MergeOptions::for_transcript(&output.transcript);
+            let stats = speakers::apply_speakers(
+                &mut output.transcript,
+                &turns,
+                diarize::DIARIZER_MODEL_ID,
+                &options,
+            );
+            debug!(
+                "Speaker labels: {} speaker(s), {} unassigned, {} split segment(s)",
+                stats.speakers, stats.unassigned, stats.split
+            );
+            if stats.speakers == 0 {
+                SpeakerJobState::Skipped {
+                    reason: SpeakerSkipReason::NoSpeech,
+                }
+            } else {
+                SpeakerJobState::Done {
+                    speakers: stats.speakers,
+                }
+            }
+        }
+        Err(error) => {
+            warn!("Speaker labels failed: {}", error);
+            output.warnings.push(format!("Speaker labels: {}", error));
+            error.job_state()
+        }
+    }
+}
+
 /// Facts about the job that every result (final or partial) needs.
 struct JobInfo<'a> {
     source_path: String,
@@ -290,12 +541,13 @@ struct JobInfo<'a> {
 
 /// What the chunk loop needs to reach the engine.
 struct ChunkEngine<'a> {
-    tm: &'a TranscriptionManager,
-    lease: &'a FileJobLease,
+    engine: &'a dyn ChunkTranscriber,
+    dictation_active: &'a dyn Fn() -> bool,
     token: &'a WorkToken,
 }
 
 /// Why the chunk loop stopped before the decoder ran dry.
+#[derive(Debug)]
 enum Stop {
     Cancelled,
     Failed {
@@ -330,8 +582,9 @@ fn cancelled_reason(processed_ms: u64) -> String {
 }
 
 /// What a chunk's transcription gives up with.
+#[derive(Debug)]
 enum ChunkFailure {
-    /// The job must stop (cancel, model switch).
+    /// The job must stop (cancel, model switch, server problem).
     Stop(Stop),
     /// This chunk could not be transcribed; the job may go on.
     Failed(anyhow::Error),
@@ -431,6 +684,7 @@ impl ChunkRun {
             warnings: self.warnings.clone(),
             source_size_bytes: job.source_size_bytes,
             source_modified_at: job.source_modified_at,
+            speakers: None,
         }
     }
 }
@@ -566,8 +820,8 @@ fn transcribe_chunks(
 }
 
 impl ChunkEngine<'_> {
-    /// Sends one chunk to the engine: waits while dictation is active, and
-    /// retries a failed chunk once.
+    /// Sends one chunk to the engine: waits while dictation is active (for
+    /// an engine that yields to it), and retries a failed chunk once.
     fn transcribe(
         &self,
         samples: &[f32],
@@ -576,13 +830,14 @@ impl ChunkEngine<'_> {
         real_len_ms: u64,
         on_event: &mut dyn FnMut(PipelineEvent),
     ) -> Result<ChunkTranscript, ChunkFailure> {
+        let yields = self.engine.yields_to_dictation();
         let mut attempts = 0;
         let mut waiting = false;
         loop {
             if self.token.is_cancelled() {
                 return Err(ChunkFailure::Stop(Stop::Cancelled));
             }
-            if self.tm.dictation_active() {
+            if yields && (self.dictation_active)() {
                 if !waiting {
                     waiting = true;
                     on_event(PipelineEvent::Waiting);
@@ -596,24 +851,15 @@ impl ChunkEngine<'_> {
                 chunk_index: index,
                 processed_ms: offset_ms,
             });
-            match self.lease.transcribe_chunk(samples, offset_ms, real_len_ms) {
+            match self.engine.transcribe(samples, offset_ms, real_len_ms) {
                 Ok(transcript) => return Ok(transcript),
                 // Dictation started between our check and the engine's: wait for it.
-                Err(ChunkError::Yield) => continue,
-                Err(ChunkError::Cancelled) => return Err(ChunkFailure::Stop(Stop::Cancelled)),
-                Err(ChunkError::ModelChanged {
-                    job_model,
-                    current_model,
-                }) => {
-                    return Err(ChunkFailure::Stop(Stop::Failed {
-                        code: FileJobErrorCode::ModelChanged,
-                        message: format!(
-                            "The model changed from {} to {} during transcription",
-                            job_model, current_model
-                        ),
-                    }))
+                Err(TranscribeError::Yield) => continue,
+                Err(TranscribeError::Cancelled) => return Err(ChunkFailure::Stop(Stop::Cancelled)),
+                Err(TranscribeError::Stop { code, message }) => {
+                    return Err(ChunkFailure::Stop(Stop::Failed { code, message }))
                 }
-                Err(ChunkError::Failed(error)) => {
+                Err(TranscribeError::Failed(error)) => {
                     attempts += 1;
                     if attempts >= ATTEMPTS_PER_CHUNK {
                         return Err(ChunkFailure::Failed(error));
@@ -810,6 +1056,10 @@ pub(crate) fn chunk_grain(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::file_transcription::lemonade::tests::{
+        begin_with_settings, json, MockServer, Reply, MODELS,
+    };
+    use std::cell::RefCell;
 
     fn segment(start_ms: u64, end_ms: u64, text: &str) -> TranscriptSegment {
         TranscriptSegment::new(start_ms, end_ms, text)
@@ -1231,5 +1481,505 @@ mod tests {
             source_path_string(Path::new("/audio/a.wav")),
             "/audio/a.wav"
         );
+    }
+
+    /// A 16 kHz mono WAV of 1 kHz tone bursts: `on_s` seconds on, 1 s off.
+    fn tone_bursts(path: &Path, total_s: u32, on_s: u32) {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 16_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::create(path, spec).unwrap();
+        for n in 0..total_s * 16_000 {
+            let in_burst = (n / 16_000) % (on_s + 1) < on_s;
+            let value = if in_burst {
+                (n as f32 * 2.0 * std::f32::consts::PI * 1_000.0 / 16_000.0).sin() * 0.3
+            } else {
+                0.0
+            };
+            writer.write_sample((value * 32767.0) as i16).unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+
+    fn lemonade_options(server: &MockServer, settings: AppSettings) -> PipelineOptions {
+        PipelineOptions {
+            engine: PipelineEngine::Lemonade {
+                config: LemonadeJobConfig {
+                    base_url: server.url(),
+                    model: "Whisper-Base".to_string(),
+                    api_key: None,
+                },
+                settings,
+            },
+            max_chunk_ms: None,
+            ffmpeg: None,
+            // Tones are not speech to the VAD.
+            skip_silent_chunks: false,
+            speaker_model: None,
+        }
+    }
+
+    fn chunk_reply(n: u32) -> Reply {
+        json(
+            200,
+            &format!(
+                r#"{{"text":" Kubernetis part {n}.","language":"english",
+                    "segments":[{{"start":0.5,"end":2.0,"text":" Kubernetis part {n}."}}]}}"#
+            ),
+        )
+    }
+
+    #[test]
+    fn lemonade_job_transcribes_every_chunk_at_its_place_in_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bursts.wav");
+        tone_bursts(&path, 65, 3);
+        let server = MockServer::start(vec![
+            json(200, MODELS),
+            chunk_reply(1),
+            chunk_reply(2),
+            chunk_reply(3),
+        ]);
+        let settings = AppSettings {
+            custom_words: vec!["Kubernetes".to_string()],
+            ..Default::default()
+        };
+        let opts = lemonade_options(&server, settings.clone());
+        let token = WorkToken::new();
+        let engine = begin_with_settings(&server, "Whisper-Base", settings, token.clone()).unwrap();
+        let decode_options = DecodeOptions::default();
+        let probe = decode::probe(&path, &decode_options).unwrap();
+        let events = RefCell::new(Vec::new());
+        let dictation_polls = Cell::new(0);
+        let dictation_active = || {
+            dictation_polls.set(dictation_polls.get() + 1);
+            true
+        };
+
+        let output = run_with(
+            &engine,
+            &dictation_active,
+            &path,
+            &decode_options,
+            &probe,
+            &opts,
+            &token,
+            &mut |event| events.borrow_mut().push(event),
+        )
+        .unwrap();
+
+        // Lemonade never waits for dictation, even while one is active.
+        assert_eq!(dictation_polls.get(), 0);
+        assert!(!events
+            .borrow()
+            .iter()
+            .any(|event| matches!(event, PipelineEvent::Waiting)));
+
+        let transcript = &output.transcript;
+        assert_eq!(output.chunks, 3);
+        assert_eq!(output.failed_chunks, 0);
+        assert_eq!(transcript.model_id, "lemonade:Whisper-Base");
+        assert_eq!(transcript.duration_ms, 65_000);
+        assert_eq!(transcript.status, TranscriptStatus::Completed);
+        assert_eq!(transcript.language.as_deref(), Some("en"));
+        assert_eq!(transcript.timing, TimingGrain::Segment);
+        assert_eq!(
+            transcript.text,
+            "Kubernetes part 1.\n\nKubernetes part 2.\n\nKubernetes part 3."
+        );
+        // Chunks tile the file; each segment sits 0.5–2 s into its chunk.
+        let mut chunk_start = 0;
+        for (i, (paragraph, segment)) in transcript
+            .paragraphs
+            .iter()
+            .zip(&transcript.segments)
+            .enumerate()
+        {
+            assert_eq!(paragraph.start_ms, chunk_start, "chunk {i}");
+            assert!(paragraph.end_ms - paragraph.start_ms <= 28_000, "chunk {i}");
+            assert_eq!(segment.start_ms, chunk_start + 500, "chunk {i}");
+            assert_eq!(segment.end_ms, chunk_start + 2_000, "chunk {i}");
+            assert_eq!(segment.text, format!("Kubernetes part {}.", i + 1));
+            chunk_start = paragraph.end_ms;
+        }
+        assert_eq!(chunk_start, 65_000);
+
+        // One preflight, then one request per chunk, in order, each with
+        // that chunk's audio.
+        let requests = server.requests();
+        assert_eq!(requests.len(), 4);
+        assert_eq!(requests[0].method, "GET");
+        for (request, paragraph) in requests[1..].iter().zip(&transcript.paragraphs) {
+            assert_eq!(request.path, "/api/v1/audio/transcriptions");
+            let samples = (paragraph.end_ms - paragraph.start_ms) as usize * 16;
+            let wav_bytes = 44 + samples.max(16_000) * 2;
+            let file_start = request.body.windows(4).position(|w| w == b"RIFF").unwrap();
+            let data_len = u32::from_le_bytes(
+                request.body[file_start + 40..file_start + 44]
+                    .try_into()
+                    .unwrap(),
+            ) as usize;
+            assert_eq!(44 + data_len, wav_bytes);
+        }
+    }
+
+    #[test]
+    fn a_failed_lemonade_chunk_is_retried_once() {
+        let server = MockServer::start(vec![
+            json(200, MODELS),
+            json(500, r#"{"error":{"message":"simulated failure"}}"#),
+            chunk_reply(1),
+        ]);
+        let token = WorkToken::new();
+        let transcriber = begin_with_settings(
+            &server,
+            "Whisper-Base",
+            AppSettings::default(),
+            token.clone(),
+        )
+        .unwrap();
+        let engine = ChunkEngine {
+            engine: &transcriber,
+            dictation_active: &|| false,
+            token: &token,
+        };
+        let mut transcribing = 0;
+
+        let chunk = engine
+            .transcribe(&[0.1; 16_000], 0, 0, 1_000, &mut |event| {
+                if matches!(event, PipelineEvent::Transcribing { .. }) {
+                    transcribing += 1;
+                }
+            })
+            .unwrap();
+
+        assert_eq!(chunk.text, "Kubernetis part 1.");
+        assert_eq!(transcribing, 2);
+        assert_eq!(server.requests().len(), 3);
+    }
+
+    #[test]
+    fn a_lemonade_server_problem_stops_the_job() {
+        let server = MockServer::start(vec![
+            json(200, MODELS),
+            json(
+                404,
+                r#"{"error":{"message":"model Whisper-Base not found"}}"#,
+            ),
+        ]);
+        let token = WorkToken::new();
+        let transcriber = begin_with_settings(
+            &server,
+            "Whisper-Base",
+            AppSettings::default(),
+            token.clone(),
+        )
+        .unwrap();
+        let engine = ChunkEngine {
+            engine: &transcriber,
+            dictation_active: &|| false,
+            token: &token,
+        };
+        match engine.transcribe(&[0.1; 16_000], 0, 0, 1_000, &mut |_| {}) {
+            Err(ChunkFailure::Stop(Stop::Failed { code, .. })) => {
+                assert_eq!(code, FileJobErrorCode::ServerModelMissing)
+            }
+            Err(ChunkFailure::Stop(Stop::Cancelled)) => panic!("not cancelled"),
+            Err(ChunkFailure::Failed(e)) => panic!("expected a stop, got {e:#}"),
+            Ok(_) => panic!("expected a stop"),
+        }
+        // Only the one request: a stop is not retried.
+        assert_eq!(server.requests().len(), 2);
+    }
+
+    /// A scripted engine for the chunk loop.
+    struct FakeEngine {
+        yields: bool,
+        results: RefCell<Vec<Result<ChunkTranscript, TranscribeError>>>,
+    }
+
+    impl ChunkTranscriber for FakeEngine {
+        fn model_id(&self) -> &str {
+            "fake"
+        }
+        fn limits(&self) -> ChunkLimits {
+            limits(28_000, 10_000)
+        }
+        fn yields_to_dictation(&self) -> bool {
+            self.yields
+        }
+        fn transcribe(
+            &self,
+            _samples: &[f32],
+            offset_ms: u64,
+            real_len_ms: u64,
+        ) -> Result<ChunkTranscript, TranscribeError> {
+            self.results.borrow_mut().pop().unwrap_or_else(|| {
+                Ok(ChunkTranscript {
+                    text: "ok".to_string(),
+                    segments: vec![segment(offset_ms, offset_ms + real_len_ms, "ok")],
+                    grain: TimingGrain::Chunk,
+                    language: None,
+                })
+            })
+        }
+    }
+
+    #[test]
+    fn an_engine_that_yields_waits_for_dictation() {
+        let engine = FakeEngine {
+            yields: true,
+            // Popped from the end: a Yield first, then success.
+            results: RefCell::new(vec![Err(TranscribeError::Yield)]),
+        };
+        let polls = Cell::new(0);
+        // Active for the first two polls.
+        let dictation_active = || {
+            polls.set(polls.get() + 1);
+            polls.get() <= 2
+        };
+        let token = WorkToken::new();
+        let chunks = ChunkEngine {
+            engine: &engine,
+            dictation_active: &dictation_active,
+            token: &token,
+        };
+        let mut events = Vec::new();
+
+        let chunk = chunks
+            .transcribe(&[0.0; 16_000], 0, 0, 1_000, &mut |event| events.push(event))
+            .unwrap();
+
+        assert_eq!(chunk.text, "ok");
+        assert_eq!(polls.get(), 4);
+        let waiting = events
+            .iter()
+            .filter(|event| matches!(event, PipelineEvent::Waiting))
+            .count();
+        assert_eq!(waiting, 1);
+    }
+
+    #[test]
+    fn engine_stops_map_to_job_failures() {
+        let token = WorkToken::new();
+        let engine = FakeEngine {
+            yields: false,
+            results: RefCell::new(vec![Err(TranscribeError::Stop {
+                code: FileJobErrorCode::ServerUnreachable,
+                message: "down".to_string(),
+            })]),
+        };
+        let chunks = ChunkEngine {
+            engine: &engine,
+            dictation_active: &|| true,
+            token: &token,
+        };
+        assert!(matches!(
+            chunks.transcribe(&[0.0; 16_000], 0, 0, 1_000, &mut |_| {}),
+            Err(ChunkFailure::Stop(Stop::Failed {
+                code: FileJobErrorCode::ServerUnreachable,
+                ..
+            }))
+        ));
+
+        assert!(matches!(
+            engine_start_error(TranscribeError::Stop {
+                code: FileJobErrorCode::ServerUnauthorized,
+                message: "bad key".to_string(),
+            }),
+            PipelineError::Failed {
+                code: FileJobErrorCode::ServerUnauthorized,
+                ..
+            }
+        ));
+        assert!(matches!(
+            engine_start_error(TranscribeError::Cancelled),
+            PipelineError::Cancelled { partial: None }
+        ));
+        assert!(matches!(
+            engine_start_error(TranscribeError::Failed(anyhow!("boom"))),
+            PipelineError::Failed {
+                code: FileJobErrorCode::EngineFailed,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn engine_config_needs_a_model() {
+        let handy = |model_id: &str| PipelineEngine::Handy {
+            model_id: model_id.to_string(),
+            device_index: None,
+        };
+        let lemonade = |model: &str| PipelineEngine::Lemonade {
+            config: LemonadeJobConfig {
+                base_url: "http://localhost:13305".to_string(),
+                model: model.to_string(),
+                api_key: None,
+            },
+            settings: AppSettings::default(),
+        };
+        assert!(check_engine_config(&handy("small")).is_ok());
+        assert!(check_engine_config(&lemonade("Whisper-Base")).is_ok());
+        for (engine, message) in [
+            (handy(""), "No transcription model is selected"),
+            (lemonade(""), "No Lemonade model is selected"),
+        ] {
+            match check_engine_config(&engine) {
+                Err(PipelineError::Failed {
+                    code, message: m, ..
+                }) => {
+                    assert_eq!(code, FileJobErrorCode::NoModel);
+                    assert_eq!(m, message);
+                }
+                other => panic!("expected NoModel, got {other:?}"),
+            }
+        }
+    }
+
+    fn output_with(paragraphs: Vec<TranscriptSegment>) -> PipelineOutput {
+        let mut builder = TranscriptBuilder::default();
+        for paragraph in paragraphs {
+            builder.push_chunk(
+                Some(paragraph.clone()),
+                vec![paragraph],
+                Some("en".to_string()),
+                TimingGrain::Chunk,
+            );
+        }
+        PipelineOutput {
+            transcript: builder.build(&meta(), None),
+            decoder: DecoderKind::Wav,
+            chunks: 1,
+            skipped_chunks: 0,
+            failed_chunks: 0,
+            warnings: Vec::new(),
+            source_size_bytes: 1,
+            source_modified_at: None,
+            speakers: None,
+        }
+    }
+
+    /// Starts labelling a file that can't be diarized (no such model or audio).
+    fn failing_labels(token: &WorkToken, events: &mut Vec<PipelineEvent>) -> SpeakerLabels {
+        let dir = std::env::temp_dir().join("handy-pipeline-no-such-dir");
+        SpeakerLabels::start(
+            Some(&dir.join("no-such-model.gguf")),
+            &dir.join("no-such-audio.wav"),
+            &DecodeOptions::default(),
+            Some(60_000),
+            token,
+            Arc::new(|| false),
+            &mut |event| events.push(event),
+        )
+    }
+
+    #[test]
+    fn a_speaker_labelling_failure_keeps_the_transcript() {
+        let token = WorkToken::new();
+        let mut events = Vec::new();
+        let mut labels = failing_labels(&token, &mut events);
+        assert!(matches!(
+            events.as_slice(),
+            [PipelineEvent::Speakers(SpeakerJobState::Running)]
+        ));
+        let output = output_with(vec![segment(0, 28_000, "Hello.")]);
+        let before = output.transcript.clone();
+
+        let output = labels
+            .finish(Ok(output), &mut |event| events.push(event))
+            .unwrap();
+
+        let state = output.speakers.clone().expect("final speaker state");
+        assert!(
+            matches!(
+                state,
+                SpeakerJobState::Failed { .. } | SpeakerJobState::Skipped { .. }
+            ),
+            "{state:?}"
+        );
+        assert!(matches!(
+            events.last(),
+            Some(PipelineEvent::Speakers(last)) if *last == state
+        ));
+        // Same text, no labels, still completed.
+        assert_eq!(output.transcript, before);
+        assert_eq!(output.transcript.status, TranscriptStatus::Completed);
+        assert_eq!(output.warnings.len(), 1);
+        assert!(output.warnings[0].starts_with("Speaker labels: "));
+    }
+
+    #[test]
+    fn an_empty_transcript_gets_no_labels() {
+        let token = WorkToken::new();
+        let mut events = Vec::new();
+        let mut labels = failing_labels(&token, &mut events);
+
+        let output = labels
+            .finish(Ok(output_with(Vec::new())), &mut |event| events.push(event))
+            .unwrap();
+
+        let skipped = SpeakerJobState::Skipped {
+            reason: SpeakerSkipReason::NoSpeech,
+        };
+        assert_eq!(output.speakers, Some(skipped.clone()));
+        assert!(output.warnings.is_empty());
+        assert!(matches!(events.last(), Some(PipelineEvent::Speakers(s)) if *s == skipped));
+    }
+
+    #[test]
+    fn a_cancelled_job_stops_labelling_and_its_partial_is_unlabelled() {
+        let token = WorkToken::new();
+        let mut events = Vec::new();
+        let mut labels = failing_labels(&token, &mut events);
+        let partial = output_with(vec![segment(0, 28_000, "Hello.")]);
+
+        let error = labels
+            .finish(
+                Err(PipelineError::Cancelled {
+                    partial: Some(Box::new(partial)),
+                }),
+                &mut |event| events.push(event),
+            )
+            .unwrap_err();
+
+        assert!(token.is_cancelled());
+        let cancelled = SpeakerJobState::Failed {
+            message: "cancelled".to_string(),
+        };
+        let PipelineError::Cancelled {
+            partial: Some(partial),
+        } = error
+        else {
+            panic!("expected a cancelled job with its partial");
+        };
+        assert_eq!(partial.speakers, Some(cancelled.clone()));
+        assert!(partial.transcript.speakers.is_none());
+        assert!(matches!(events.last(), Some(PipelineEvent::Speakers(s)) if *s == cancelled));
+    }
+
+    #[test]
+    fn no_labels_asked_means_no_speaker_events() {
+        let mut events = Vec::new();
+        let mut labels = SpeakerLabels::start(
+            None,
+            Path::new("/audio/a.wav"),
+            &DecodeOptions::default(),
+            None,
+            &WorkToken::new(),
+            Arc::new(|| false),
+            &mut |event| events.push(event),
+        );
+        let output = labels
+            .finish(
+                Ok(output_with(vec![segment(0, 1_000, "Hi.")])),
+                &mut |event| events.push(event),
+            )
+            .unwrap();
+        assert!(events.is_empty());
+        assert_eq!(output.speakers, None);
     }
 }

@@ -7,18 +7,21 @@
 
 use crate::engine_supervisor::WorkToken;
 use crate::file_transcription::formats;
+use crate::file_transcription::lemonade::{self, LemonadeJobConfig, LEMONADE_MODEL_PREFIX};
 use crate::file_transcription::pipeline::{
-    self, PipelineError, PipelineEvent, PipelineOptions, PipelineOutput, TranscriptBuilder,
-    TranscriptMeta,
+    self, PipelineEngine, PipelineError, PipelineEvent, PipelineOptions, PipelineOutput,
+    TranscriptBuilder, TranscriptMeta,
 };
+use crate::file_transcription::speaker_model;
 use crate::file_transcription::types::{
     DecoderKind, FileJobError, FileJobErrorCode, FileJobSnapshot, FileJobStatus, FileTranscript,
-    FileTranscriptionEvent, FileTranscriptionOptions, SpeakerJobState, TranscriptStatus,
+    FileTranscriptionEvent, FileTranscriptionOptions, SpeakerJobState, SpeakerSkipReason,
+    TranscriptStatus,
 };
 use crate::managers::history::HistoryManager;
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings::FileTranscriptionEngine;
+use crate::settings::{AppSettings, FileTranscriptionEngine};
 use chrono::Utc;
 use log::{error, info, warn};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -80,6 +83,8 @@ impl FileTranscriptionManager {
         options: FileTranscriptionOptions,
     ) -> Vec<FileJobSnapshot> {
         let enqueued_at = Utc::now().timestamp_millis();
+        // Shown while queued; fixed from the settings when the job starts.
+        let engine = crate::settings::get_settings(&self.app).file_transcription_engine;
         // Touch the file system before taking the lock.
         let checked: Vec<(String, Result<(), FileJobError>)> = paths
             .into_iter()
@@ -97,7 +102,14 @@ impl FileTranscriptionManager {
                 .into_iter()
                 .map(|(path, validation)| {
                     let job_id = self.next_id.fetch_add(1, Ordering::Relaxed);
-                    state.add(job_id, path, options.clone(), validation, enqueued_at)
+                    state.add(
+                        job_id,
+                        path,
+                        options.clone(),
+                        engine,
+                        validation,
+                        enqueued_at,
+                    )
                 })
                 .collect();
             (snapshots, state.evict_finished(MAX_FINISHED_JOBS))
@@ -164,14 +176,15 @@ impl FileTranscriptionManager {
     /// Applies `edit` to a finished job's stored result (`JobRecord.result`)
     /// and returns the updated transcript. Err if the job is unknown, still
     /// running, or has no result.
+    ///
+    /// `edit` runs with the job table locked, so it must not block. A
+    /// failed edit leaves the stored result unchanged.
     pub fn edit_job_transcript(
         &self,
         job_id: u64,
         edit: impl FnOnce(&mut FileTranscript) -> Result<(), String>,
     ) -> Result<FileTranscript, String> {
-        // Contract stub; the job-result edit lands with the Lemonade engine work.
-        let _ = (job_id, edit);
-        Err("not implemented".to_string())
+        self.lock_state().edit_result(job_id, edit)
     }
 
     fn lock_state(&self) -> MutexGuard<'_, JobTable> {
@@ -192,23 +205,12 @@ impl FileTranscriptionManager {
 
     fn run_worker(&self) {
         loop {
-            let job = {
-                let mut state = self.lock_state();
-                loop {
-                    if let Some(job) = state.start_next() {
-                        break job;
-                    }
-                    state = self
-                        .wake
-                        .wait(state)
-                        .unwrap_or_else(PoisonError::into_inner);
-                }
-            };
+            let (job, settings) = self.next_job();
             self.emit(FileTranscriptionEvent::Updated {
                 job: job.snapshot.clone(),
             });
 
-            self.run_job(&job);
+            self.run_job(&job, &settings);
 
             crate::memory::trim_freed_memory();
             let evicted = self.lock_state().evict_finished(MAX_FINISHED_JOBS);
@@ -216,18 +218,31 @@ impl FileTranscriptionManager {
         }
     }
 
+    /// Waits for a queued job and starts it, with the settings it runs with:
+    /// the engine and model are fixed when a job starts, not when it was
+    /// queued.
+    fn next_job(&self) -> (StartedJob, AppSettings) {
+        loop {
+            // Read outside the lock, and again after every wake-up.
+            let settings = crate::settings::get_settings(&self.app);
+            let mut state = self.lock_state();
+            if let Some(job) = state.start_next(settings.file_transcription_engine) {
+                return (job, settings);
+            }
+            // Re-check (with fresh settings) after a wake-up; a job queued in
+            // between is found by that check, so no wake-up is lost.
+            let state = self
+                .wake
+                .wait(state)
+                .unwrap_or_else(PoisonError::into_inner);
+            drop(state);
+        }
+    }
+
     /// Runs one job to its end. The job table is locked only briefly to
     /// record progress: never while the pipeline works or an event is sent.
-    fn run_job(&self, job: &StartedJob) {
-        // The model is fixed when the job starts, not when it was queued.
-        let model_id = crate::settings::get_settings(&self.app).selected_model;
-        let options = PipelineOptions {
-            model_id: model_id.clone(),
-            device_index: None,
-            max_chunk_ms: None,
-            ffmpeg: None,
-            skip_silent_chunks: true,
-        };
+    fn run_job(&self, job: &StartedJob, settings: &AppSettings) {
+        let (engine, model_id) = job_engine(settings);
         info!(
             "Starting file transcription job {} with model {}",
             job.job_id, model_id
@@ -240,6 +255,28 @@ impl FileTranscriptionManager {
             for event in events {
                 self.emit(event);
             }
+        };
+        let speaker_model = if job.options.label_speakers {
+            let installed = speaker_model::installed_speaker_model(&self.app);
+            if installed.is_none() {
+                info!(
+                    "Not labelling speakers of job {}: the speaker model isn't installed",
+                    job.job_id
+                );
+                on_event(PipelineEvent::Speakers(SpeakerJobState::Skipped {
+                    reason: SpeakerSkipReason::ModelMissing,
+                }));
+            }
+            installed
+        } else {
+            None
+        };
+        let options = PipelineOptions {
+            engine,
+            max_chunk_ms: None,
+            ffmpeg: None,
+            skip_silent_chunks: true,
+            speaker_model,
         };
         let result = catch_unwind(AssertUnwindSafe(|| {
             pipeline::run_pipeline(
@@ -341,13 +378,39 @@ impl FileTranscriptionManager {
     }
 
     fn finish_transcript(&self, mut transcript: FileTranscript, model_id: &str) -> FileTranscript {
-        transcript.model_name = self
-            .app
-            .try_state::<Arc<ModelManager>>()
-            .and_then(|models| models.get_model_info(model_id))
-            .map(|info| info.name);
+        transcript.model_name = lemonade::display_model_name(model_id).or_else(|| {
+            self.app
+                .try_state::<Arc<ModelManager>>()
+                .and_then(|models| models.get_model_info(model_id))
+                .map(|info| info.name)
+        });
         transcript.created_at = Utc::now().timestamp();
         transcript
+    }
+}
+
+/// The pipeline engine for a job started with `settings`, and the model id
+/// it reports ("small", "lemonade:Whisper-Base").
+fn job_engine(settings: &AppSettings) -> (PipelineEngine, String) {
+    match settings.file_transcription_engine {
+        FileTranscriptionEngine::Handy => (
+            PipelineEngine::Handy {
+                model_id: settings.selected_model.clone(),
+                device_index: None,
+            },
+            settings.selected_model.clone(),
+        ),
+        FileTranscriptionEngine::Lemonade => {
+            let config = LemonadeJobConfig::from_settings(&settings.lemonade);
+            let model_id = format!("{}{}", LEMONADE_MODEL_PREFIX, config.model);
+            (
+                PipelineEngine::Lemonade {
+                    config,
+                    settings: settings.clone(),
+                },
+                model_id,
+            )
+        }
     }
 }
 
@@ -442,6 +505,7 @@ impl JobTable {
         job_id: u64,
         path: String,
         options: FileTranscriptionOptions,
+        engine: FileTranscriptionEngine,
         validation: Result<(), FileJobError>,
         enqueued_at: i64,
     ) -> FileJobSnapshot {
@@ -461,7 +525,7 @@ impl JobTable {
             chunks_done: 0,
             decoder: None,
             model_id: None,
-            engine: FileTranscriptionEngine::Handy,
+            engine,
             speakers,
             error,
             has_transcript: false,
@@ -480,13 +544,14 @@ impl JobTable {
         snapshot
     }
 
-    /// Takes the oldest queued job and marks it `Preparing`.
-    fn start_next(&mut self) -> Option<StartedJob> {
+    /// Takes the oldest queued job and marks it `Preparing` on `engine`.
+    fn start_next(&mut self, engine: FileTranscriptionEngine) -> Option<StartedJob> {
         let record = self
             .jobs
             .iter_mut()
             .find(|job| job.snapshot.status == FileJobStatus::Queued)?;
         record.snapshot.status = FileJobStatus::Preparing;
+        record.snapshot.engine = engine;
         record.last_progress_emit = None;
         Some(StartedJob {
             job_id: record.snapshot.job_id,
@@ -550,6 +615,32 @@ impl JobTable {
         }
         self.jobs.remove(index);
         Ok(())
+    }
+
+    /// Applies `edit` to a finished job's result; see
+    /// [`FileTranscriptionManager::edit_job_transcript`].
+    fn edit_result(
+        &mut self,
+        job_id: u64,
+        edit: impl FnOnce(&mut FileTranscript) -> Result<(), String>,
+    ) -> Result<FileTranscript, String> {
+        let record = self
+            .record_mut(job_id)
+            .ok_or_else(|| format!("Unknown file transcription job {}", job_id))?;
+        if !is_finished(record.snapshot.status) {
+            return Err(format!(
+                "File transcription job {} is still running",
+                job_id
+            ));
+        }
+        let result = record
+            .result
+            .as_mut()
+            .ok_or_else(|| format!("File transcription job {} has no transcript", job_id))?;
+        let mut edited = result.clone();
+        edit(&mut edited)?;
+        *result = edited.clone();
+        Ok(edited)
     }
 
     fn transcript(&self, job_id: u64, now_secs: i64) -> Option<FileTranscript> {
@@ -726,6 +817,7 @@ mod tests {
                 job_id,
                 format!("/audio/file-{job_id}.mp3"),
                 WITH_HISTORY,
+                FileTranscriptionEngine::Handy,
                 Ok(()),
                 1_000 + job_id as i64,
             );
@@ -828,6 +920,7 @@ mod tests {
             1,
             "/audio/Talk.MP3".to_string(),
             WITH_HISTORY,
+            FileTranscriptionEngine::Handy,
             Ok(()),
             1_234,
         );
@@ -835,6 +928,7 @@ mod tests {
             2,
             "/audio/notes.xyz".to_string(),
             FileTranscriptionOptions::default(),
+            FileTranscriptionEngine::Lemonade,
             Err(FileJobError {
                 code: FileJobErrorCode::UnsupportedFormat,
                 message: "Unsupported file type: .xyz".to_string(),
@@ -856,6 +950,8 @@ mod tests {
         assert_eq!(queued.history_id, None);
 
         assert_eq!(failed.status, FileJobStatus::Failed);
+        assert_eq!(queued.engine, FileTranscriptionEngine::Handy);
+        assert_eq!(failed.engine, FileTranscriptionEngine::Lemonade);
         assert_eq!(
             failed.error.as_ref().map(|error| error.code),
             Some(FileJobErrorCode::UnsupportedFormat)
@@ -875,16 +971,20 @@ mod tests {
         let mut table = table_with_queued(3);
         table.cancel(1).expect("cancel queued job");
 
-        let first = table.start_next().expect("job 2 starts");
+        let first = table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("job 2 starts");
         assert_eq!(first.job_id, 2);
         assert_eq!(first.path, "/audio/file-2.mp3");
         assert!(first.options.save_to_history);
         assert_eq!(first.snapshot.status, FileJobStatus::Preparing);
         assert_eq!(status(&table, 2), FileJobStatus::Preparing);
 
-        let second = table.start_next().expect("job 3 starts");
+        let second = table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("job 3 starts");
         assert_eq!(second.job_id, 3);
-        assert!(table.start_next().is_none());
+        assert!(table.start_next(FileTranscriptionEngine::Handy).is_none());
     }
 
     #[test]
@@ -906,7 +1006,9 @@ mod tests {
     #[test]
     fn cancelling_a_running_job_cancels_its_token() {
         let mut table = table_with_queued(1);
-        let started = table.start_next().expect("start");
+        let started = table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
 
         match table.cancel(1).expect("cancel") {
             Cancellation::Running(token) => assert!(token.same_as(&started.token)),
@@ -921,9 +1023,13 @@ mod tests {
     #[test]
     fn cancel_all_dequeues_and_collects_running_tokens() {
         let mut table = table_with_queued(3);
-        let running = table.start_next().expect("start");
+        let running = table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
         table.finish(1, finished(FileJobStatus::Completed, None));
-        let next = table.start_next().expect("start job 2");
+        let next = table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start job 2");
         assert_eq!(next.job_id, 2);
         assert!(!running.token.is_cancelled());
 
@@ -942,7 +1048,9 @@ mod tests {
     #[test]
     fn dismiss_only_removes_finished_jobs() {
         let mut table = table_with_queued(2);
-        table.start_next().expect("start");
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
 
         assert!(table.dismiss(1).is_err(), "running");
         assert!(table.dismiss(2).is_err(), "queued");
@@ -958,11 +1066,15 @@ mod tests {
     fn eviction_drops_the_oldest_finished_jobs() {
         let mut table = table_with_queued(25);
         for _ in 0..23 {
-            let job = table.start_next().expect("start");
+            let job = table
+                .start_next(FileTranscriptionEngine::Handy)
+                .expect("start");
             table.finish(job.job_id, finished(FileJobStatus::Completed, None));
         }
         // Job 24 is running and job 25 is queued; neither may be evicted.
-        table.start_next().expect("start job 24");
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start job 24");
 
         let evicted = table.evict_finished(MAX_FINISHED_JOBS);
 
@@ -975,7 +1087,9 @@ mod tests {
     #[test]
     fn events_update_the_snapshot() {
         let mut table = table_with_queued(1);
-        table.start_next().expect("start");
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
         let start = Instant::now();
 
         let events = table.apply(
@@ -1028,7 +1142,9 @@ mod tests {
     #[test]
     fn progress_updates_are_throttled_but_status_changes_are_not() {
         let mut table = table_with_queued(1);
-        table.start_next().expect("start");
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
         let start = Instant::now();
         let transcribing = |processed_ms| PipelineEvent::Transcribing {
             chunk_index: 0,
@@ -1075,12 +1191,21 @@ mod tests {
             save_to_history: true,
             label_speakers: true,
         };
-        let snapshot = table.add(2, "/audio/talk.mp3".to_string(), labelled, Ok(()), 2_000);
+        let snapshot = table.add(
+            2,
+            "/audio/talk.mp3".to_string(),
+            labelled,
+            FileTranscriptionEngine::Handy,
+            Ok(()),
+            2_000,
+        );
         assert_eq!(snapshot.speakers, Some(SpeakerJobState::Pending));
         assert_eq!(snapshot.engine, FileTranscriptionEngine::Handy);
         assert_eq!(table.record(1).expect("job").snapshot.speakers, None);
 
-        table.start_next().expect("start");
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
         let now = Instant::now();
         table.apply(1, "tiny", PipelineEvent::ModelReady, now);
         // Within the progress throttle window, but a state change is never held back.
@@ -1108,7 +1233,9 @@ mod tests {
     #[test]
     fn running_transcript_is_partial_and_in_progress() {
         let mut table = table_with_queued(1);
-        table.start_next().expect("start");
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
         let now = Instant::now();
         assert!(table.transcript(1, 5).is_none(), "nothing transcribed yet");
 
@@ -1155,7 +1282,9 @@ mod tests {
     #[test]
     fn finish_records_the_result() {
         let mut table = table_with_queued(1);
-        table.start_next().expect("start");
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
         table.apply(
             1,
             "tiny",
@@ -1187,7 +1316,9 @@ mod tests {
     #[test]
     fn failed_job_without_result_has_no_transcript() {
         let mut table = table_with_queued(1);
-        table.start_next().expect("start");
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
         table.apply(
             1,
             "tiny",
@@ -1219,5 +1350,99 @@ mod tests {
         assert_eq!(snapshot.transcript_status, None);
         assert_eq!(snapshot.decoder, None);
         assert!(table.transcript(1, 0).is_none());
+    }
+
+    #[test]
+    fn the_engine_is_fixed_when_the_job_starts() {
+        let mut table = table_with_queued(2);
+        assert_eq!(
+            table.record(1).expect("job").snapshot.engine,
+            FileTranscriptionEngine::Handy
+        );
+
+        let started = table
+            .start_next(FileTranscriptionEngine::Lemonade)
+            .expect("start");
+
+        assert_eq!(started.snapshot.engine, FileTranscriptionEngine::Lemonade);
+        assert_eq!(
+            table.record(1).expect("job").snapshot.engine,
+            FileTranscriptionEngine::Lemonade
+        );
+        // Still queued: shows the engine it was queued with.
+        assert_eq!(
+            table.record(2).expect("job").snapshot.engine,
+            FileTranscriptionEngine::Handy
+        );
+    }
+
+    #[test]
+    fn job_engine_follows_the_settings() {
+        let mut settings = crate::settings::get_default_settings();
+        settings.selected_model = "small".to_string();
+        settings.lemonade.model = " Whisper-Base ".to_string();
+        settings.lemonade.api_key = "  ".to_string();
+
+        let (engine, model_id) = job_engine(&settings);
+        assert_eq!(model_id, "small");
+        assert!(matches!(
+            engine,
+            PipelineEngine::Handy { model_id, device_index: None } if model_id == "small"
+        ));
+
+        settings.file_transcription_engine = FileTranscriptionEngine::Lemonade;
+        let (engine, model_id) = job_engine(&settings);
+        assert_eq!(model_id, "lemonade:Whisper-Base");
+        match engine {
+            PipelineEngine::Lemonade { config, settings } => {
+                assert_eq!(config.model, "Whisper-Base");
+                assert_eq!(config.base_url, "http://localhost:13305");
+                assert_eq!(config.api_key, None);
+                assert_eq!(settings.selected_model, "small");
+            }
+            PipelineEngine::Handy { .. } => panic!("expected the Lemonade engine"),
+        }
+    }
+
+    #[test]
+    fn edit_job_transcript_changes_only_finished_results() {
+        let mut table = table_with_queued(3);
+        let rename = |t: &mut FileTranscript| {
+            t.text = "Edited.".to_string();
+            Ok(())
+        };
+        assert!(table.edit_result(42, rename).is_err(), "unknown job");
+        assert!(table.edit_result(1, rename).is_err(), "queued");
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+        let err = table.edit_result(1, rename).unwrap_err();
+        assert!(err.contains("still running"), "{err}");
+
+        table.finish(
+            1,
+            finished(FileJobStatus::Completed, Some(transcript("Hi."))),
+        );
+        let edited = table.edit_result(1, rename).expect("edit");
+        assert_eq!(edited.text, "Edited.");
+        assert_eq!(table.transcript(1, 0).expect("result").text, "Edited.");
+
+        // A failed edit keeps what was stored.
+        let err = table
+            .edit_result(1, |t| {
+                t.text = "Half done".to_string();
+                Err("no such speaker".to_string())
+            })
+            .unwrap_err();
+        assert_eq!(err, "no such speaker");
+        assert_eq!(table.transcript(1, 0).expect("result").text, "Edited.");
+
+        // A finished job without a result has nothing to edit.
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+        table.finish(2, finished(FileJobStatus::Cancelled, None));
+        let err = table.edit_result(2, rename).unwrap_err();
+        assert!(err.contains("no transcript"), "{err}");
     }
 }
