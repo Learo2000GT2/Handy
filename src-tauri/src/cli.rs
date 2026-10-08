@@ -1,3 +1,4 @@
+use crate::file_transcription::types::TranscriptFormat;
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -28,10 +29,12 @@ pub struct CliArgs {
     #[arg(long)]
     pub debug: bool,
 
-    /// Transcribe this WAV (16 kHz mono) headlessly and exit. Runs the same
-    /// batch transcription path as the app — no mic, no VAD, no download
-    /// (the model must already be installed).
-    #[arg(short = 'f', long, value_name = "WAV")]
+    /// Transcribe this audio or video file headlessly and exit. Reads WAV,
+    /// AIFF, MP3, FLAC, Ogg Vorbis, M4A/AAC and MP4/MOV audio natively, and
+    /// formats like Opus, WebM, WMA, AMR and DSS when ffmpeg is installed.
+    /// Long recordings are split into chunks. Same transcription path as the
+    /// app — no mic, no download (the model must already be installed).
+    #[arg(short = 'f', long, value_name = "FILE")]
     pub transcribe_file: Option<PathBuf>,
 
     /// Model id to load for --transcribe-file (default: the selected model).
@@ -60,4 +63,122 @@ pub struct CliArgs {
     /// Emit --transcribe-file results as JSON.
     #[arg(long)]
     pub json: bool,
+
+    /// Write the transcript to this file instead of printing it. Format:
+    /// --format, else the file extension, else plain text.
+    #[arg(short = 'o', long, value_name = "PATH", requires = "transcribe_file")]
+    pub output: Option<PathBuf>,
+
+    /// Transcript format for --output or stdout: txt, md, srt, vtt or json.
+    #[arg(long, value_enum, value_name = "FORMAT", requires = "transcribe_file")]
+    pub format: Option<TranscriptFormat>,
+
+    /// Longest chunk sent to the model, in seconds: 0 = whole file in one
+    /// call, otherwise at least 5. Default: the model's limit (at most 28).
+    #[arg(long, value_name = "SECS", requires = "transcribe_file")]
+    pub chunk_secs: Option<u32>,
+
+    /// ffmpeg binary for formats the built-in decoder can't read.
+    /// Default: $HANDY_FFMPEG, then PATH and common install folders.
+    #[arg(long, value_name = "PATH", requires = "transcribe_file")]
+    pub ffmpeg: Option<PathBuf>,
+
+    /// Don't print progress (or, with --format, the metrics line) to stderr.
+    #[arg(short = 'q', long)]
+    pub quiet: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+    use std::path::Path;
+
+    fn parse(args: &[&str]) -> Result<CliArgs, clap::Error> {
+        CliArgs::try_parse_from(std::iter::once("handy").chain(args.iter().copied()))
+    }
+
+    #[test]
+    fn command_definition_is_valid() {
+        CliArgs::command().debug_assert();
+    }
+
+    #[test]
+    fn parses_file_transcription_flags() {
+        let args = parse(&["-f", "a.mp3", "--format", "srt", "-o", "x.srt"]).unwrap();
+        assert_eq!(args.transcribe_file, Some(PathBuf::from("a.mp3")));
+        assert_eq!(args.format, Some(TranscriptFormat::Srt));
+        assert_eq!(args.output, Some(PathBuf::from("x.srt")));
+        assert!(!args.quiet);
+
+        let args = parse(&[
+            "--transcribe-file",
+            "talk.opus",
+            "--output",
+            "talk.vtt",
+            "--chunk-secs",
+            "20",
+            "--ffmpeg",
+            "/opt/ffmpeg",
+            "-q",
+            "--json",
+        ])
+        .unwrap();
+        assert_eq!(args.chunk_secs, Some(20));
+        assert_eq!(args.ffmpeg, Some(PathBuf::from("/opt/ffmpeg")));
+        assert!(args.quiet && args.json);
+        assert_eq!(args.format, None);
+    }
+
+    #[test]
+    fn format_names_and_aliases() {
+        for (name, format) in [
+            ("txt", TranscriptFormat::Txt),
+            ("md", TranscriptFormat::Md),
+            ("markdown", TranscriptFormat::Md),
+            ("srt", TranscriptFormat::Srt),
+            ("vtt", TranscriptFormat::Vtt),
+            ("json", TranscriptFormat::Json),
+        ] {
+            let args = parse(&["-f", "a.wav", "--format", name]).unwrap();
+            assert_eq!(args.format, Some(format), "{name}");
+        }
+        assert!(parse(&["-f", "a.wav", "--format", "docx"]).is_err());
+    }
+
+    #[test]
+    fn file_options_require_a_file() {
+        assert!(parse(&["-o", "x.txt"]).is_err());
+        assert!(parse(&["--format", "srt"]).is_err());
+        assert!(parse(&["--chunk-secs", "10"]).is_err());
+        assert!(parse(&["--ffmpeg", "/usr/bin/ffmpeg"]).is_err());
+        assert!(parse(&["--chunk-secs", "ten", "-f", "a.wav"]).is_err());
+        // --quiet stands alone, like --json.
+        assert!(parse(&["-q"]).is_ok());
+        assert!(parse(&[]).is_ok());
+    }
+
+    #[test]
+    fn transcript_format_from_output_extension() {
+        let cases = [
+            ("notes.txt", Some(TranscriptFormat::Txt)),
+            ("notes.TEXT", Some(TranscriptFormat::Txt)),
+            ("notes.md", Some(TranscriptFormat::Md)),
+            ("notes.Markdown", Some(TranscriptFormat::Md)),
+            ("subs.srt", Some(TranscriptFormat::Srt)),
+            ("subs.VTT", Some(TranscriptFormat::Vtt)),
+            ("subs.webvtt", Some(TranscriptFormat::Vtt)),
+            ("out.json", Some(TranscriptFormat::Json)),
+            ("out.docx", None),
+            ("out", None),
+            ("dir.srt/out", None),
+        ];
+        for (path, format) in cases {
+            assert_eq!(
+                TranscriptFormat::from_path(Path::new(path)),
+                format,
+                "{path}"
+            );
+        }
+    }
 }

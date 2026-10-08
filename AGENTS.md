@@ -173,22 +173,36 @@ For translation contribution guidelines, see [CONTRIBUTING_TRANSLATIONS.md](CONT
 
 Handy supports command-line parameters on all platforms for integration with scripts, window managers, and autostart configurations.
 
-**Implementation:** `cli.rs` (definitions), `main.rs` (parsing), `lib.rs` (applying), `signal_handle.rs` (shared logic)
+**Implementation:** `cli.rs` (definitions), `main.rs` (parsing), `lib.rs` (applying), `signal_handle.rs` (shared logic), `headless.rs` (file transcription and listings)
 
-| Flag                     | Description                                                |
-| ------------------------ | ---------------------------------------------------------- |
-| `--toggle-transcription` | Toggle recording on/off on a running instance              |
-| `--toggle-post-process`  | Toggle recording with post-processing on/off               |
-| `--cancel`               | Cancel the current operation on a running instance         |
-| `--start-hidden`         | Launch without showing the main window (tray icon visible) |
-| `--no-tray`              | Launch without system tray (closing window quits the app)  |
-| `--debug`                | Enable debug mode with verbose (Trace) logging             |
+| Flag                        | Description                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| `--toggle-transcription`    | Toggle recording on/off on a running instance                                                     |
+| `--toggle-post-process`     | Toggle recording with post-processing on/off                                                      |
+| `--cancel`                  | Cancel the current operation on a running instance                                                |
+| `--start-hidden`            | Launch without showing the main window (tray icon visible)                                        |
+| `--no-tray`                 | Launch without system tray (closing window quits the app)                                         |
+| `--debug`                   | Enable debug mode with verbose (Trace) logging                                                    |
+| `-f`, `--transcribe-file F` | Transcribe an audio/video file headlessly and exit (`handy -f talk.m4a -o talk.srt`)              |
+| `-o`, `--output PATH`       | Write the transcript to a file (atomically) instead of stdout                                     |
+| `--format FMT`              | `txt`, `md`, `srt`, `vtt` or `json` (default: `--output` extension, else `txt`)                   |
+| `--chunk-secs N`            | Longest chunk per engine call: `0` = whole file, else ≥ 5 (default: model limit, at most 28)      |
+| `--ffmpeg PATH`             | ffmpeg for formats symphonia can't decode (default: `$HANDY_FFMPEG`, `PATH`, common folders)      |
+| `-q`, `--quiet`             | No progress (or `--format` metrics line) on stderr                                                |
+| `--model ID`                | Model for `--transcribe-file` (default: the selected model; must be downloaded)                   |
+| `--device-index N`          | Hard-select a transcribe-cpp compute device by its `--list-devices` index                         |
+| `--repeat N`                | Run the transcription N times; `best_ms` reports the fastest                                      |
+| `--json`                    | JSON output for `--transcribe-file` and `--list-models` (legacy keys are kept, others only added) |
+| `--list-models`             | List model ids and exit (`handy --list-models --json`)                                            |
+| `--list-devices`            | List transcribe-cpp compute devices with their indices and exit                                   |
 
 **Key design decisions:**
 
 - CLI flags are runtime-only overrides — they do NOT modify persisted settings
 - Remote control flags work via `tauri_plugin_single_instance`: second instance sends args, then exits
 - `send_transcription_input()` in `signal_handle.rs` is shared between signal handlers and CLI
+- Headless flags (`--transcribe-file`, `--list-models`, `--list-devices`) skip the single-instance plugin and run as their own process; stdout carries only results (logs go to stderr), and the exit code is 0 ok, 1 runtime failure, 2 bad input or usage
+- The default and `--json` stdout shapes of `--transcribe-file` are a stable scripting interface: add keys, never rename or retype them
 
 ## Debug Mode
 
