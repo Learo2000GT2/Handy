@@ -971,6 +971,11 @@ async getFileTranscript(source: TranscriptSource) : Promise<Result<FileTranscrip
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Writes the transcript in `format` to `path` (absolute; its folder must
+ * exist; the format's extension is added when the name has none) and
+ * returns the path written.
+ */
 async exportFileTranscript(source: TranscriptSource, format: TranscriptFormat, path: string) : Promise<Result<string, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("export_file_transcript", { source, format, path }) };
@@ -980,10 +985,8 @@ async exportFileTranscript(source: TranscriptSource, format: TranscriptFormat, p
 }
 },
 /**
- * Checks if the Mac is a laptop by detecting battery presence
- * 
- * This uses pmset to check for battery information.
- * Returns true if a battery is detected (laptop), false otherwise (desktop)
+ * Stub implementation for non-macOS platforms
+ * Always returns false since laptop detection is macOS-specific
  */
 async isLaptop() : Promise<Result<boolean, string>> {
     try {
@@ -1194,7 +1197,11 @@ export type FileTranscriptionEvent =
 { kind: "removed"; job_id: number }
 export type FileTranscriptionOptions = { save_to_history: boolean }
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
-export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean; file: FileHistoryInfo | null }
+export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean; 
+/**
+ * Set for entries made by file transcription.
+ */
+file: FileHistoryInfo | null }
 export type HistoryUpdatePayload = { action: "added"; entry: HistoryEntry } | { action: "updated"; entry: HistoryEntry } | { action: "deleted"; id: number } | { action: "toggled"; id: number }
 /**
  * Result of changing keyboard implementation
