@@ -468,8 +468,11 @@
       "title": "Phiên âm tệp",
       "description": "Chuyển các bản ghi âm có sẵn thành văn bản ngay trên máy tính này. Tệp của bạn không bao giờ rời khỏi thiết bị.",
       "settingsNote": "Sử dụng mô hình bạn đã chọn cùng các cài đặt ngôn ngữ, dịch, từ tùy chỉnh và từ đệm của bạn.",
+      "settingsNoteLemonade": "Sử dụng các cài đặt ngôn ngữ, từ tùy chỉnh và từ đệm của bạn.",
       "model": "Mô hình: {{model}}",
+      "modelLemonade": "Mô hình: {{model}} trên Lemonade Server",
       "noModel": "Chọn một mô hình đã tải xuống ở trang Mô hình để phiên âm tệp.",
+      "noLemonadeModel": "Chọn một mô hình Lemonade để phiên âm tệp.",
       "dropzone": {
         "title": "Thả tệp âm thanh hoặc video vào đây",
         "hint": "Phỏng vấn, cuộc họp, bài giảng và ghi chú giọng nói với mọi độ dài",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Lưu vào lịch sử",
         "description": "Bản chép lời hoàn tất được lưu và gắn sao để tính năng tự động dọn dẹp giữ lại chúng."
+      },
+      "engine": {
+        "title": "Công cụ phiên âm",
+        "label": "Phiên âm bằng",
+        "description": "Nhập bằng giọng nói luôn dùng mô hình riêng của Handy. Lựa chọn này chỉ áp dụng cho tệp.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Địa chỉ máy chủ",
+          "description": "Thường là http://localhost:13305. Các phiên bản Lemonade cũ hơn dùng cổng 8000."
+        },
+        "apiKey": {
+          "label": "Khóa API",
+          "description": "Chỉ cần khi Lemonade Server của bạn yêu cầu.",
+          "placeholder": "Tùy chọn"
+        },
+        "model": {
+          "label": "Mô hình",
+          "description": "Mô hình Lemonade dùng để phiên âm tệp của bạn, chẳng hạn Whisper-Base.",
+          "placeholder": "Chọn một mô hình Whisper",
+          "notDownloaded": "{{model}} (tải xuống khi dùng lần đầu)",
+          "none": "Không tìm thấy mô hình phiên âm nào trên máy chủ này.",
+          "use": "Dùng “{{model}}”"
+        },
+        "test": "Kiểm tra kết nối",
+        "testing": "Đang kết nối…",
+        "connected_one": "Đã kết nối. Có {{count}} mô hình phiên âm khả dụng.",
+        "connected_other": "Đã kết nối. Có {{count}} mô hình phiên âm khả dụng.",
+        "checkFailed": "Không thể kiểm tra Lemonade Server: {{error}}",
+        "saveError": "Không thể lưu cài đặt Lemonade: {{error}}",
+        "firstChunkSlow": "Lemonade có thể đang tải xuống hoặc nạp mô hình. Lần đầu có thể mất vài phút.",
+        "errors": {
+          "invalidUrl": "Nhập địa chỉ dạng http://localhost:13305.",
+          "unreachable": "Không thể kết nối tới Lemonade Server tại {{url}}. Hãy đảm bảo máy chủ đang chạy.",
+          "timeout": "Lemonade Server không phản hồi kịp thời.",
+          "unauthorized": "Lemonade Server không chấp nhận khóa API.",
+          "modelNotFound": "Lemonade Server không có mô hình này.",
+          "http": "Lemonade Server trả về lỗi.",
+          "badResponse": "Lemonade Server gửi phản hồi mà Handy không đọc được.",
+          "cancelled": "Đã hủy kiểm tra kết nối."
+        },
+        "notes": {
+          "noTranslate": "Không thể dùng Dịch sang tiếng Anh với Lemonade Server. Tệp sẽ được phiên âm theo ngôn ngữ được nói.",
+          "remote": "Địa chỉ này không nằm trên máy tính này. Bản ghi âm của bạn sẽ được gửi tới đó."
+        }
+      },
+      "speakers": {
+        "label": "Gắn nhãn người nói",
+        "description": "Đánh dấu ai nói gì, tối đa 4 người nói. Chạy trên máy tính này và cần tải xuống một lần {{size}} MB.",
+        "download": "Tải xuống mô hình người nói ({{size}} MB)",
+        "downloading": "Đang tải xuống mô hình người nói… {{percent}}%",
+        "verifying": "Đang kiểm tra bản tải xuống…",
+        "cancelDownload": "Hủy tải xuống",
+        "downloadFailed": "Không thể tải xuống mô hình người nói: {{error}}",
+        "installed": "Đã cài đặt mô hình người nói ({{size}} MB)",
+        "remove": "Gỡ mô hình người nói",
+        "removeError": "Không thể gỡ mô hình người nói: {{error}}",
+        "license": "Mô hình người nói do NVIDIA phát triển, theo giấy phép NVIDIA Open Model License (<link>trang mô hình</link>).",
+        "title": "Người nói",
+        "defaultName": "Người nói {{number}}",
+        "rename": "Đổi tên {{name}}",
+        "nameLabel": "Tên mới cho {{name}}",
+        "save": "Lưu",
+        "cancel": "Hủy",
+        "renameError": "Không thể đổi tên người nói: {{error}}",
+        "approximate": "Thời điểm đổi người nói chỉ là ước tính vì mô hình này không cung cấp dấu thời gian.",
+        "unassigned": "Một số đoạn không khớp được với người nói nào.",
+        "state": {
+          "running": "Đang xác định người nói…",
+          "done_one": "{{count}} người nói",
+          "done_other": "{{count}} người nói",
+          "failed": "Không thể gắn nhãn người nói",
+          "skipped": {
+            "modelMissing": "Đã bỏ qua nhãn người nói: chưa tải xuống mô hình người nói.",
+            "noSpeech": "Đã bỏ qua nhãn người nói: không tìm thấy giọng nói."
+          }
+        }
       },
       "queue": {
         "title": "Tệp",
@@ -526,6 +608,9 @@
         "modelChanged": "Mô hình đã thay đổi trong khi tệp này đang được phiên âm.",
         "decodeFailed": "Không thể đọc âm thanh trong tệp này.",
         "engineFailed": "Phiên âm thất bại.",
+        "serverUnreachable": "Không thể kết nối tới Lemonade Server. Hãy đảm bảo máy chủ đang chạy.",
+        "serverUnauthorized": "Lemonade Server không chấp nhận khóa API.",
+        "serverModelMissing": "Lemonade Server không có mô hình đã chọn.",
         "internal": "Đã xảy ra lỗi.",
         "enqueue": "Không thể thêm tệp: {{error}}",
         "cancel": "Không thể hủy: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "Tệp gốc đã bị di chuyển hoặc xóa.",
       "fileDuration": "Thời lượng {{duration}}",
       "incomplete": "Chưa đầy đủ",
+      "speakerCount_one": "{{count}} người nói",
+      "speakerCount_other": "{{count}} người nói",
       "retranscribeFileUnavailable": "Để phiên âm lại tệp này, hãy dùng trang Phiên âm."
     },
     "debug": {

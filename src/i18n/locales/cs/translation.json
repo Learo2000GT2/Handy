@@ -468,8 +468,11 @@
       "title": "Přepis souborů",
       "description": "Převeďte existující nahrávky na text přímo v tomto počítači. Vaše soubory nikdy neopustí vaše zařízení.",
       "settingsNote": "Používá vybraný model a vaše nastavení jazyka, překladu, vlastních slov a výplňových slov.",
+      "settingsNoteLemonade": "Používá vaše nastavení jazyka, vlastních slov a výplňových slov.",
       "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} přes Lemonade Server",
       "noModel": "Chcete-li přepisovat soubory, vyberte stažený model na stránce Modely.",
+      "noLemonadeModel": "Chcete-li přepisovat soubory, vyberte model Lemonade.",
       "dropzone": {
         "title": "Přetáhněte sem zvukové nebo video soubory",
         "hint": "Rozhovory, schůzky, přednášky a hlasové poznámky libovolné délky",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Uložit do historie",
         "description": "Dokončené přepisy se uloží a označí hvězdičkou, takže je automatické mazání ponechá."
+      },
+      "engine": {
+        "title": "Nástroj pro přepis",
+        "label": "Přepisovat pomocí",
+        "description": "Diktování vždy používá vlastní model aplikace Handy. Tato volba platí jen pro soubory.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Adresa serveru",
+          "description": "Obvykle http://localhost:13305. Starší verze Lemonade používaly port 8000."
+        },
+        "apiKey": {
+          "label": "API klíč",
+          "description": "Potřebný jen tehdy, pokud ho váš Lemonade Server vyžaduje.",
+          "placeholder": "Volitelné"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Model Lemonade, který přepisuje vaše soubory, například Whisper-Base.",
+          "placeholder": "Vyberte model Whisper",
+          "notDownloaded": "{{model}} (stáhne se při prvním použití)",
+          "none": "Na tomto serveru nebyly nalezeny žádné modely pro přepis.",
+          "use": "Použít „{{model}}“"
+        },
+        "test": "Otestovat připojení",
+        "testing": "Připojuji…",
+        "connected_one": "Připojeno. K dispozici je {{count}} model pro přepis.",
+        "connected_other": "Připojeno. K dispozici je {{count}} modelů pro přepis.",
+        "checkFailed": "Lemonade Server se nepodařilo zkontrolovat: {{error}}",
+        "saveError": "Nastavení Lemonade se nepodařilo uložit: {{error}}",
+        "firstChunkSlow": "Lemonade možná stahuje nebo načítá model. Poprvé to může trvat několik minut.",
+        "errors": {
+          "invalidUrl": "Zadejte adresu ve tvaru http://localhost:13305.",
+          "unreachable": "Lemonade Server na adrese {{url}} není dostupný. Ujistěte se, že běží.",
+          "timeout": "Lemonade Server neodpověděl včas.",
+          "unauthorized": "Lemonade Server nepřijal API klíč.",
+          "modelNotFound": "Lemonade Server tento model nemá.",
+          "http": "Lemonade Server vrátil chybu.",
+          "badResponse": "Lemonade Server poslal odpověď, kterou Handy nedokázal přečíst.",
+          "cancelled": "Test připojení byl zrušen."
+        },
+        "notes": {
+          "noTranslate": "Funkce „Překládat do angličtiny“ není s Lemonade Server k dispozici. Soubory se přepisují v mluveném jazyce.",
+          "remote": "Tato adresa není v tomto počítači. Vaše nahrávky na ni budou odeslány."
+        }
+      },
+      "speakers": {
+        "label": "Označit mluvčí",
+        "description": "Označí, kdo co řekl, až pro 4 mluvčí. Běží v tomto počítači a vyžaduje jednorázové stažení {{size}} MB.",
+        "download": "Stáhnout model mluvčích ({{size}} MB)",
+        "downloading": "Stahuji model mluvčích… {{percent}}%",
+        "verifying": "Kontroluji stažený soubor…",
+        "cancelDownload": "Zrušit stahování",
+        "downloadFailed": "Model mluvčích se nepodařilo stáhnout: {{error}}",
+        "installed": "Model mluvčích je nainstalován ({{size}} MB)",
+        "remove": "Odebrat model mluvčích",
+        "removeError": "Model mluvčích se nepodařilo odebrat: {{error}}",
+        "license": "Model mluvčích od společnosti NVIDIA v rámci licence NVIDIA Open Model License (<link>stránka modelu</link>).",
+        "title": "Mluvčí",
+        "defaultName": "Mluvčí {{number}}",
+        "rename": "Přejmenovat {{name}}",
+        "nameLabel": "Nové jméno pro {{name}}",
+        "save": "Uložit",
+        "cancel": "Zrušit",
+        "renameError": "Mluvčího se nepodařilo přejmenovat: {{error}}",
+        "approximate": "Změny mluvčích jsou přibližné, protože tento model neposkytuje časové značky.",
+        "unassigned": "Některé pasáže se nepodařilo přiřadit k žádnému mluvčímu.",
+        "state": {
+          "running": "Rozpoznávám mluvčí…",
+          "done_one": "{{count}} mluvčí",
+          "done_other": "{{count}} mluvčích",
+          "failed": "Mluvčí se nepodařilo označit",
+          "skipped": {
+            "modelMissing": "Označení mluvčích přeskočeno: model mluvčích není stažen.",
+            "noSpeech": "Označení mluvčích přeskočeno: nebyla nalezena žádná řeč."
+          }
+        }
       },
       "queue": {
         "title": "Soubory",
@@ -526,6 +608,9 @@
         "modelChanged": "Model se změnil během přepisu tohoto souboru.",
         "decodeFailed": "Zvuk v tomto souboru se nepodařilo přečíst.",
         "engineFailed": "Přepis selhal.",
+        "serverUnreachable": "Lemonade Server není dostupný. Ujistěte se, že běží.",
+        "serverUnauthorized": "Lemonade Server nepřijal API klíč.",
+        "serverModelMissing": "Lemonade Server nemá vybraný model.",
         "internal": "Něco se pokazilo.",
         "enqueue": "Soubory se nepodařilo přidat: {{error}}",
         "cancel": "Nepodařilo se zrušit: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "Původní soubor byl přesunut nebo smazán.",
       "fileDuration": "Délka {{duration}}",
       "incomplete": "Neúplný",
+      "speakerCount_one": "{{count}} mluvčí",
+      "speakerCount_other": "{{count}} mluvčích",
       "retranscribeFileUnavailable": "Chcete-li tento soubor přepsat znovu, použijte stránku Přepis."
     },
     "debug": {

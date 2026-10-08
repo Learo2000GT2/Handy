@@ -468,8 +468,11 @@
       "title": "ファイルの文字起こし",
       "description": "既存の録音をこのコンピューター上でテキストに変換します。ファイルがデバイスの外に送信されることはありません。",
       "settingsNote": "選択中のモデルと、言語・翻訳・カスタム単語・フィラー語の設定が使用されます。",
+      "settingsNoteLemonade": "言語・カスタム単語・フィラー語の設定が使用されます。",
       "model": "モデル: {{model}}",
+      "modelLemonade": "モデル: Lemonade Server の {{model}}",
       "noModel": "ファイルを文字起こしするには、モデルページでダウンロード済みのモデルを選択してください。",
+      "noLemonadeModel": "ファイルを文字起こしするには、Lemonade のモデルを選択してください。",
       "dropzone": {
         "title": "音声または動画ファイルをここにドロップ",
         "hint": "インタビュー、会議、講義、ボイスメモなど、長さを問わず対応",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "履歴に保存",
         "description": "完了した文字起こしは保存されてスターが付き、自動削除の対象外になります。"
+      },
+      "engine": {
+        "title": "文字起こしエンジン",
+        "label": "使用するエンジン",
+        "description": "音声入力には常に Handy 独自のモデルが使用されます。この選択はファイルにのみ適用されます。",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "サーバーアドレス",
+          "description": "通常は http://localhost:13305 です。古いバージョンの Lemonade ではポート 8000 が使われていました。"
+        },
+        "apiKey": {
+          "label": "API キー",
+          "description": "Lemonade Server で API キーが求められる場合にのみ必要です。",
+          "placeholder": "任意"
+        },
+        "model": {
+          "label": "モデル",
+          "description": "ファイルの文字起こしに使用する Lemonade のモデル（例: Whisper-Base）。",
+          "placeholder": "Whisper モデルを選択",
+          "notDownloaded": "{{model}}（初回使用時にダウンロード）",
+          "none": "このサーバーに文字起こしモデルが見つかりません。",
+          "use": "「{{model}}」を使用"
+        },
+        "test": "接続をテスト",
+        "testing": "接続中…",
+        "connected_one": "接続しました。{{count}}個の文字起こしモデルを利用できます。",
+        "connected_other": "接続しました。{{count}}個の文字起こしモデルを利用できます。",
+        "checkFailed": "Lemonade Server を確認できませんでした: {{error}}",
+        "saveError": "Lemonade の設定を保存できませんでした: {{error}}",
+        "firstChunkSlow": "Lemonade がモデルをダウンロードまたは読み込んでいる可能性があります。初回は数分かかることがあります。",
+        "errors": {
+          "invalidUrl": "http://localhost:13305 のようなアドレスを入力してください。",
+          "unreachable": "{{url}} の Lemonade Server に接続できません。起動していることを確認してください。",
+          "timeout": "Lemonade Server から時間内に応答がありませんでした。",
+          "unauthorized": "Lemonade Server で API キーが受け付けられませんでした。",
+          "modelNotFound": "Lemonade Server にこのモデルがありません。",
+          "http": "Lemonade Server がエラーを返しました。",
+          "badResponse": "Lemonade Server から Handy が読み取れない応答が返されました。",
+          "cancelled": "接続テストがキャンセルされました。"
+        },
+        "notes": {
+          "noTranslate": "Lemonade Server では「英語に翻訳」を使用できません。ファイルは話されている言語のまま文字起こしされます。",
+          "remote": "このアドレスはこのコンピューター上にありません。録音はこのアドレスに送信されます。"
+        }
+      },
+      "speakers": {
+        "label": "話者ラベルを付ける",
+        "description": "最大 4 人まで、誰が何を話したかを区別します。このコンピューター上で動作し、初回のみ {{size}} MB のダウンロードが必要です。",
+        "download": "話者モデルをダウンロード（{{size}} MB）",
+        "downloading": "話者モデルをダウンロード中… {{percent}}%",
+        "verifying": "ダウンロードを確認中…",
+        "cancelDownload": "ダウンロードをキャンセル",
+        "downloadFailed": "話者モデルをダウンロードできませんでした: {{error}}",
+        "installed": "話者モデルをインストール済み（{{size}} MB）",
+        "remove": "話者モデルを削除",
+        "removeError": "話者モデルを削除できませんでした: {{error}}",
+        "license": "話者モデルは NVIDIA が NVIDIA Open Model License の下で提供しています（<link>モデルページ</link>）。",
+        "title": "話者",
+        "defaultName": "話者 {{number}}",
+        "rename": "{{name}} の名前を変更",
+        "nameLabel": "{{name}} の新しい名前",
+        "save": "保存",
+        "cancel": "キャンセル",
+        "renameError": "話者の名前を変更できませんでした: {{error}}",
+        "approximate": "このモデルはタイムスタンプを出力しないため、話者の切り替わり位置はおおよそのものです。",
+        "unassigned": "一部の箇所は話者を特定できませんでした。",
+        "state": {
+          "running": "話者を識別中…",
+          "done_one": "話者 {{count}} 人",
+          "done_other": "話者 {{count}} 人",
+          "failed": "話者ラベルを付けられませんでした",
+          "skipped": {
+            "modelMissing": "話者ラベルをスキップしました: 話者モデルがダウンロードされていません。",
+            "noSpeech": "話者ラベルをスキップしました: 音声が見つかりませんでした。"
+          }
+        }
       },
       "queue": {
         "title": "ファイル",
@@ -526,6 +608,9 @@
         "modelChanged": "このファイルの文字起こし中にモデルが変更されました。",
         "decodeFailed": "このファイルの音声を読み取れませんでした。",
         "engineFailed": "文字起こしに失敗しました。",
+        "serverUnreachable": "Lemonade Server に接続できません。起動していることを確認してください。",
+        "serverUnauthorized": "Lemonade Server で API キーが受け付けられませんでした。",
+        "serverModelMissing": "Lemonade Server に選択したモデルがありません。",
         "internal": "問題が発生しました。",
         "enqueue": "ファイルを追加できませんでした: {{error}}",
         "cancel": "キャンセルできませんでした: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "元のファイルは移動または削除されています。",
       "fileDuration": "長さ {{duration}}",
       "incomplete": "不完全",
+      "speakerCount_one": "話者 {{count}} 人",
+      "speakerCount_other": "話者 {{count}} 人",
       "retranscribeFileUnavailable": "このファイルをもう一度文字起こしするには、「文字起こし」ページを使用してください。"
     },
     "debug": {

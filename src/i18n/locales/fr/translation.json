@@ -468,8 +468,11 @@
       "title": "Transcrire des fichiers",
       "description": "Convertissez des enregistrements existants en texte sur cet ordinateur. Vos fichiers ne quittent jamais votre appareil.",
       "settingsNote": "Utilise le modèle sélectionné ainsi que vos paramètres de langue, de traduction, de mots personnalisés et de mots de remplissage.",
+      "settingsNoteLemonade": "Utilise vos paramètres de langue, de mots personnalisés et de mots de remplissage.",
       "model": "Modèle : {{model}}",
+      "modelLemonade": "Modèle : {{model}} sur Lemonade Server",
       "noModel": "Sélectionnez un modèle téléchargé dans la page 'Modèles' pour transcrire des fichiers.",
+      "noLemonadeModel": "Choisissez un modèle Lemonade pour transcrire des fichiers.",
       "dropzone": {
         "title": "Déposez des fichiers audio ou vidéo ici",
         "hint": "Entretiens, réunions, cours et mémos vocaux de toute durée",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Enregistrer dans l'historique",
         "description": "Les transcriptions terminées sont enregistrées et ajoutées aux favoris pour que le nettoyage automatique les conserve."
+      },
+      "engine": {
+        "title": "Moteur de transcription",
+        "label": "Transcrire avec",
+        "description": "La dictée utilise toujours le modèle propre à Handy. Ce choix ne concerne que les fichiers.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Adresse du serveur",
+          "description": "Généralement http://localhost:13305. Les anciennes versions de Lemonade utilisaient le port 8000."
+        },
+        "apiKey": {
+          "label": "Clé API",
+          "description": "Nécessaire uniquement si votre Lemonade Server en demande une.",
+          "placeholder": "Facultatif"
+        },
+        "model": {
+          "label": "Modèle",
+          "description": "Le modèle Lemonade qui transcrit vos fichiers, par exemple Whisper-Base.",
+          "placeholder": "Choisissez un modèle Whisper",
+          "notDownloaded": "{{model}} (téléchargé à la première utilisation)",
+          "none": "Aucun modèle de transcription trouvé sur ce serveur.",
+          "use": "Utiliser « {{model}} »"
+        },
+        "test": "Tester la connexion",
+        "testing": "Connexion en cours…",
+        "connected_one": "Connecté. {{count}} modèle de transcription disponible.",
+        "connected_other": "Connecté. {{count}} modèles de transcription disponibles.",
+        "checkFailed": "Impossible de vérifier Lemonade Server : {{error}}",
+        "saveError": "Impossible d'enregistrer les paramètres Lemonade : {{error}}",
+        "firstChunkSlow": "Lemonade est peut-être en train de télécharger ou de charger le modèle. La première fois, cela peut prendre quelques minutes.",
+        "errors": {
+          "invalidUrl": "Saisissez une adresse comme http://localhost:13305.",
+          "unreachable": "Impossible de joindre Lemonade Server à l'adresse {{url}}. Vérifiez qu'il est en cours d'exécution.",
+          "timeout": "Lemonade Server n'a pas répondu à temps.",
+          "unauthorized": "Lemonade Server n'a pas accepté la clé API.",
+          "modelNotFound": "Lemonade Server ne dispose pas de ce modèle.",
+          "http": "Lemonade Server a renvoyé une erreur.",
+          "badResponse": "Lemonade Server a envoyé une réponse que Handy n'a pas pu lire.",
+          "cancelled": "Le test de connexion a été annulé."
+        },
+        "notes": {
+          "noTranslate": "La traduction en anglais n'est pas disponible avec Lemonade Server. Les fichiers sont transcrits dans la langue parlée.",
+          "remote": "Cette adresse ne se trouve pas sur cet ordinateur. Vos enregistrements y seront envoyés."
+        }
+      },
+      "speakers": {
+        "label": "Identifier les intervenants",
+        "description": "Indique qui a dit quoi, jusqu'à 4 intervenants. Fonctionne sur cet ordinateur et nécessite un téléchargement unique de {{size}} Mo.",
+        "download": "Télécharger le modèle d'intervenants ({{size}} Mo)",
+        "downloading": "Téléchargement du modèle d'intervenants… {{percent}}%",
+        "verifying": "Vérification du téléchargement…",
+        "cancelDownload": "Annuler le téléchargement",
+        "downloadFailed": "Impossible de télécharger le modèle d'intervenants : {{error}}",
+        "installed": "Modèle d'intervenants installé ({{size}} Mo)",
+        "remove": "Supprimer le modèle d'intervenants",
+        "removeError": "Impossible de supprimer le modèle d'intervenants : {{error}}",
+        "license": "Modèle d'intervenants de NVIDIA, sous NVIDIA Open Model License (<link>page du modèle</link>).",
+        "title": "Intervenants",
+        "defaultName": "Intervenant {{number}}",
+        "rename": "Renommer {{name}}",
+        "nameLabel": "Nouveau nom pour {{name}}",
+        "save": "Enregistrer",
+        "cancel": "Annuler",
+        "renameError": "Impossible de renommer l'intervenant : {{error}}",
+        "approximate": "Les changements d'intervenant sont approximatifs car ce modèle ne fournit pas d'horodatage.",
+        "unassigned": "Certains passages n'ont pas pu être attribués à un intervenant.",
+        "state": {
+          "running": "Identification des intervenants…",
+          "done_one": "{{count}} intervenant",
+          "done_other": "{{count}} intervenants",
+          "failed": "Impossible d'identifier les intervenants",
+          "skipped": {
+            "modelMissing": "Identification des intervenants ignorée : le modèle d'intervenants n'est pas téléchargé.",
+            "noSpeech": "Identification des intervenants ignorée : aucune parole détectée."
+          }
+        }
       },
       "queue": {
         "title": "Fichiers",
@@ -526,6 +608,9 @@
         "modelChanged": "Le modèle a changé pendant la transcription de ce fichier.",
         "decodeFailed": "Impossible de lire l'audio de ce fichier.",
         "engineFailed": "La transcription a échoué.",
+        "serverUnreachable": "Impossible de joindre Lemonade Server. Vérifiez qu'il est en cours d'exécution.",
+        "serverUnauthorized": "Lemonade Server n'a pas accepté la clé API.",
+        "serverModelMissing": "Lemonade Server ne dispose pas du modèle sélectionné.",
         "internal": "Une erreur s'est produite.",
         "enqueue": "Impossible d'ajouter les fichiers : {{error}}",
         "cancel": "Impossible d'annuler : {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "Le fichier original a été déplacé ou supprimé.",
       "fileDuration": "Durée {{duration}}",
       "incomplete": "Incomplète",
+      "speakerCount_one": "{{count}} intervenant",
+      "speakerCount_other": "{{count}} intervenants",
       "retranscribeFileUnavailable": "Pour transcrire à nouveau ce fichier, utilisez la page 'Transcrire'."
     },
     "debug": {

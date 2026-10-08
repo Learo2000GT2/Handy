@@ -445,8 +445,11 @@
       "title": "تفريغ الملفات",
       "description": "حوّل التسجيلات الموجودة إلى نص على هذا الكمبيوتر. لا تغادر ملفاتك جهازك أبدًا.",
       "settingsNote": "يستخدم النموذج المحدد وإعداداتك للغة والترجمة والكلمات المخصصة وكلمات الحشو.",
+      "settingsNoteLemonade": "يستخدم إعداداتك للغة والكلمات المخصصة وكلمات الحشو.",
       "model": "النموذج: {{model}}",
+      "modelLemonade": "النموذج: {{model}} على Lemonade Server",
       "noModel": "اختر نموذجًا محمّلًا من صفحة النماذج لتفريغ الملفات.",
+      "noLemonadeModel": "اختر نموذج Lemonade لتفريغ الملفات.",
       "dropzone": {
         "title": "أفلت ملفات الصوت أو الفيديو هنا",
         "hint": "مقابلات واجتماعات ومحاضرات ومذكرات صوتية بأي طول",
@@ -466,6 +469,85 @@
       "saveToHistory": {
         "label": "الحفظ في السجل",
         "description": "تُحفظ التفريغات المكتملة وتُميَّز بنجمة حتى لا يحذفها التنظيف التلقائي."
+      },
+      "engine": {
+        "title": "محرك التفريغ",
+        "label": "التفريغ باستخدام",
+        "description": "يستخدم الإملاء دائمًا النموذج الخاص بـ Handy. هذا الخيار للملفات فقط.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "عنوان الخادم",
+          "description": "عادةً http://localhost:13305. كانت إصدارات Lemonade الأقدم تستخدم المنفذ 8000."
+        },
+        "apiKey": {
+          "label": "مفتاح API",
+          "description": "مطلوب فقط إذا طلبه Lemonade Server.",
+          "placeholder": "اختياري"
+        },
+        "model": {
+          "label": "النموذج",
+          "description": "نموذج Lemonade الذي يفرّغ ملفاتك، مثل Whisper-Base.",
+          "placeholder": "اختر نموذج Whisper",
+          "notDownloaded": "{{model}} (يُنزَّل عند أول استخدام)",
+          "none": "لم يُعثر على نماذج تفريغ على هذا الخادم.",
+          "use": "استخدام «{{model}}»"
+        },
+        "test": "اختبار الاتصال",
+        "testing": "جارٍ الاتصال…",
+        "connected_one": "متصل. يتوفر {{count}} نموذج تفريغ.",
+        "connected_other": "متصل. يتوفر {{count}} من نماذج التفريغ.",
+        "checkFailed": "تعذر التحقق من Lemonade Server: {{error}}",
+        "saveError": "تعذر حفظ إعدادات Lemonade: {{error}}",
+        "firstChunkSlow": "قد يكون Lemonade بصدد تنزيل النموذج أو تحميله. قد يستغرق ذلك بضع دقائق في المرة الأولى.",
+        "errors": {
+          "invalidUrl": "أدخل عنوانًا مثل http://localhost:13305.",
+          "unreachable": "تعذر الوصول إلى Lemonade Server على {{url}}. تأكد من أنه قيد التشغيل.",
+          "timeout": "لم يستجب Lemonade Server في الوقت المحدد.",
+          "unauthorized": "لم يقبل Lemonade Server مفتاح API.",
+          "modelNotFound": "هذا النموذج غير متوفر على Lemonade Server.",
+          "http": "أرجع Lemonade Server خطأً.",
+          "badResponse": "أرسل Lemonade Server ردًا تعذر على Handy قراءته.",
+          "cancelled": "تم إلغاء اختبار الاتصال."
+        },
+        "notes": {
+          "noTranslate": "خيار «الترجمة إلى الإنجليزية» غير متاح مع Lemonade Server. تُفرَّغ الملفات باللغة المنطوقة.",
+          "remote": "هذا العنوان ليس على هذا الكمبيوتر. سيتم إرسال تسجيلاتك إليه."
+        }
+      },
+      "speakers": {
+        "label": "تمييز المتحدثين",
+        "description": "حدّد من قال ماذا، لما يصل إلى 4 متحدثين. يعمل على هذا الكمبيوتر ويتطلب تنزيلًا لمرة واحدة بحجم {{size}} ميجابايت.",
+        "download": "تنزيل نموذج المتحدثين ({{size}} ميجابايت)",
+        "downloading": "جارٍ تنزيل نموذج المتحدثين… {{percent}}%",
+        "verifying": "جارٍ التحقق من التنزيل…",
+        "cancelDownload": "إلغاء التنزيل",
+        "downloadFailed": "تعذر تنزيل نموذج المتحدثين: {{error}}",
+        "installed": "نموذج المتحدثين مثبّت ({{size}} ميجابايت)",
+        "remove": "إزالة نموذج المتحدثين",
+        "removeError": "تعذرت إزالة نموذج المتحدثين: {{error}}",
+        "license": "نموذج المتحدثين من NVIDIA، بموجب ترخيص NVIDIA Open Model License (<link>صفحة النموذج</link>).",
+        "title": "المتحدثون",
+        "defaultName": "المتحدث {{number}}",
+        "rename": "إعادة تسمية {{name}}",
+        "nameLabel": "الاسم الجديد لـ {{name}}",
+        "save": "حفظ",
+        "cancel": "إلغاء",
+        "renameError": "تعذرت إعادة تسمية المتحدث: {{error}}",
+        "approximate": "مواضع تغيّر المتحدث تقريبية لأن هذا النموذج لا يوفر طوابع زمنية.",
+        "unassigned": "تعذر ربط بعض المقاطع بمتحدث.",
+        "state": {
+          "running": "جارٍ تحديد المتحدثين…",
+          "done_one": "{{count}} متحدث",
+          "done_other": "{{count}} متحدثين",
+          "failed": "تعذر تمييز المتحدثين",
+          "skipped": {
+            "modelMissing": "تم تخطي تمييز المتحدثين: نموذج المتحدثين غير منزَّل.",
+            "noSpeech": "تم تخطي تمييز المتحدثين: لم يُعثر على كلام."
+          }
+        }
       },
       "queue": {
         "title": "الملفات",
@@ -503,6 +585,9 @@
         "modelChanged": "تغيّر النموذج أثناء تفريغ هذا الملف.",
         "decodeFailed": "تعذرت قراءة الصوت في هذا الملف.",
         "engineFailed": "فشل التفريغ.",
+        "serverUnreachable": "تعذر الوصول إلى Lemonade Server. تأكد من أنه قيد التشغيل.",
+        "serverUnauthorized": "لم يقبل Lemonade Server مفتاح API.",
+        "serverModelMissing": "النموذج المحدد غير متوفر على Lemonade Server.",
         "internal": "حدث خطأ ما.",
         "enqueue": "تعذرت إضافة الملفات: {{error}}",
         "cancel": "تعذر الإلغاء: {{error}}",
@@ -552,6 +637,8 @@
       "originalMissing": "تم نقل الملف الأصلي أو حذفه.",
       "fileDuration": "المدة {{duration}}",
       "incomplete": "غير مكتمل",
+      "speakerCount_one": "{{count}} متحدث",
+      "speakerCount_other": "{{count}} متحدثين",
       "retranscribeFileUnavailable": "لإعادة تفريغ هذا الملف، استخدم صفحة التفريغ الصوتي."
     },
     "debug": {

@@ -468,8 +468,11 @@
       "title": "Transkrypcja plików",
       "description": "Zamieniaj istniejące nagrania na tekst na tym komputerze. Twoje pliki nigdy nie opuszczają urządzenia.",
       "settingsNote": "Używa wybranego modelu oraz Twoich ustawień języka, tłumaczenia, własnych słów i wyrazów wypełniających.",
+      "settingsNoteLemonade": "Używa Twoich ustawień języka, własnych słów i wyrazów wypełniających.",
       "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} na Lemonade Server",
       "noModel": "Wybierz pobrany model na stronie Modele, aby transkrybować pliki.",
+      "noLemonadeModel": "Wybierz model Lemonade, aby transkrybować pliki.",
       "dropzone": {
         "title": "Upuść tutaj pliki audio lub wideo",
         "hint": "Wywiady, spotkania, wykłady i notatki głosowe dowolnej długości",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Zapisuj w historii",
         "description": "Gotowe transkrypcje są zapisywane i oznaczane gwiazdką, dzięki czemu automatyczne czyszczenie ich nie usuwa."
+      },
+      "engine": {
+        "title": "Silnik transkrypcji",
+        "label": "Transkrybuj za pomocą",
+        "description": "Dyktowanie zawsze używa własnego modelu Handy. Ten wybór dotyczy tylko plików.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Adres serwera",
+          "description": "Zwykle http://localhost:13305. Starsze wersje Lemonade używały portu 8000."
+        },
+        "apiKey": {
+          "label": "Klucz API",
+          "description": "Potrzebny tylko wtedy, gdy Twój Lemonade Server go wymaga.",
+          "placeholder": "Opcjonalnie"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Model Lemonade, który transkrybuje Twoje pliki, np. Whisper-Base.",
+          "placeholder": "Wybierz model Whisper",
+          "notDownloaded": "{{model}} (pobierany przy pierwszym użyciu)",
+          "none": "Nie znaleziono modeli transkrypcji na tym serwerze.",
+          "use": "Użyj „{{model}}”"
+        },
+        "test": "Testuj połączenie",
+        "testing": "Łączenie…",
+        "connected_one": "Połączono. Dostępny jest {{count}} model transkrypcji.",
+        "connected_other": "Połączono. Dostępne modele transkrypcji: {{count}}.",
+        "checkFailed": "Nie udało się sprawdzić Lemonade Server: {{error}}",
+        "saveError": "Nie udało się zapisać ustawień Lemonade: {{error}}",
+        "firstChunkSlow": "Lemonade może pobierać lub wczytywać model. Za pierwszym razem może to potrwać kilka minut.",
+        "errors": {
+          "invalidUrl": "Wpisz adres, np. http://localhost:13305.",
+          "unreachable": "Nie można połączyć się z Lemonade Server pod adresem {{url}}. Upewnij się, że jest uruchomiony.",
+          "timeout": "Lemonade Server nie odpowiedział na czas.",
+          "unauthorized": "Lemonade Server nie zaakceptował klucza API.",
+          "modelNotFound": "Lemonade Server nie ma tego modelu.",
+          "http": "Lemonade Server zwrócił błąd.",
+          "badResponse": "Lemonade Server wysłał odpowiedź, której Handy nie może odczytać.",
+          "cancelled": "Test połączenia został anulowany."
+        },
+        "notes": {
+          "noTranslate": "Opcja „Tłumacz na angielski” nie jest dostępna z Lemonade Server. Pliki są transkrybowane w języku nagrania.",
+          "remote": "Ten adres nie wskazuje na ten komputer. Twoje nagrania zostaną na niego wysłane."
+        }
+      },
+      "speakers": {
+        "label": "Oznaczaj mówców",
+        "description": "Pokazuje, kto co powiedział, dla maksymalnie 4 mówców. Działa na tym komputerze i wymaga jednorazowego pobrania {{size}} MB.",
+        "download": "Pobierz model mówców ({{size}} MB)",
+        "downloading": "Pobieranie modelu mówców… {{percent}}%",
+        "verifying": "Sprawdzanie pobranego pliku…",
+        "cancelDownload": "Anuluj pobieranie",
+        "downloadFailed": "Nie udało się pobrać modelu mówców: {{error}}",
+        "installed": "Zainstalowano model mówców ({{size}} MB)",
+        "remove": "Usuń model mówców",
+        "removeError": "Nie udało się usunąć modelu mówców: {{error}}",
+        "license": "Model mówców od NVIDIA, na licencji NVIDIA Open Model License (<link>strona modelu</link>).",
+        "title": "Mówcy",
+        "defaultName": "Mówca {{number}}",
+        "rename": "Zmień nazwę „{{name}}”",
+        "nameLabel": "Nowa nazwa dla „{{name}}”",
+        "save": "Zapisz",
+        "cancel": "Anuluj",
+        "renameError": "Nie udało się zmienić nazwy mówcy: {{error}}",
+        "approximate": "Zmiany mówców są przybliżone, ponieważ ten model nie podaje znaczników czasu.",
+        "unassigned": "Niektórych fragmentów nie udało się przypisać do mówcy.",
+        "state": {
+          "running": "Rozpoznawanie mówców…",
+          "done_one": "{{count}} mówca",
+          "done_other": "Mówcy: {{count}}",
+          "failed": "Nie udało się oznaczyć mówców",
+          "skipped": {
+            "modelMissing": "Pominięto oznaczanie mówców: model mówców nie został pobrany.",
+            "noSpeech": "Pominięto oznaczanie mówców: nie wykryto mowy."
+          }
+        }
       },
       "queue": {
         "title": "Pliki",
@@ -526,6 +608,9 @@
         "modelChanged": "Model zmienił się podczas transkrypcji tego pliku.",
         "decodeFailed": "Nie udało się odczytać dźwięku z tego pliku.",
         "engineFailed": "Transkrypcja nie powiodła się.",
+        "serverUnreachable": "Nie można połączyć się z Lemonade Server. Upewnij się, że jest uruchomiony.",
+        "serverUnauthorized": "Lemonade Server nie zaakceptował klucza API.",
+        "serverModelMissing": "Lemonade Server nie ma wybranego modelu.",
         "internal": "Coś poszło nie tak.",
         "enqueue": "Nie udało się dodać plików: {{error}}",
         "cancel": "Nie udało się anulować: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "Oryginalny plik został przeniesiony lub usunięty.",
       "fileDuration": "Długość {{duration}}",
       "incomplete": "Niekompletna",
+      "speakerCount_one": "{{count}} mówca",
+      "speakerCount_other": "Mówcy: {{count}}",
       "retranscribeFileUnavailable": "Aby ponownie transkrybować ten plik, użyj strony Transkrypcja."
     },
     "debug": {

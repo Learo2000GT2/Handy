@@ -468,8 +468,11 @@
       "title": "Transkripsikan File",
       "description": "Ubah rekaman yang sudah ada menjadi teks di komputer ini. File Anda tidak pernah keluar dari perangkat Anda.",
       "settingsNote": "Menggunakan model yang Anda pilih serta pengaturan bahasa, terjemahan, kata khusus, dan kata pengisi Anda.",
+      "settingsNoteLemonade": "Menggunakan pengaturan bahasa, kata khusus, dan kata pengisi Anda.",
       "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} di Lemonade Server",
       "noModel": "Pilih model yang sudah diunduh di halaman Model untuk mentranskripsikan file.",
+      "noLemonadeModel": "Pilih model Lemonade untuk mentranskripsikan file.",
       "dropzone": {
         "title": "Letakkan file audio atau video di sini",
         "hint": "Wawancara, rapat, kuliah, dan memo suara dengan durasi berapa pun",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Simpan ke Riwayat",
         "description": "Transkripsi yang selesai akan disimpan dan diberi bintang agar tidak dihapus oleh pembersihan otomatis."
+      },
+      "engine": {
+        "title": "Mesin Transkripsi",
+        "label": "Transkripsikan dengan",
+        "description": "Dikte selalu menggunakan model milik Handy sendiri. Pilihan ini hanya berlaku untuk file.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Alamat Server",
+          "description": "Biasanya http://localhost:13305. Versi Lemonade yang lebih lama menggunakan port 8000."
+        },
+        "apiKey": {
+          "label": "Kunci API",
+          "description": "Hanya diperlukan jika Lemonade Server Anda memintanya.",
+          "placeholder": "Opsional"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Model Lemonade yang mentranskripsikan file Anda, misalnya Whisper-Base.",
+          "placeholder": "Pilih model Whisper",
+          "notDownloaded": "{{model}} (diunduh saat pertama kali digunakan)",
+          "none": "Tidak ada model transkripsi yang ditemukan di server ini.",
+          "use": "Gunakan “{{model}}”"
+        },
+        "test": "Uji Koneksi",
+        "testing": "Menghubungkan…",
+        "connected_one": "Terhubung. {{count}} model transkripsi tersedia.",
+        "connected_other": "Terhubung. {{count}} model transkripsi tersedia.",
+        "checkFailed": "Tidak dapat memeriksa Lemonade Server: {{error}}",
+        "saveError": "Tidak dapat menyimpan pengaturan Lemonade: {{error}}",
+        "firstChunkSlow": "Lemonade mungkin sedang mengunduh atau memuat model. Pada penggunaan pertama, ini bisa memakan waktu beberapa menit.",
+        "errors": {
+          "invalidUrl": "Masukkan alamat seperti http://localhost:13305.",
+          "unreachable": "Tidak dapat menjangkau Lemonade Server di {{url}}. Pastikan server sedang berjalan.",
+          "timeout": "Lemonade Server tidak merespons tepat waktu.",
+          "unauthorized": "Lemonade Server tidak menerima kunci API.",
+          "modelNotFound": "Lemonade Server tidak memiliki model ini.",
+          "http": "Lemonade Server mengembalikan kesalahan.",
+          "badResponse": "Lemonade Server mengirim respons yang tidak dapat dibaca oleh Handy.",
+          "cancelled": "Uji koneksi dibatalkan."
+        },
+        "notes": {
+          "noTranslate": "Terjemahkan ke Bahasa Inggris tidak tersedia dengan Lemonade Server. File ditranskripsikan dalam bahasa yang diucapkan.",
+          "remote": "Alamat ini tidak berada di komputer ini. Rekaman Anda akan dikirim ke alamat tersebut."
+        }
+      },
+      "speakers": {
+        "label": "Beri Label Pembicara",
+        "description": "Tandai siapa mengatakan apa, hingga 4 pembicara. Berjalan di komputer ini dan memerlukan unduhan satu kali sebesar {{size}} MB.",
+        "download": "Unduh Model Pembicara ({{size}} MB)",
+        "downloading": "Mengunduh model pembicara… {{percent}}%",
+        "verifying": "Memeriksa unduhan…",
+        "cancelDownload": "Batalkan Unduhan",
+        "downloadFailed": "Tidak dapat mengunduh model pembicara: {{error}}",
+        "installed": "Model pembicara terinstal ({{size}} MB)",
+        "remove": "Hapus Model Pembicara",
+        "removeError": "Tidak dapat menghapus model pembicara: {{error}}",
+        "license": "Model pembicara oleh NVIDIA, di bawah NVIDIA Open Model License (<link>halaman model</link>).",
+        "title": "Pembicara",
+        "defaultName": "Pembicara {{number}}",
+        "rename": "Ganti Nama {{name}}",
+        "nameLabel": "Nama baru untuk {{name}}",
+        "save": "Simpan",
+        "cancel": "Batal",
+        "renameError": "Tidak dapat mengganti nama pembicara: {{error}}",
+        "approximate": "Pergantian pembicara bersifat perkiraan karena model ini tidak menyediakan stempel waktu.",
+        "unassigned": "Beberapa bagian tidak dapat dicocokkan dengan pembicara.",
+        "state": {
+          "running": "Mengidentifikasi pembicara…",
+          "done_one": "{{count}} pembicara",
+          "done_other": "{{count}} pembicara",
+          "failed": "Tidak dapat memberi label pembicara",
+          "skipped": {
+            "modelMissing": "Label pembicara dilewati: model pembicara belum diunduh.",
+            "noSpeech": "Label pembicara dilewati: tidak ada ucapan yang ditemukan."
+          }
+        }
       },
       "queue": {
         "title": "File",
@@ -526,6 +608,9 @@
         "modelChanged": "Model berubah saat file ini sedang ditranskripsikan.",
         "decodeFailed": "Audio dalam file ini tidak dapat dibaca.",
         "engineFailed": "Transkripsi gagal.",
+        "serverUnreachable": "Lemonade Server tidak dapat dijangkau. Pastikan server sedang berjalan.",
+        "serverUnauthorized": "Lemonade Server tidak menerima kunci API.",
+        "serverModelMissing": "Lemonade Server tidak memiliki model yang dipilih.",
         "internal": "Terjadi kesalahan.",
         "enqueue": "Tidak dapat menambahkan file: {{error}}",
         "cancel": "Tidak dapat membatalkan: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "File asli telah dipindahkan atau dihapus.",
       "fileDuration": "Durasi {{duration}}",
       "incomplete": "Tidak Lengkap",
+      "speakerCount_one": "{{count}} pembicara",
+      "speakerCount_other": "{{count}} pembicara",
       "retranscribeFileUnavailable": "Untuk mentranskripsikan file ini lagi, gunakan halaman Transkripsi."
     },
     "debug": {

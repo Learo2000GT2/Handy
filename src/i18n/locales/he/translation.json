@@ -468,8 +468,11 @@
       "title": "תמלול קבצים",
       "description": "המר הקלטות קיימות לטקסט במחשב הזה. הקבצים שלך אף פעם לא יוצאים מהמכשיר.",
       "settingsNote": "משתמש במודל שבחרת ובהגדרות השפה, התרגום, המילים המותאמות אישית ומילות המילוי שלך.",
+      "settingsNoteLemonade": "משתמש בהגדרות השפה, המילים המותאמות אישית ומילות המילוי שלך.",
       "model": "מודל: {{model}}",
+      "modelLemonade": "מודל: {{model}} ב-Lemonade Server",
       "noModel": "בחר מודל שהורד בעמוד 'מודלים' כדי לתמלל קבצים.",
+      "noLemonadeModel": "בחר מודל של Lemonade כדי לתמלל קבצים.",
       "dropzone": {
         "title": "גרור לכאן קובצי אודיו או וידאו",
         "hint": "ראיונות, פגישות, הרצאות ותזכירים קוליים בכל אורך",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "שמור בהיסטוריה",
         "description": "תמלולים שהסתיימו נשמרים ומסומנים בכוכב, כך שהניקוי האוטומטי לא ימחק אותם."
+      },
+      "engine": {
+        "title": "מנוע תמלול",
+        "label": "תמלל באמצעות",
+        "description": "ההכתבה תמיד משתמשת במודל המובנה של Handy. הבחירה הזו חלה רק על קבצים.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "כתובת השרת",
+          "description": "בדרך כלל http://localhost:13305. גרסאות ישנות של Lemonade השתמשו בפורט 8000."
+        },
+        "apiKey": {
+          "label": "מפתח API",
+          "description": "נדרש רק אם ה-Lemonade Server שלך מבקש מפתח.",
+          "placeholder": "אופציונלי"
+        },
+        "model": {
+          "label": "מודל",
+          "description": "מודל ה-Lemonade שמתמלל את הקבצים שלך, למשל Whisper-Base.",
+          "placeholder": "בחר מודל Whisper",
+          "notDownloaded": "{{model}} (יורד בשימוש הראשון)",
+          "none": "לא נמצאו מודלי תמלול בשרת הזה.",
+          "use": "השתמש ב-\"{{model}}\""
+        },
+        "test": "בדוק חיבור",
+        "testing": "מתחבר…",
+        "connected_one": "מחובר. {{count}} מודל תמלול זמין.",
+        "connected_other": "מחובר. {{count}} מודלי תמלול זמינים.",
+        "checkFailed": "לא ניתן לבדוק את Lemonade Server: {{error}}",
+        "saveError": "לא ניתן לשמור את הגדרות Lemonade: {{error}}",
+        "firstChunkSlow": "ייתכן ש-Lemonade מוריד או טוען את המודל. בפעם הראשונה זה עשוי להימשך כמה דקות.",
+        "errors": {
+          "invalidUrl": "הזן כתובת כמו http://localhost:13305.",
+          "unreachable": "לא ניתן להתחבר ל-Lemonade Server בכתובת {{url}}. ודא שהוא פועל.",
+          "timeout": "Lemonade Server לא הגיב בזמן.",
+          "unauthorized": "Lemonade Server לא קיבל את מפתח ה-API.",
+          "modelNotFound": "המודל הזה לא קיים ב-Lemonade Server.",
+          "http": "Lemonade Server החזיר שגיאה.",
+          "badResponse": "Lemonade Server שלח תשובה ש-Handy לא הצליח לקרוא.",
+          "cancelled": "בדיקת החיבור בוטלה."
+        },
+        "notes": {
+          "noTranslate": "האפשרות 'תרגם לאנגלית' אינה זמינה עם Lemonade Server. הקבצים מתומללים בשפה המדוברת.",
+          "remote": "הכתובת הזו אינה במחשב הזה. ההקלטות שלך יישלחו אליה."
+        }
+      },
+      "speakers": {
+        "label": "סמן דוברים",
+        "description": "מסמן מי אמר מה, עבור עד 4 דוברים. פועל במחשב הזה ודורש הורדה חד-פעמית של {{size}} MB.",
+        "download": "הורד את מודל הדוברים ({{size}} MB)",
+        "downloading": "מוריד את מודל הדוברים… {{percent}}%",
+        "verifying": "בודק את ההורדה…",
+        "cancelDownload": "בטל הורדה",
+        "downloadFailed": "לא ניתן להוריד את מודל הדוברים: {{error}}",
+        "installed": "מודל הדוברים מותקן ({{size}} MB)",
+        "remove": "הסר את מודל הדוברים",
+        "removeError": "לא ניתן להסיר את מודל הדוברים: {{error}}",
+        "license": "מודל הדוברים מאת NVIDIA, ברישיון NVIDIA Open Model License (<link>עמוד המודל</link>).",
+        "title": "דוברים",
+        "defaultName": "דובר {{number}}",
+        "rename": "שנה את השם של {{name}}",
+        "nameLabel": "שם חדש עבור {{name}}",
+        "save": "שמור",
+        "cancel": "ביטול",
+        "renameError": "לא ניתן לשנות את שם הדובר: {{error}}",
+        "approximate": "החלפות הדוברים משוערות, כי המודל הזה לא מספק חותמות זמן.",
+        "unassigned": "לא ניתן היה לשייך חלק מהקטעים לדובר.",
+        "state": {
+          "running": "מזהה דוברים…",
+          "done_one": "{{count}} דובר",
+          "done_other": "{{count}} דוברים",
+          "failed": "לא ניתן לסמן דוברים",
+          "skipped": {
+            "modelMissing": "סימון הדוברים דולג: מודל הדוברים לא הורד.",
+            "noSpeech": "סימון הדוברים דולג: לא נמצא דיבור."
+          }
+        }
       },
       "queue": {
         "title": "קבצים",
@@ -526,6 +608,9 @@
         "modelChanged": "המודל השתנה בזמן שהקובץ הזה תומלל.",
         "decodeFailed": "לא ניתן לקרוא את האודיו בקובץ הזה.",
         "engineFailed": "התמלול נכשל.",
+        "serverUnreachable": "לא ניתן להתחבר ל-Lemonade Server. ודא שהוא פועל.",
+        "serverUnauthorized": "Lemonade Server לא קיבל את מפתח ה-API.",
+        "serverModelMissing": "המודל שנבחר לא קיים ב-Lemonade Server.",
         "internal": "משהו השתבש.",
         "enqueue": "לא ניתן להוסיף קבצים: {{error}}",
         "cancel": "לא ניתן לבטל: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "הקובץ המקורי הועבר או נמחק.",
       "fileDuration": "אורך {{duration}}",
       "incomplete": "לא שלם",
+      "speakerCount_one": "{{count}} דובר",
+      "speakerCount_other": "{{count}} דוברים",
       "retranscribeFileUnavailable": "כדי לתמלל את הקובץ הזה מחדש, השתמש בעמוד 'תמלול'."
     },
     "debug": {

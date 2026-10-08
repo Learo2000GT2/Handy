@@ -468,8 +468,11 @@
       "title": "Dosyaları Transkribe Et",
       "description": "Mevcut kayıtları bu bilgisayarda metne dönüştürün. Dosyalarınız cihazınızdan asla çıkmaz.",
       "settingsNote": "Seçili modelinizi ve dil, çeviri, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
+      "settingsNoteLemonade": "Dil, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
       "model": "Model: {{model}}",
+      "modelLemonade": "Model: Lemonade Server'daki {{model}}",
       "noModel": "Dosyaları transkribe etmek için Modeller sayfasından indirilmiş bir model seçin.",
+      "noLemonadeModel": "Dosyaları transkribe etmek için bir Lemonade modeli seçin.",
       "dropzone": {
         "title": "Ses veya video dosyalarını buraya bırakın",
         "hint": "Her uzunlukta röportaj, toplantı, ders ve sesli not",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Geçmişe Kaydet",
         "description": "Tamamlanan transkriptler kaydedilir ve otomatik temizlemede korunmaları için yıldızlanır."
+      },
+      "engine": {
+        "title": "Transkripsiyon Motoru",
+        "label": "Kullanılacak Motor",
+        "description": "Sesle yazma her zaman Handy'nin kendi modelini kullanır. Bu seçim yalnızca dosyalar içindir.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Sunucu Adresi",
+          "description": "Genellikle http://localhost:13305. Eski Lemonade sürümleri 8000 numaralı bağlantı noktasını kullanıyordu."
+        },
+        "apiKey": {
+          "label": "API Anahtarı",
+          "description": "Yalnızca Lemonade Server'ınız bir anahtar isterse gerekir.",
+          "placeholder": "İsteğe bağlı"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Dosyalarınızı transkribe eden Lemonade modeli, örneğin Whisper-Base.",
+          "placeholder": "Bir Whisper modeli seçin",
+          "notDownloaded": "{{model}} (ilk kullanımda indirilir)",
+          "none": "Bu sunucuda transkripsiyon modeli bulunamadı.",
+          "use": "“{{model}}” kullan"
+        },
+        "test": "Bağlantıyı Test Et",
+        "testing": "Bağlanılıyor…",
+        "connected_one": "Bağlandı. {{count}} transkripsiyon modeli kullanılabilir.",
+        "connected_other": "Bağlandı. {{count}} transkripsiyon modeli kullanılabilir.",
+        "checkFailed": "Lemonade Server kontrol edilemedi: {{error}}",
+        "saveError": "Lemonade ayarları kaydedilemedi: {{error}}",
+        "firstChunkSlow": "Lemonade modeli indiriyor veya yüklüyor olabilir. İlk seferde bu birkaç dakika sürebilir.",
+        "errors": {
+          "invalidUrl": "http://localhost:13305 gibi bir adres girin.",
+          "unreachable": "{{url}} adresindeki Lemonade Server'a ulaşılamıyor. Çalıştığından emin olun.",
+          "timeout": "Lemonade Server zamanında yanıt vermedi.",
+          "unauthorized": "Lemonade Server API anahtarını kabul etmedi.",
+          "modelNotFound": "Lemonade Server'da bu model yok.",
+          "http": "Lemonade Server bir hata döndürdü.",
+          "badResponse": "Lemonade Server, Handy'nin okuyamadığı bir yanıt gönderdi.",
+          "cancelled": "Bağlantı testi iptal edildi."
+        },
+        "notes": {
+          "noTranslate": "İngilizce'ye Çevir özelliği Lemonade Server ile kullanılamaz. Dosyalar konuşulan dilde transkribe edilir.",
+          "remote": "Bu adres bu bilgisayarda değil. Kayıtlarınız bu adrese gönderilecek."
+        }
+      },
+      "speakers": {
+        "label": "Konuşmacıları Etiketle",
+        "description": "En fazla 4 konuşmacı için kimin ne söylediğini işaretler. Bu bilgisayarda çalışır ve tek seferlik {{size}} MB indirme gerektirir.",
+        "download": "Konuşmacı Modelini İndir ({{size}} MB)",
+        "downloading": "Konuşmacı modeli indiriliyor… %{{percent}}",
+        "verifying": "İndirme kontrol ediliyor…",
+        "cancelDownload": "İndirmeyi İptal Et",
+        "downloadFailed": "Konuşmacı modeli indirilemedi: {{error}}",
+        "installed": "Konuşmacı modeli yüklendi ({{size}} MB)",
+        "remove": "Konuşmacı Modelini Kaldır",
+        "removeError": "Konuşmacı modeli kaldırılamadı: {{error}}",
+        "license": "Konuşmacı modeli NVIDIA tarafından, NVIDIA Open Model License kapsamında sunulur (<link>model sayfası</link>).",
+        "title": "Konuşmacılar",
+        "defaultName": "Konuşmacı {{number}}",
+        "rename": "{{name}} adını değiştir",
+        "nameLabel": "{{name}} için yeni ad",
+        "save": "Kaydet",
+        "cancel": "İptal",
+        "renameError": "Konuşmacının adı değiştirilemedi: {{error}}",
+        "approximate": "Bu model zaman damgası bildirmediği için konuşmacı değişimleri yaklaşıktır.",
+        "unassigned": "Bazı bölümler bir konuşmacıyla eşleştirilemedi.",
+        "state": {
+          "running": "Konuşmacılar belirleniyor…",
+          "done_one": "{{count}} konuşmacı",
+          "done_other": "{{count}} konuşmacı",
+          "failed": "Konuşmacılar etiketlenemedi",
+          "skipped": {
+            "modelMissing": "Konuşmacı etiketleri atlandı: konuşmacı modeli indirilmemiş.",
+            "noSpeech": "Konuşmacı etiketleri atlandı: konuşma bulunamadı."
+          }
+        }
       },
       "queue": {
         "title": "Dosyalar",
@@ -526,6 +608,9 @@
         "modelChanged": "Bu dosya transkribe edilirken model değişti.",
         "decodeFailed": "Bu dosyadaki ses okunamadı.",
         "engineFailed": "Transkripsiyon başarısız oldu.",
+        "serverUnreachable": "Lemonade Server'a ulaşılamıyor. Çalıştığından emin olun.",
+        "serverUnauthorized": "Lemonade Server API anahtarını kabul etmedi.",
+        "serverModelMissing": "Lemonade Server'da seçili model yok.",
         "internal": "Bir şeyler ters gitti.",
         "enqueue": "Dosyalar eklenemedi: {{error}}",
         "cancel": "İptal edilemedi: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "Orijinal dosya taşınmış veya silinmiş.",
       "fileDuration": "Süre {{duration}}",
       "incomplete": "Eksik",
+      "speakerCount_one": "{{count}} konuşmacı",
+      "speakerCount_other": "{{count}} konuşmacı",
       "retranscribeFileUnavailable": "Bu dosyayı yeniden transkribe etmek için Transkripsiyon sayfasını kullanın."
     },
     "debug": {

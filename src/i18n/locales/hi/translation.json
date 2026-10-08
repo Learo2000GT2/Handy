@@ -468,8 +468,11 @@
       "title": "फ़ाइलें ट्रांसक्राइब करें",
       "description": "मौजूदा रिकॉर्डिंग को इसी कंप्यूटर पर टेक्स्ट में बदलें. आपकी फ़ाइलें कभी आपके डिवाइस से बाहर नहीं जातीं.",
       "settingsNote": "आपके चुने गए मॉडल और आपकी भाषा, अनुवाद, कस्टम शब्द और फिलर शब्द सेटिंग का इस्तेमाल करता है.",
+      "settingsNoteLemonade": "आपकी भाषा, कस्टम शब्द और फिलर शब्द सेटिंग का इस्तेमाल करता है.",
       "model": "मॉडल: {{model}}",
+      "modelLemonade": "मॉडल: Lemonade Server पर {{model}}",
       "noModel": "फ़ाइलें ट्रांसक्राइब करने के लिए, 'मॉडल' पेज पर कोई डाउनलोड किया गया मॉडल चुनें.",
+      "noLemonadeModel": "फ़ाइलें ट्रांसक्राइब करने के लिए कोई Lemonade मॉडल चुनें.",
       "dropzone": {
         "title": "ऑडियो या वीडियो फ़ाइलें यहां छोड़ें",
         "hint": "किसी भी लंबाई के इंटरव्यू, मीटिंग, लेक्चर और वॉइस मेमो",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "इतिहास में सेव करें",
         "description": "पूरे हुए ट्रांसक्रिप्ट सेव होते हैं और उन पर स्टार लगता है, ताकि अपने आप होने वाली सफ़ाई में वे न हटें."
+      },
+      "engine": {
+        "title": "ट्रांसक्रिप्शन इंजन",
+        "label": "इससे ट्रांसक्राइब करें",
+        "description": "डिक्टेशन में हमेशा Handy का अपना मॉडल इस्तेमाल होता है. यह विकल्प केवल फ़ाइलों के लिए है.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "सर्वर का पता",
+          "description": "आम तौर पर http://localhost:13305. Lemonade के पुराने वर्शन पोर्ट 8000 का इस्तेमाल करते थे."
+        },
+        "apiKey": {
+          "label": "API कुंजी",
+          "description": "केवल तभी ज़रूरी है, जब आपका Lemonade Server इसे मांगे.",
+          "placeholder": "वैकल्पिक"
+        },
+        "model": {
+          "label": "मॉडल",
+          "description": "वह Lemonade मॉडल जो आपकी फ़ाइलें ट्रांसक्राइब करता है, जैसे Whisper-Base.",
+          "placeholder": "कोई Whisper मॉडल चुनें",
+          "notDownloaded": "{{model}} (पहली बार इस्तेमाल पर डाउनलोड होगा)",
+          "none": "इस सर्वर पर कोई ट्रांसक्रिप्शन मॉडल नहीं मिला.",
+          "use": "“{{model}}” इस्तेमाल करें"
+        },
+        "test": "कनेक्शन जांचें",
+        "testing": "कनेक्ट हो रहा है…",
+        "connected_one": "कनेक्ट हो गया. {{count}} ट्रांसक्रिप्शन मॉडल उपलब्ध है.",
+        "connected_other": "कनेक्ट हो गया. {{count}} ट्रांसक्रिप्शन मॉडल उपलब्ध हैं.",
+        "checkFailed": "Lemonade Server की जांच नहीं हो सकी: {{error}}",
+        "saveError": "Lemonade सेटिंग सेव नहीं हो सकीं: {{error}}",
+        "firstChunkSlow": "हो सकता है Lemonade मॉडल डाउनलोड या लोड कर रहा हो. पहली बार इसमें कुछ मिनट लग सकते हैं.",
+        "errors": {
+          "invalidUrl": "http://localhost:13305 जैसा पता डालें.",
+          "unreachable": "{{url}} पर Lemonade Server से कनेक्ट नहीं हो पा रहा है. पक्का करें कि यह चल रहा है.",
+          "timeout": "Lemonade Server ने समय पर जवाब नहीं दिया.",
+          "unauthorized": "Lemonade Server ने API कुंजी स्वीकार नहीं की.",
+          "modelNotFound": "Lemonade Server पर यह मॉडल नहीं है.",
+          "http": "Lemonade Server से गड़बड़ी का जवाब मिला.",
+          "badResponse": "Lemonade Server ने ऐसा जवाब भेजा जिसे Handy पढ़ नहीं सका.",
+          "cancelled": "कनेक्शन की जांच रद्द कर दी गई."
+        },
+        "notes": {
+          "noTranslate": "Lemonade Server के साथ 'अंग्रेज़ी में अनुवाद करें' उपलब्ध नहीं है. फ़ाइलें बोली गई भाषा में ही ट्रांसक्राइब होती हैं.",
+          "remote": "यह पता इस कंप्यूटर पर नहीं है. आपकी रिकॉर्डिंग इसी पते पर भेजी जाएंगी."
+        }
+      },
+      "speakers": {
+        "label": "स्पीकर लेबल करें",
+        "description": "किसने क्या कहा, यह चिह्नित करता है (4 स्पीकर तक). यह इसी कंप्यूटर पर चलता है और इसके लिए एक बार {{size}} MB डाउनलोड करना होगा.",
+        "download": "स्पीकर मॉडल डाउनलोड करें ({{size}} MB)",
+        "downloading": "स्पीकर मॉडल डाउनलोड हो रहा है… {{percent}}%",
+        "verifying": "डाउनलोड की जांच हो रही है…",
+        "cancelDownload": "डाउनलोड रद्द करें",
+        "downloadFailed": "स्पीकर मॉडल डाउनलोड नहीं हो सका: {{error}}",
+        "installed": "स्पीकर मॉडल इंस्टॉल किया गया ({{size}} MB)",
+        "remove": "स्पीकर मॉडल हटाएं",
+        "removeError": "स्पीकर मॉडल हटाया नहीं जा सका: {{error}}",
+        "license": "NVIDIA का स्पीकर मॉडल, NVIDIA Open Model License के तहत (<link>मॉडल पेज</link>).",
+        "title": "स्पीकर",
+        "defaultName": "स्पीकर {{number}}",
+        "rename": "{{name}} का नाम बदलें",
+        "nameLabel": "{{name}} के लिए नया नाम",
+        "save": "सेव करें",
+        "cancel": "रद्द करें",
+        "renameError": "स्पीकर का नाम नहीं बदला जा सका: {{error}}",
+        "approximate": "स्पीकर में बदलाव अनुमानित हैं, क्योंकि यह मॉडल टाइमस्टैम्प नहीं देता.",
+        "unassigned": "कुछ हिस्सों का किसी स्पीकर से मिलान नहीं हो सका.",
+        "state": {
+          "running": "स्पीकर की पहचान हो रही है…",
+          "done_one": "{{count}} स्पीकर",
+          "done_other": "{{count}} स्पीकर",
+          "failed": "स्पीकर लेबल नहीं किए जा सके",
+          "skipped": {
+            "modelMissing": "स्पीकर लेबल छोड़े गए: स्पीकर मॉडल डाउनलोड नहीं किया गया है.",
+            "noSpeech": "स्पीकर लेबल छोड़े गए: कोई बोली नहीं मिली."
+          }
+        }
       },
       "queue": {
         "title": "फ़ाइलें",
@@ -526,6 +608,9 @@
         "modelChanged": "इस फ़ाइल के ट्रांसक्राइब होते समय मॉडल बदल गया.",
         "decodeFailed": "इस फ़ाइल का ऑडियो पढ़ा नहीं जा सका.",
         "engineFailed": "ट्रांसक्रिप्शन नहीं हो सका.",
+        "serverUnreachable": "Lemonade Server से कनेक्ट नहीं हो पा रहा है. पक्का करें कि यह चल रहा है.",
+        "serverUnauthorized": "Lemonade Server ने API कुंजी स्वीकार नहीं की.",
+        "serverModelMissing": "Lemonade Server पर चुना गया मॉडल नहीं है.",
         "internal": "कुछ गड़बड़ हो गई.",
         "enqueue": "फ़ाइलें नहीं जोड़ी जा सकीं: {{error}}",
         "cancel": "रद्द नहीं किया जा सका: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "मूल फ़ाइल हटा दी गई है या कहीं और ले जाई गई है.",
       "fileDuration": "अवधि {{duration}}",
       "incomplete": "अधूरा",
+      "speakerCount_one": "{{count}} स्पीकर",
+      "speakerCount_other": "{{count}} स्पीकर",
       "retranscribeFileUnavailable": "इस फ़ाइल को फिर से ट्रांसक्राइब करने के लिए, 'ट्रांसक्राइब' पेज का इस्तेमाल करें."
     },
     "debug": {

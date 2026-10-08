@@ -468,8 +468,11 @@
       "title": "Transkribera filer",
       "description": "Gör om befintliga inspelningar till text på den här datorn. Dina filer lämnar aldrig din enhet.",
       "settingsNote": "Använder din valda modell och dina inställningar för språk, översättning, anpassade ord och utfyllnadsord.",
+      "settingsNoteLemonade": "Använder dina inställningar för språk, anpassade ord och utfyllnadsord.",
       "model": "Modell: {{model}}",
+      "modelLemonade": "Modell: {{model}} på Lemonade Server",
       "noModel": "Välj en nedladdad modell på sidan Modeller för att transkribera filer.",
+      "noLemonadeModel": "Välj en Lemonade-modell för att transkribera filer.",
       "dropzone": {
         "title": "Släpp ljud- eller videofiler här",
         "hint": "Intervjuer, möten, föreläsningar och röstmemon av valfri längd",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Spara i historik",
         "description": "Färdiga transkriptioner sparas och stjärnmarkeras så att automatisk rensning behåller dem."
+      },
+      "engine": {
+        "title": "Transkriberingsmotor",
+        "label": "Transkribera med",
+        "description": "Diktering använder alltid Handys egen modell. Det här valet gäller bara filer.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Serveradress",
+          "description": "Vanligtvis http://localhost:13305. Äldre versioner av Lemonade använde port 8000."
+        },
+        "apiKey": {
+          "label": "API-nyckel",
+          "description": "Behövs bara om din Lemonade Server kräver en.",
+          "placeholder": "Valfritt"
+        },
+        "model": {
+          "label": "Modell",
+          "description": "Lemonade-modellen som transkriberar dina filer, till exempel Whisper-Base.",
+          "placeholder": "Välj en Whisper-modell",
+          "notDownloaded": "{{model}} (laddas ner vid första användning)",
+          "none": "Inga transkriptionsmodeller hittades på den här servern.",
+          "use": "Använd ”{{model}}”"
+        },
+        "test": "Testa anslutning",
+        "testing": "Ansluter…",
+        "connected_one": "Ansluten. {{count}} transkriptionsmodell tillgänglig.",
+        "connected_other": "Ansluten. {{count}} transkriptionsmodeller tillgängliga.",
+        "checkFailed": "Det gick inte att kontrollera Lemonade Server: {{error}}",
+        "saveError": "Det gick inte att spara Lemonade-inställningarna: {{error}}",
+        "firstChunkSlow": "Lemonade kanske laddar ner eller läser in modellen. Första gången kan det ta några minuter.",
+        "errors": {
+          "invalidUrl": "Ange en adress som http://localhost:13305.",
+          "unreachable": "Det går inte att nå Lemonade Server på {{url}}. Kontrollera att den körs.",
+          "timeout": "Lemonade Server svarade inte i tid.",
+          "unauthorized": "Lemonade Server godkände inte API-nyckeln.",
+          "modelNotFound": "Lemonade Server har inte den här modellen.",
+          "http": "Lemonade Server returnerade ett fel.",
+          "badResponse": "Lemonade Server skickade ett svar som Handy inte kunde läsa.",
+          "cancelled": "Anslutningstestet avbröts."
+        },
+        "notes": {
+          "noTranslate": "Översätt till engelska är inte tillgängligt med Lemonade Server. Filerna transkriberas på det språk som talas.",
+          "remote": "Den här adressen finns inte på den här datorn. Dina inspelningar skickas dit."
+        }
+      },
+      "speakers": {
+        "label": "Märk ut talare",
+        "description": "Visar vem som sa vad, för upp till 4 talare. Körs på den här datorn och kräver en engångsnedladdning på {{size}} MB.",
+        "download": "Ladda ner talarmodell ({{size}} MB)",
+        "downloading": "Laddar ner talarmodell… {{percent}}%",
+        "verifying": "Kontrollerar nedladdningen…",
+        "cancelDownload": "Avbryt nedladdning",
+        "downloadFailed": "Det gick inte att ladda ner talarmodellen: {{error}}",
+        "installed": "Talarmodell installerad ({{size}} MB)",
+        "remove": "Ta bort talarmodell",
+        "removeError": "Det gick inte att ta bort talarmodellen: {{error}}",
+        "license": "Talarmodell från NVIDIA, under NVIDIA Open Model License (<link>modellsida</link>).",
+        "title": "Talare",
+        "defaultName": "Talare {{number}}",
+        "rename": "Byt namn på {{name}}",
+        "nameLabel": "Nytt namn för {{name}}",
+        "save": "Spara",
+        "cancel": "Avbryt",
+        "renameError": "Det gick inte att byta namn på talaren: {{error}}",
+        "approximate": "Talarbyten är ungefärliga eftersom den här modellen inte rapporterar tidsstämplar.",
+        "unassigned": "Vissa avsnitt kunde inte kopplas till en talare.",
+        "state": {
+          "running": "Identifierar talare…",
+          "done_one": "{{count}} talare",
+          "done_other": "{{count}} talare",
+          "failed": "Det gick inte att märka ut talare",
+          "skipped": {
+            "modelMissing": "Talarmärkning hoppades över: talarmodellen är inte nedladdad.",
+            "noSpeech": "Talarmärkning hoppades över: inget tal hittades."
+          }
+        }
       },
       "queue": {
         "title": "Filer",
@@ -526,6 +608,9 @@
         "modelChanged": "Modellen ändrades medan den här filen transkriberades.",
         "decodeFailed": "Ljudet i den här filen kunde inte läsas.",
         "engineFailed": "Transkriberingen misslyckades.",
+        "serverUnreachable": "Det går inte att nå Lemonade Server. Kontrollera att den körs.",
+        "serverUnauthorized": "Lemonade Server godkände inte API-nyckeln.",
+        "serverModelMissing": "Lemonade Server har inte den valda modellen.",
         "internal": "Något gick fel.",
         "enqueue": "Det gick inte att lägga till filer: {{error}}",
         "cancel": "Det gick inte att avbryta: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "Originalfilen har flyttats eller tagits bort.",
       "fileDuration": "Längd {{duration}}",
       "incomplete": "Ofullständig",
+      "speakerCount_one": "{{count}} talare",
+      "speakerCount_other": "{{count}} talare",
       "retranscribeFileUnavailable": "Använd sidan Transkribera för att transkribera den här filen igen."
     },
     "debug": {

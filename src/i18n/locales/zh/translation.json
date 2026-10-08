@@ -468,8 +468,11 @@
       "title": "转录文件",
       "description": "在这台电脑上将现有录音转为文字。您的文件绝不会离开您的设备。",
       "settingsNote": "使用您选择的模型，以及您的语言、翻译、自定义词汇和语气词设置。",
+      "settingsNoteLemonade": "使用您的语言、自定义词汇和语气词设置。",
       "model": "模型：{{model}}",
+      "modelLemonade": "模型：Lemonade Server 上的 {{model}}",
       "noModel": "请在「模型」页面选择一个已下载的模型，以便转录文件。",
+      "noLemonadeModel": "请选择一个 Lemonade 模型以转录文件。",
       "dropzone": {
         "title": "将音频或视频文件拖放到此处",
         "hint": "访谈、会议、讲座和语音备忘录，时长不限",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "保存到历史记录",
         "description": "完成的转录会被保存并加星标，因此自动清理会保留它们。"
+      },
+      "engine": {
+        "title": "转录引擎",
+        "label": "转录方式",
+        "description": "听写始终使用 Handy 自己的模型。此选项仅适用于文件。",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "服务器地址",
+          "description": "通常为 http://localhost:13305。旧版 Lemonade 使用端口 8000。"
+        },
+        "apiKey": {
+          "label": "API 密钥",
+          "description": "仅在您的 Lemonade Server 要求时才需要。",
+          "placeholder": "可选"
+        },
+        "model": {
+          "label": "模型",
+          "description": "用于转录文件的 Lemonade 模型，例如 Whisper-Base。",
+          "placeholder": "选择一个 Whisper 模型",
+          "notDownloaded": "{{model}}（首次使用时下载）",
+          "none": "此服务器上未找到转录模型。",
+          "use": "使用「{{model}}」"
+        },
+        "test": "测试连接",
+        "testing": "正在连接…",
+        "connected_one": "已连接。有 {{count}} 个可用的转录模型。",
+        "connected_other": "已连接。有 {{count}} 个可用的转录模型。",
+        "checkFailed": "无法检查 Lemonade Server：{{error}}",
+        "saveError": "无法保存 Lemonade 设置：{{error}}",
+        "firstChunkSlow": "Lemonade 可能正在下载或加载模型。首次使用可能需要几分钟。",
+        "errors": {
+          "invalidUrl": "请输入类似 http://localhost:13305 的地址。",
+          "unreachable": "无法连接到位于 {{url}} 的 Lemonade Server。请确认它正在运行。",
+          "timeout": "Lemonade Server 未及时响应。",
+          "unauthorized": "Lemonade Server 未接受该 API 密钥。",
+          "modelNotFound": "Lemonade Server 上没有此模型。",
+          "http": "Lemonade Server 返回了错误。",
+          "badResponse": "Lemonade Server 返回了 Handy 无法读取的响应。",
+          "cancelled": "连接测试已取消。"
+        },
+        "notes": {
+          "noTranslate": "使用 Lemonade Server 时无法翻译为英语。文件将按所说的语言转录。",
+          "remote": "此地址不在这台电脑上。您的录音将被发送到该地址。"
+        }
+      },
+      "speakers": {
+        "label": "标注说话人",
+        "description": "标注谁说了什么，最多支持 4 位说话人。在这台电脑上运行，需一次性下载 {{size}} MB。",
+        "download": "下载说话人模型（{{size}} MB）",
+        "downloading": "正在下载说话人模型… {{percent}}%",
+        "verifying": "正在检查下载…",
+        "cancelDownload": "取消下载",
+        "downloadFailed": "无法下载说话人模型：{{error}}",
+        "installed": "说话人模型已安装（{{size}} MB）",
+        "remove": "移除说话人模型",
+        "removeError": "无法移除说话人模型：{{error}}",
+        "license": "说话人模型由 NVIDIA 提供，采用 NVIDIA Open Model License（<link>模型页面</link>）。",
+        "title": "说话人",
+        "defaultName": "说话人 {{number}}",
+        "rename": "重命名 {{name}}",
+        "nameLabel": "{{name}} 的新名称",
+        "save": "保存",
+        "cancel": "取消",
+        "renameError": "无法重命名说话人：{{error}}",
+        "approximate": "由于此模型不提供时间戳，说话人切换的位置为近似值。",
+        "unassigned": "部分段落无法匹配到说话人。",
+        "state": {
+          "running": "正在识别说话人…",
+          "done_one": "{{count}} 位说话人",
+          "done_other": "{{count}} 位说话人",
+          "failed": "无法标注说话人",
+          "skipped": {
+            "modelMissing": "已跳过说话人标注：未下载说话人模型。",
+            "noSpeech": "已跳过说话人标注：未检测到语音。"
+          }
+        }
       },
       "queue": {
         "title": "文件",
@@ -526,6 +608,9 @@
         "modelChanged": "转录此文件期间模型已更改。",
         "decodeFailed": "无法读取此文件中的音频。",
         "engineFailed": "转录失败。",
+        "serverUnreachable": "无法连接到 Lemonade Server。请确认它正在运行。",
+        "serverUnauthorized": "Lemonade Server 未接受该 API 密钥。",
+        "serverModelMissing": "Lemonade Server 上没有所选模型。",
         "internal": "出了点问题。",
         "enqueue": "无法添加文件：{{error}}",
         "cancel": "无法取消：{{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "原始文件已被移动或删除。",
       "fileDuration": "时长 {{duration}}",
       "incomplete": "不完整",
+      "speakerCount_one": "{{count}} 位说话人",
+      "speakerCount_other": "{{count}} 位说话人",
       "retranscribeFileUnavailable": "如需重新转录此文件，请使用「转录」页面。"
     },
     "debug": {

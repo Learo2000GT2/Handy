@@ -468,8 +468,11 @@
       "title": "Transcripció de fitxers",
       "description": "Convertiu enregistraments existents en text en aquest ordinador. Els fitxers no surten mai del dispositiu.",
       "settingsNote": "Utilitza el model seleccionat i la configuració de llengua, traducció, paraules personalitzades i falques.",
+      "settingsNoteLemonade": "Utilitza la configuració de llengua, paraules personalitzades i falques.",
       "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} a Lemonade Server",
       "noModel": "Seleccioneu un model baixat a la pàgina Models per transcriure fitxers.",
+      "noLemonadeModel": "Trieu un model de Lemonade per transcriure fitxers.",
       "dropzone": {
         "title": "Deixeu anar aquí fitxers d'àudio o de vídeo",
         "hint": "Entrevistes, reunions, classes i notes de veu de qualsevol durada",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Desa a l'historial",
         "description": "Les transcripcions acabades es desen i es marquen amb una estrella perquè la neteja automàtica les conservi."
+      },
+      "engine": {
+        "title": "Motor de transcripció",
+        "label": "Transcriu amb",
+        "description": "El dictat sempre utilitza el model propi de Handy. Aquesta opció només s'aplica als fitxers.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Adreça del servidor",
+          "description": "Normalment http://localhost:13305. Les versions antigues de Lemonade utilitzaven el port 8000."
+        },
+        "apiKey": {
+          "label": "Clau de l'API",
+          "description": "Només cal si el vostre Lemonade Server en demana una.",
+          "placeholder": "Opcional"
+        },
+        "model": {
+          "label": "Model",
+          "description": "El model de Lemonade que transcriu els fitxers, com ara Whisper-Base.",
+          "placeholder": "Trieu un model Whisper",
+          "notDownloaded": "{{model}} (es baixa en el primer ús)",
+          "none": "No s'ha trobat cap model de transcripció en aquest servidor.",
+          "use": "Utilitza «{{model}}»"
+        },
+        "test": "Prova la connexió",
+        "testing": "S'està connectant…",
+        "connected_one": "Connectat. Hi ha {{count}} model de transcripció disponible.",
+        "connected_other": "Connectat. Hi ha {{count}} models de transcripció disponibles.",
+        "checkFailed": "No s'ha pogut comprovar Lemonade Server: {{error}}",
+        "saveError": "No s'ha pogut desar la configuració de Lemonade: {{error}}",
+        "firstChunkSlow": "És possible que Lemonade estigui baixant o carregant el model. La primera vegada pot trigar uns quants minuts.",
+        "errors": {
+          "invalidUrl": "Introduïu una adreça com ara http://localhost:13305.",
+          "unreachable": "No es pot connectar amb Lemonade Server a {{url}}. Comproveu que s'estigui executant.",
+          "timeout": "Lemonade Server no ha respost a temps.",
+          "unauthorized": "Lemonade Server no ha acceptat la clau de l'API.",
+          "modelNotFound": "Lemonade Server no té aquest model.",
+          "http": "Lemonade Server ha retornat un error.",
+          "badResponse": "Lemonade Server ha enviat una resposta que Handy no ha pogut llegir.",
+          "cancelled": "S'ha cancel·lat la prova de connexió."
+        },
+        "notes": {
+          "noTranslate": "La traducció a l'anglès no està disponible amb Lemonade Server. Els fitxers es transcriuen en la llengua parlada.",
+          "remote": "Aquesta adreça no és d'aquest ordinador. Els enregistraments s'hi enviaran."
+        }
+      },
+      "speakers": {
+        "label": "Etiqueta els parlants",
+        "description": "Indica qui ha dit què, fins a 4 parlants. S'executa en aquest ordinador i requereix una baixada única de {{size}} MB.",
+        "download": "Baixa el model de parlants ({{size}} MB)",
+        "downloading": "S'està baixant el model de parlants… {{percent}}%",
+        "verifying": "S'està comprovant la baixada…",
+        "cancelDownload": "Cancel·la la baixada",
+        "downloadFailed": "No s'ha pogut baixar el model de parlants: {{error}}",
+        "installed": "Model de parlants instal·lat ({{size}} MB)",
+        "remove": "Suprimeix el model de parlants",
+        "removeError": "No s'ha pogut suprimir el model de parlants: {{error}}",
+        "license": "Model de parlants d'NVIDIA, amb la llicència NVIDIA Open Model License (<link>pàgina del model</link>).",
+        "title": "Parlants",
+        "defaultName": "Parlant {{number}}",
+        "rename": "Canvia el nom de {{name}}",
+        "nameLabel": "Nom nou per a {{name}}",
+        "save": "Desa",
+        "cancel": "Cancel·la",
+        "renameError": "No s'ha pogut canviar el nom del parlant: {{error}}",
+        "approximate": "Els canvis de parlant són aproximats perquè aquest model no proporciona marques de temps.",
+        "unassigned": "Alguns fragments no s'han pogut associar a cap parlant.",
+        "state": {
+          "running": "S'estan identificant els parlants…",
+          "done_one": "{{count}} parlant",
+          "done_other": "{{count}} parlants",
+          "failed": "No s'han pogut etiquetar els parlants",
+          "skipped": {
+            "modelMissing": "S'ha omès l'etiquetatge de parlants: el model de parlants no s'ha baixat.",
+            "noSpeech": "S'ha omès l'etiquetatge de parlants: no s'ha detectat parla."
+          }
+        }
       },
       "queue": {
         "title": "Fitxers",
@@ -526,6 +608,9 @@
         "modelChanged": "El model ha canviat mentre es transcrivia aquest fitxer.",
         "decodeFailed": "No s'ha pogut llegir l'àudio d'aquest fitxer.",
         "engineFailed": "La transcripció ha fallat.",
+        "serverUnreachable": "No es pot connectar amb Lemonade Server. Comproveu que s'estigui executant.",
+        "serverUnauthorized": "Lemonade Server no ha acceptat la clau de l'API.",
+        "serverModelMissing": "Lemonade Server no té el model seleccionat.",
         "internal": "Alguna cosa no ha anat bé.",
         "enqueue": "No s'han pogut afegir els fitxers: {{error}}",
         "cancel": "No s'ha pogut cancel·lar: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "El fitxer original s'ha mogut o suprimit.",
       "fileDuration": "Durada {{duration}}",
       "incomplete": "Incompleta",
+      "speakerCount_one": "{{count}} parlant",
+      "speakerCount_other": "{{count}} parlants",
       "retranscribeFileUnavailable": "Per tornar a transcriure aquest fitxer, utilitzeu la pàgina Transcripció."
     },
     "debug": {

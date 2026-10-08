@@ -468,8 +468,11 @@
       "title": "Trascrivi file",
       "description": "Trasforma le registrazioni esistenti in testo su questo computer. I tuoi file non lasciano mai il dispositivo.",
       "settingsNote": "Usa il modello selezionato e le tue impostazioni di lingua, traduzione, parole personalizzate e parole riempitive.",
+      "settingsNoteLemonade": "Usa le tue impostazioni di lingua, parole personalizzate e parole riempitive.",
       "model": "Modello: {{model}}",
+      "modelLemonade": "Modello: {{model}} su Lemonade Server",
       "noModel": "Seleziona un modello scaricato nella pagina Modelli per trascrivere i file.",
+      "noLemonadeModel": "Scegli un modello Lemonade per trascrivere i file.",
       "dropzone": {
         "title": "Trascina qui file audio o video",
         "hint": "Interviste, riunioni, lezioni e memo vocali di qualsiasi durata",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Salva nella cronologia",
         "description": "Le trascrizioni completate vengono salvate e contrassegnate con la stella, così la pulizia automatica le conserva."
+      },
+      "engine": {
+        "title": "Motore di trascrizione",
+        "label": "Trascrivi con",
+        "description": "La dettatura usa sempre il modello di Handy. Questa scelta vale solo per i file.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Indirizzo del server",
+          "description": "Di solito http://localhost:13305. Le versioni precedenti di Lemonade usavano la porta 8000."
+        },
+        "apiKey": {
+          "label": "Chiave API",
+          "description": "Necessaria solo se il tuo Lemonade Server la richiede.",
+          "placeholder": "Facoltativa"
+        },
+        "model": {
+          "label": "Modello",
+          "description": "Il modello Lemonade che trascrive i tuoi file, ad esempio Whisper-Base.",
+          "placeholder": "Scegli un modello Whisper",
+          "notDownloaded": "{{model}} (scaricato al primo utilizzo)",
+          "none": "Nessun modello di trascrizione trovato su questo server.",
+          "use": "Usa “{{model}}”"
+        },
+        "test": "Verifica connessione",
+        "testing": "Connessione in corso…",
+        "connected_one": "Connesso. {{count}} modello di trascrizione disponibile.",
+        "connected_other": "Connesso. {{count}} modelli di trascrizione disponibili.",
+        "checkFailed": "Impossibile verificare Lemonade Server: {{error}}",
+        "saveError": "Impossibile salvare le impostazioni di Lemonade: {{error}}",
+        "firstChunkSlow": "Lemonade potrebbe essere in fase di download o caricamento del modello. La prima volta può richiedere alcuni minuti.",
+        "errors": {
+          "invalidUrl": "Inserisci un indirizzo come http://localhost:13305.",
+          "unreachable": "Impossibile raggiungere Lemonade Server all'indirizzo {{url}}. Assicurati che sia in esecuzione.",
+          "timeout": "Lemonade Server non ha risposto in tempo.",
+          "unauthorized": "Lemonade Server non ha accettato la chiave API.",
+          "modelNotFound": "Lemonade Server non dispone di questo modello.",
+          "http": "Lemonade Server ha restituito un errore.",
+          "badResponse": "Lemonade Server ha inviato una risposta che Handy non è riuscito a leggere.",
+          "cancelled": "La verifica della connessione è stata annullata."
+        },
+        "notes": {
+          "noTranslate": "L'opzione Traduci in inglese non è disponibile con Lemonade Server. I file vengono trascritti nella lingua parlata.",
+          "remote": "Questo indirizzo non è su questo computer. Le tue registrazioni verranno inviate lì."
+        }
+      },
+      "speakers": {
+        "label": "Etichetta i parlanti",
+        "description": "Indica chi ha detto cosa, fino a 4 parlanti. Funziona su questo computer e richiede un download una tantum di {{size}} MB.",
+        "download": "Scarica il modello dei parlanti ({{size}} MB)",
+        "downloading": "Download del modello dei parlanti… {{percent}}%",
+        "verifying": "Verifica del download…",
+        "cancelDownload": "Annulla download",
+        "downloadFailed": "Impossibile scaricare il modello dei parlanti: {{error}}",
+        "installed": "Modello dei parlanti installato ({{size}} MB)",
+        "remove": "Rimuovi il modello dei parlanti",
+        "removeError": "Impossibile rimuovere il modello dei parlanti: {{error}}",
+        "license": "Modello dei parlanti di NVIDIA, con licenza NVIDIA Open Model License (<link>pagina del modello</link>).",
+        "title": "Parlanti",
+        "defaultName": "Parlante {{number}}",
+        "rename": "Rinomina {{name}}",
+        "nameLabel": "Nuovo nome per {{name}}",
+        "save": "Salva",
+        "cancel": "Annulla",
+        "renameError": "Impossibile rinominare il parlante: {{error}}",
+        "approximate": "I cambi di parlante sono approssimativi perché questo modello non fornisce i timestamp.",
+        "unassigned": "Non è stato possibile associare alcuni passaggi a un parlante.",
+        "state": {
+          "running": "Identificazione dei parlanti…",
+          "done_one": "{{count}} parlante",
+          "done_other": "{{count}} parlanti",
+          "failed": "Impossibile etichettare i parlanti",
+          "skipped": {
+            "modelMissing": "Etichette dei parlanti saltate: il modello dei parlanti non è stato scaricato.",
+            "noSpeech": "Etichette dei parlanti saltate: nessun parlato trovato."
+          }
+        }
       },
       "queue": {
         "title": "File",
@@ -526,6 +608,9 @@
         "modelChanged": "Il modello è cambiato durante la trascrizione di questo file.",
         "decodeFailed": "Impossibile leggere l'audio di questo file.",
         "engineFailed": "Trascrizione non riuscita.",
+        "serverUnreachable": "Impossibile raggiungere Lemonade Server. Assicurati che sia in esecuzione.",
+        "serverUnauthorized": "Lemonade Server non ha accettato la chiave API.",
+        "serverModelMissing": "Lemonade Server non dispone del modello selezionato.",
         "internal": "Si è verificato un errore.",
         "enqueue": "Impossibile aggiungere i file: {{error}}",
         "cancel": "Impossibile annullare: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "Il file originale è stato spostato o eliminato.",
       "fileDuration": "Durata {{duration}}",
       "incomplete": "Incompleta",
+      "speakerCount_one": "{{count}} parlante",
+      "speakerCount_other": "{{count}} parlanti",
       "retranscribeFileUnavailable": "Per trascrivere di nuovo questo file, usa la pagina Trascrivi."
     },
     "debug": {

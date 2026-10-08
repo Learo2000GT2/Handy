@@ -468,8 +468,11 @@
       "title": "Transcribir archivos",
       "description": "Convierte grabaciones existentes en texto en esta computadora. Tus archivos nunca salen de tu dispositivo.",
       "settingsNote": "Usa el modelo seleccionado y tus ajustes de idioma, traducción, palabras personalizadas y muletillas.",
+      "settingsNoteLemonade": "Usa tus ajustes de idioma, palabras personalizadas y muletillas.",
       "model": "Modelo: {{model}}",
+      "modelLemonade": "Modelo: {{model}} en Lemonade Server",
       "noModel": "Selecciona un modelo descargado en la página 'Modelos' para transcribir archivos.",
+      "noLemonadeModel": "Elige un modelo de Lemonade para transcribir archivos.",
       "dropzone": {
         "title": "Suelta aquí archivos de audio o video",
         "hint": "Entrevistas, reuniones, clases y notas de voz de cualquier duración",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Guardar en el historial",
         "description": "Las transcripciones terminadas se guardan y se marcan con una estrella para que la limpieza automática no las elimine."
+      },
+      "engine": {
+        "title": "Motor de transcripción",
+        "label": "Transcribir con",
+        "description": "El dictado siempre usa el modelo propio de Handy. Esta opción es solo para archivos.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Dirección del servidor",
+          "description": "Normalmente http://localhost:13305. Las versiones anteriores de Lemonade usaban el puerto 8000."
+        },
+        "apiKey": {
+          "label": "Clave API",
+          "description": "Solo es necesaria si tu Lemonade Server la solicita.",
+          "placeholder": "Opcional"
+        },
+        "model": {
+          "label": "Modelo",
+          "description": "El modelo de Lemonade que transcribe tus archivos, como Whisper-Base.",
+          "placeholder": "Elige un modelo Whisper",
+          "notDownloaded": "{{model}} (se descarga al usarlo por primera vez)",
+          "none": "No se encontraron modelos de transcripción en este servidor.",
+          "use": "Usar «{{model}}»"
+        },
+        "test": "Probar conexión",
+        "testing": "Conectando…",
+        "connected_one": "Conectado. {{count}} modelo de transcripción disponible.",
+        "connected_other": "Conectado. {{count}} modelos de transcripción disponibles.",
+        "checkFailed": "No se pudo comprobar Lemonade Server: {{error}}",
+        "saveError": "No se pudieron guardar los ajustes de Lemonade: {{error}}",
+        "firstChunkSlow": "Es posible que Lemonade esté descargando o cargando el modelo. La primera vez puede tardar unos minutos.",
+        "errors": {
+          "invalidUrl": "Ingresa una dirección como http://localhost:13305.",
+          "unreachable": "No se puede conectar con Lemonade Server en {{url}}. Asegúrate de que esté en ejecución.",
+          "timeout": "Lemonade Server no respondió a tiempo.",
+          "unauthorized": "Lemonade Server no aceptó la clave API.",
+          "modelNotFound": "Lemonade Server no tiene este modelo.",
+          "http": "Lemonade Server devolvió un error.",
+          "badResponse": "Lemonade Server envió una respuesta que Handy no pudo leer.",
+          "cancelled": "Se canceló la prueba de conexión."
+        },
+        "notes": {
+          "noTranslate": "La opción «Traducir al inglés» no está disponible con Lemonade Server. Los archivos se transcriben en el idioma hablado.",
+          "remote": "Esta dirección no está en esta computadora. Tus grabaciones se enviarán a ella."
+        }
+      },
+      "speakers": {
+        "label": "Etiquetar hablantes",
+        "description": "Indica quién dijo qué, con hasta 4 hablantes. Se ejecuta en esta computadora y requiere una descarga única de {{size}} MB.",
+        "download": "Descargar modelo de hablantes ({{size}} MB)",
+        "downloading": "Descargando modelo de hablantes… {{percent}}%",
+        "verifying": "Comprobando la descarga…",
+        "cancelDownload": "Cancelar descarga",
+        "downloadFailed": "No se pudo descargar el modelo de hablantes: {{error}}",
+        "installed": "Modelo de hablantes instalado ({{size}} MB)",
+        "remove": "Eliminar modelo de hablantes",
+        "removeError": "No se pudo eliminar el modelo de hablantes: {{error}}",
+        "license": "Modelo de hablantes de NVIDIA, con la NVIDIA Open Model License (<link>página del modelo</link>).",
+        "title": "Hablantes",
+        "defaultName": "Hablante {{number}}",
+        "rename": "Cambiar nombre de {{name}}",
+        "nameLabel": "Nuevo nombre para {{name}}",
+        "save": "Guardar",
+        "cancel": "Cancelar",
+        "renameError": "No se pudo cambiar el nombre del hablante: {{error}}",
+        "approximate": "Los cambios de hablante son aproximados porque este modelo no proporciona marcas de tiempo.",
+        "unassigned": "Algunos fragmentos no se pudieron asignar a un hablante.",
+        "state": {
+          "running": "Identificando hablantes…",
+          "done_one": "{{count}} hablante",
+          "done_other": "{{count}} hablantes",
+          "failed": "No se pudieron etiquetar los hablantes",
+          "skipped": {
+            "modelMissing": "Etiquetas de hablantes omitidas: el modelo de hablantes no está descargado.",
+            "noSpeech": "Etiquetas de hablantes omitidas: no se detectó voz."
+          }
+        }
       },
       "queue": {
         "title": "Archivos",
@@ -526,6 +608,9 @@
         "modelChanged": "El modelo cambió mientras se transcribía este archivo.",
         "decodeFailed": "No se pudo leer el audio de este archivo.",
         "engineFailed": "La transcripción falló.",
+        "serverUnreachable": "No se puede conectar con Lemonade Server. Asegúrate de que esté en ejecución.",
+        "serverUnauthorized": "Lemonade Server no aceptó la clave API.",
+        "serverModelMissing": "Lemonade Server no tiene el modelo seleccionado.",
         "internal": "Algo salió mal.",
         "enqueue": "No se pudieron agregar los archivos: {{error}}",
         "cancel": "No se pudo cancelar: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "El archivo original se movió o se eliminó.",
       "fileDuration": "Duración {{duration}}",
       "incomplete": "Incompleta",
+      "speakerCount_one": "{{count}} hablante",
+      "speakerCount_other": "{{count}} hablantes",
       "retranscribeFileUnavailable": "Para volver a transcribir este archivo, usa la página 'Transcribir'."
     },
     "debug": {

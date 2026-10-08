@@ -468,8 +468,11 @@
       "title": "Dateien transkribieren",
       "description": "Wandle vorhandene Aufnahmen direkt auf diesem Computer in Text um. Deine Dateien verlassen nie dein Gerät.",
       "settingsNote": "Verwendet dein ausgewähltes Modell sowie deine Einstellungen für Sprache, Übersetzung, benutzerdefinierte Wörter und Füllwörter.",
+      "settingsNoteLemonade": "Verwendet deine Einstellungen für Sprache, benutzerdefinierte Wörter und Füllwörter.",
       "model": "Modell: {{model}}",
+      "modelLemonade": "Modell: {{model}} auf Lemonade Server",
       "noModel": "Wähle auf der Seite 'Modelle' ein heruntergeladenes Modell aus, um Dateien zu transkribieren.",
+      "noLemonadeModel": "Wähle ein Lemonade-Modell aus, um Dateien zu transkribieren.",
       "dropzone": {
         "title": "Audio- oder Videodateien hier ablegen",
         "hint": "Interviews, Meetings, Vorlesungen und Sprachmemos beliebiger Länge",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Im Verlauf speichern",
         "description": "Fertige Transkriptionen werden gespeichert und mit einem Stern markiert, damit die automatische Bereinigung sie nicht löscht."
+      },
+      "engine": {
+        "title": "Transkriptions-Engine",
+        "label": "Transkribieren mit",
+        "description": "Beim Diktieren verwendet Handy immer sein eigenes Modell. Diese Auswahl gilt nur für Dateien.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Serveradresse",
+          "description": "Normalerweise http://localhost:13305. Ältere Lemonade-Versionen verwendeten Port 8000."
+        },
+        "apiKey": {
+          "label": "API-Schlüssel",
+          "description": "Nur erforderlich, wenn dein Lemonade Server einen verlangt.",
+          "placeholder": "Optional"
+        },
+        "model": {
+          "label": "Modell",
+          "description": "Das Lemonade-Modell, das deine Dateien transkribiert, z. B. Whisper-Base.",
+          "placeholder": "Whisper-Modell auswählen",
+          "notDownloaded": "{{model}} (wird bei der ersten Verwendung heruntergeladen)",
+          "none": "Auf diesem Server wurden keine Transkriptionsmodelle gefunden.",
+          "use": "„{{model}}“ verwenden"
+        },
+        "test": "Verbindung testen",
+        "testing": "Verbindung wird hergestellt…",
+        "connected_one": "Verbunden. {{count}} Transkriptionsmodell verfügbar.",
+        "connected_other": "Verbunden. {{count}} Transkriptionsmodelle verfügbar.",
+        "checkFailed": "Lemonade Server konnte nicht geprüft werden: {{error}}",
+        "saveError": "Lemonade-Einstellungen konnten nicht gespeichert werden: {{error}}",
+        "firstChunkSlow": "Lemonade lädt das Modell möglicherweise gerade herunter oder in den Speicher. Beim ersten Mal kann das einige Minuten dauern.",
+        "errors": {
+          "invalidUrl": "Gib eine Adresse wie http://localhost:13305 ein.",
+          "unreachable": "Lemonade Server unter {{url}} ist nicht erreichbar. Stelle sicher, dass er läuft.",
+          "timeout": "Lemonade Server hat nicht rechtzeitig geantwortet.",
+          "unauthorized": "Lemonade Server hat den API-Schlüssel nicht akzeptiert.",
+          "modelNotFound": "Dieses Modell ist auf Lemonade Server nicht vorhanden.",
+          "http": "Lemonade Server hat einen Fehler zurückgegeben.",
+          "badResponse": "Lemonade Server hat eine Antwort gesendet, die Handy nicht lesen konnte.",
+          "cancelled": "Der Verbindungstest wurde abgebrochen."
+        },
+        "notes": {
+          "noTranslate": "„Ins Englische übersetzen“ ist mit Lemonade Server nicht verfügbar. Dateien werden in der gesprochenen Sprache transkribiert.",
+          "remote": "Diese Adresse befindet sich nicht auf diesem Computer. Deine Aufnahmen werden dorthin gesendet."
+        }
+      },
+      "speakers": {
+        "label": "Sprecher kennzeichnen",
+        "description": "Kennzeichnet, wer was gesagt hat, für bis zu 4 Sprecher. Läuft auf diesem Computer und erfordert einen einmaligen Download von {{size}} MB.",
+        "download": "Sprechermodell herunterladen ({{size}} MB)",
+        "downloading": "Sprechermodell wird heruntergeladen… {{percent}}%",
+        "verifying": "Download wird überprüft…",
+        "cancelDownload": "Download abbrechen",
+        "downloadFailed": "Sprechermodell konnte nicht heruntergeladen werden: {{error}}",
+        "installed": "Sprechermodell installiert ({{size}} MB)",
+        "remove": "Sprechermodell entfernen",
+        "removeError": "Sprechermodell konnte nicht entfernt werden: {{error}}",
+        "license": "Sprechermodell von NVIDIA, unter der NVIDIA Open Model License (<link>Modellseite</link>).",
+        "title": "Sprecher",
+        "defaultName": "Sprecher {{number}}",
+        "rename": "{{name}} umbenennen",
+        "nameLabel": "Neuer Name für {{name}}",
+        "save": "Speichern",
+        "cancel": "Abbrechen",
+        "renameError": "Sprecher konnte nicht umbenannt werden: {{error}}",
+        "approximate": "Sprecherwechsel sind ungefähr, da dieses Modell keine Zeitstempel liefert.",
+        "unassigned": "Einige Abschnitte konnten keinem Sprecher zugeordnet werden.",
+        "state": {
+          "running": "Sprecher werden erkannt…",
+          "done_one": "{{count}} Sprecher",
+          "done_other": "{{count}} Sprecher",
+          "failed": "Sprecher konnten nicht gekennzeichnet werden",
+          "skipped": {
+            "modelMissing": "Sprecherkennzeichnung übersprungen: Das Sprechermodell ist nicht heruntergeladen.",
+            "noSpeech": "Sprecherkennzeichnung übersprungen: Keine Sprache erkannt."
+          }
+        }
       },
       "queue": {
         "title": "Dateien",
@@ -526,6 +608,9 @@
         "modelChanged": "Das Modell wurde geändert, während diese Datei transkribiert wurde.",
         "decodeFailed": "Das Audio in dieser Datei konnte nicht gelesen werden.",
         "engineFailed": "Transkription fehlgeschlagen.",
+        "serverUnreachable": "Lemonade Server ist nicht erreichbar. Stelle sicher, dass er läuft.",
+        "serverUnauthorized": "Lemonade Server hat den API-Schlüssel nicht akzeptiert.",
+        "serverModelMissing": "Das ausgewählte Modell ist auf Lemonade Server nicht vorhanden.",
         "internal": "Etwas ist schiefgelaufen.",
         "enqueue": "Dateien konnten nicht hinzugefügt werden: {{error}}",
         "cancel": "Abbrechen fehlgeschlagen: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "Die Originaldatei wurde verschoben oder gelöscht.",
       "fileDuration": "Länge {{duration}}",
       "incomplete": "Unvollständig",
+      "speakerCount_one": "{{count}} Sprecher",
+      "speakerCount_other": "{{count}} Sprecher",
       "retranscribeFileUnavailable": "Um diese Datei erneut zu transkribieren, verwende die Seite 'Transkribieren'."
     },
     "debug": {

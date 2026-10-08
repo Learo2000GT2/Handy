@@ -468,8 +468,11 @@
       "title": "Bestanden transcriberen",
       "description": "Zet bestaande opnames om in tekst op deze computer. Je bestanden verlaten je apparaat nooit.",
       "settingsNote": "Gebruikt je geselecteerde model en je instellingen voor taal, vertaling, eigen woordenlijst en opvulwoorden.",
+      "settingsNoteLemonade": "Gebruikt je instellingen voor taal, eigen woordenlijst en opvulwoorden.",
       "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} op Lemonade Server",
       "noModel": "Selecteer een gedownload model op de pagina Modellen om bestanden te transcriberen.",
+      "noLemonadeModel": "Kies een Lemonade-model om bestanden te transcriberen.",
       "dropzone": {
         "title": "Sleep audio- of videobestanden hierheen",
         "hint": "Interviews, vergaderingen, colleges en spraakmemo's van elke lengte",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Opslaan in geschiedenis",
         "description": "Voltooide transcripties worden opgeslagen en met een ster gemarkeerd, zodat automatisch opschonen ze bewaart."
+      },
+      "engine": {
+        "title": "Transcriptie-engine",
+        "label": "Transcriberen met",
+        "description": "Dicteren gebruikt altijd het eigen model van Handy. Deze keuze geldt alleen voor bestanden.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Serveradres",
+          "description": "Meestal http://localhost:13305. Oudere versies van Lemonade gebruikten poort 8000."
+        },
+        "apiKey": {
+          "label": "API-sleutel",
+          "description": "Alleen nodig als je Lemonade Server erom vraagt.",
+          "placeholder": "Optioneel"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Het Lemonade-model dat je bestanden transcribeert, zoals Whisper-Base.",
+          "placeholder": "Kies een Whisper-model",
+          "notDownloaded": "{{model}} (wordt bij eerste gebruik gedownload)",
+          "none": "Geen transcriptiemodellen gevonden op deze server.",
+          "use": "“{{model}}” gebruiken"
+        },
+        "test": "Verbinding testen",
+        "testing": "Verbinden…",
+        "connected_one": "Verbonden. {{count}} transcriptiemodel beschikbaar.",
+        "connected_other": "Verbonden. {{count}} transcriptiemodellen beschikbaar.",
+        "checkFailed": "Lemonade Server controleren mislukt: {{error}}",
+        "saveError": "Lemonade-instellingen opslaan mislukt: {{error}}",
+        "firstChunkSlow": "Lemonade is mogelijk het model aan het downloaden of laden. De eerste keer kan dit enkele minuten duren.",
+        "errors": {
+          "invalidUrl": "Voer een adres in zoals http://localhost:13305.",
+          "unreachable": "Lemonade Server op {{url}} is niet bereikbaar. Controleer of de server draait.",
+          "timeout": "Lemonade Server reageerde niet op tijd.",
+          "unauthorized": "Lemonade Server heeft de API-sleutel niet geaccepteerd.",
+          "modelNotFound": "Lemonade Server heeft dit model niet.",
+          "http": "Lemonade Server gaf een fout terug.",
+          "badResponse": "Lemonade Server stuurde een antwoord dat Handy niet kon lezen.",
+          "cancelled": "De verbindingstest is geannuleerd."
+        },
+        "notes": {
+          "noTranslate": "Vertalen naar het Engels is niet beschikbaar met Lemonade Server. Bestanden worden getranscribeerd in de gesproken taal.",
+          "remote": "Dit adres staat niet op deze computer. Je opnames worden ernaartoe verzonden."
+        }
+      },
+      "speakers": {
+        "label": "Sprekers aanduiden",
+        "description": "Geef aan wie wat zei, voor maximaal 4 sprekers. Draait op deze computer en vereist een eenmalige download van {{size}} MB.",
+        "download": "Sprekermodel downloaden ({{size}} MB)",
+        "downloading": "Sprekermodel downloaden… {{percent}}%",
+        "verifying": "Download controleren…",
+        "cancelDownload": "Download annuleren",
+        "downloadFailed": "Sprekermodel downloaden mislukt: {{error}}",
+        "installed": "Sprekermodel geïnstalleerd ({{size}} MB)",
+        "remove": "Sprekermodel verwijderen",
+        "removeError": "Sprekermodel verwijderen mislukt: {{error}}",
+        "license": "Sprekermodel van NVIDIA, onder de NVIDIA Open Model License (<link>modelpagina</link>).",
+        "title": "Sprekers",
+        "defaultName": "Spreker {{number}}",
+        "rename": "{{name}} hernoemen",
+        "nameLabel": "Nieuwe naam voor {{name}}",
+        "save": "Opslaan",
+        "cancel": "Annuleren",
+        "renameError": "Spreker hernoemen mislukt: {{error}}",
+        "approximate": "Sprekerwisselingen zijn bij benadering omdat dit model geen tijdstempels geeft.",
+        "unassigned": "Sommige passages konden niet aan een spreker worden gekoppeld.",
+        "state": {
+          "running": "Sprekers identificeren…",
+          "done_one": "{{count}} spreker",
+          "done_other": "{{count}} sprekers",
+          "failed": "Sprekers aanduiden mislukt",
+          "skipped": {
+            "modelMissing": "Sprekeraanduiding overgeslagen: het sprekermodel is niet gedownload.",
+            "noSpeech": "Sprekeraanduiding overgeslagen: geen spraak gevonden."
+          }
+        }
       },
       "queue": {
         "title": "Bestanden",
@@ -526,6 +608,9 @@
         "modelChanged": "Het model is gewijzigd terwijl dit bestand werd getranscribeerd.",
         "decodeFailed": "De audio in dit bestand kon niet worden gelezen.",
         "engineFailed": "Transcriptie mislukt.",
+        "serverUnreachable": "Lemonade Server is niet bereikbaar. Controleer of de server draait.",
+        "serverUnauthorized": "Lemonade Server heeft de API-sleutel niet geaccepteerd.",
+        "serverModelMissing": "Lemonade Server heeft het geselecteerde model niet.",
         "internal": "Er is iets misgegaan.",
         "enqueue": "Bestanden toevoegen mislukt: {{error}}",
         "cancel": "Annuleren mislukt: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "Het originele bestand is verplaatst of verwijderd.",
       "fileDuration": "Lengte {{duration}}",
       "incomplete": "Onvolledig",
+      "speakerCount_one": "{{count}} spreker",
+      "speakerCount_other": "{{count}} sprekers",
       "retranscribeFileUnavailable": "Gebruik de pagina Transcriberen om dit bestand opnieuw te transcriberen."
     },
     "debug": {
