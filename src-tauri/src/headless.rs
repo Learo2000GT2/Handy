@@ -3,7 +3,7 @@
 
 use crate::cli::CliArgs;
 use crate::engine_supervisor::WorkToken;
-use crate::file_transcription::decode::{self, DecodeOptions};
+use crate::file_transcription::decode::{self, DecodeError, DecodeOptions};
 use crate::file_transcription::export;
 use crate::file_transcription::pipeline::{
     self, PipelineError, PipelineEvent, PipelineOptions, PipelineOutput,
@@ -122,7 +122,7 @@ fn transcribe_file(app: &AppHandle, args: &CliArgs, path: &Path) -> i32 {
     let probe = match decode::probe(path, &decode_options) {
         Ok(probe) => probe,
         Err(e) => {
-            eprintln!("error: {}: {}", path.display(), e);
+            eprintln!("error: {}", probe_error(path, &e));
             return 2;
         }
     };
@@ -218,9 +218,14 @@ fn transcribe_file(app: &AppHandle, args: &CliArgs, path: &Path) -> i32 {
     }
     drop(lease);
     // `runs` is at least 1, and every failed run returned above.
-    let Some(output) = last_output else {
+    let Some(mut output) = last_output else {
         return 1;
     };
+    // As the app does: the Markdown header shows the model's name.
+    output.transcript.model_name = app
+        .try_state::<Arc<ModelManager>>()
+        .and_then(|models| models.get_model_info(&model_id))
+        .map(|info| info.name);
 
     for warning in &output.warnings {
         eprintln!("warning: {}", warning);
@@ -338,8 +343,18 @@ fn output_plan(args: &CliArgs) -> Result<OutputPlan, String> {
     })
 }
 
+/// A probe error that names the input file once: `NotFound` messages
+/// already contain its path.
+fn probe_error(path: &Path, error: &DecodeError) -> String {
+    match error {
+        DecodeError::NotFound(_) => error.to_string(),
+        _ => format!("{}: {}", path.display(), error),
+    }
+}
+
 /// Catches an `--output` that can't work before the transcription runs: a
-/// missing folder, a folder as the target, or the input file itself.
+/// missing folder, a folder as the target, the input file itself, or a
+/// place that can't be written.
 fn check_output_path(output: &Path, input: &Path) -> Result<(), String> {
     let folder = match output.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent,
@@ -356,7 +371,7 @@ fn check_output_path(output: &Path, input: &Path) -> Result<(), String> {
             return Err("--output would overwrite the input file".to_string());
         }
     }
-    Ok(())
+    export::check_writable(output).map_err(|e| format!("cannot write {}: {}", output.display(), e))
 }
 
 /// Warns when `--chunk-secs` asks for more audio per call than the model
@@ -676,6 +691,53 @@ mod tests {
         assert!(err.contains("is a folder"), "{err}");
         let err = check_output_path(&dir.path().join(".").join("talk.wav"), &input).unwrap_err();
         assert!(err.contains("overwrite the input"), "{err}");
+        // The writability probe leaves nothing behind.
+        let mut names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["talk.txt", "talk.wav"]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn check_output_path_catches_unwritable_folders_before_transcribing() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("talk.wav");
+        std::fs::write(&input, b"RIFF").unwrap();
+
+        // Exists, but no file can be created in it (not even by root).
+        let err = check_output_path(Path::new("/proc/talk.srt"), &input).unwrap_err();
+        assert!(err.starts_with("cannot write /proc/talk.srt: "), "{err}");
+        // Devices are written to, not replaced, so they pass.
+        assert!(check_output_path(Path::new("/dev/null"), &input).is_ok());
+    }
+
+    #[test]
+    fn probe_errors_name_the_file_once() {
+        let path = Path::new("/nope/x.mp3");
+        assert_eq!(
+            probe_error(
+                path,
+                &DecodeError::NotFound("/nope/x.mp3 does not exist".to_string())
+            ),
+            "/nope/x.mp3 does not exist"
+        );
+        assert_eq!(
+            probe_error(
+                path,
+                &DecodeError::Unsupported("the file has no audio track".to_string())
+            ),
+            "/nope/x.mp3: unsupported file: the file has no audio track"
+        );
+        assert_eq!(
+            probe_error(
+                path,
+                &DecodeError::NeedsFfmpeg("opus files need ffmpeg".into())
+            ),
+            "/nope/x.mp3: opus files need ffmpeg, but ffmpeg was not found"
+        );
     }
 
     #[test]
@@ -762,6 +824,21 @@ mod tests {
             metrics_line(&report(&output, None, &[0])),
             "model=small device=settings backend=? audio=3725.00s load=1200ms best=0ms rtf=0.00x"
         );
+    }
+
+    #[test]
+    fn metrics_of_an_empty_recording() {
+        let mut output = sample_output();
+        output.transcript.duration_ms = 0;
+        output.transcript.text = String::new();
+        output.transcript.status = TranscriptStatus::Completed;
+        assert_eq!(
+            metrics_line(&report(&output, Some("cpu"), &[12])),
+            "model=small device=settings backend=cpu audio=0.00s load=1200ms best=12ms rtf=0.00x"
+        );
+        let json = legacy_json(&report(&output, Some("cpu"), &[12]), None);
+        assert_eq!(json["audio_secs"], 0.0);
+        assert_eq!(json["text"], "");
     }
 
     #[test]

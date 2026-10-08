@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 use tauri::AppHandle;
 use tauri_specta::Event;
 
@@ -68,6 +70,10 @@ DELETE FROM file_transcription
 pub(crate) fn ensure_file_transcription_schema(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(FILE_TRANSCRIPTION_SCHEMA)
 }
+
+/// Longest a History page waits to learn whether its entries' source files
+/// still exist.
+const SOURCE_CHECK_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Columns read by `map_history_entry`; every entry SELECT uses this list
 /// with `ENTRY_FROM`, so a new column cannot be missed by one query.
@@ -291,19 +297,17 @@ impl HistoryManager {
 
     fn map_history_entry(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> {
         let file = match row.get::<_, Option<i64>>("f_history_id")? {
-            Some(_) => {
-                let source_path: String = row.get("f_source_path")?;
-                let source_exists = Path::new(&source_path).exists();
-                Some(FileHistoryInfo {
-                    source_name: row.get("f_source_name")?,
-                    duration_ms: row.get("f_duration_ms")?,
-                    model_id: row.get("f_model_id")?,
-                    model_name: row.get("f_model_name")?,
-                    status: status_from_sql(row.get::<_, Option<String>>("f_status")?.as_deref()),
-                    source_exists,
-                    source_path,
-                })
-            }
+            Some(_) => Some(FileHistoryInfo {
+                source_path: row.get("f_source_path")?,
+                source_name: row.get("f_source_name")?,
+                duration_ms: row.get("f_duration_ms")?,
+                model_id: row.get("f_model_id")?,
+                model_name: row.get("f_model_name")?,
+                status: status_from_sql(row.get::<_, Option<String>>("f_status")?.as_deref()),
+                // Unknown here; `check_sources` looks without blocking the
+                // async runtime on a slow file system.
+                source_exists: true,
+            }),
             None => None,
         };
 
@@ -625,6 +629,7 @@ impl HistoryManager {
         if has_more {
             entries.pop();
         }
+        check_sources(&mut entries, SOURCE_CHECK_TIMEOUT, |path| path.exists()).await;
 
         Ok(PaginatedHistory { entries, has_more })
     }
@@ -940,6 +945,44 @@ impl HistoryManager {
     }
 }
 
+/// Sets `source_exists` on the file entries, checking each source with
+/// `exists` on a blocking thread: a source on an unreachable network share
+/// can stall for a long time. A source not checked within `timeout` keeps
+/// `true` (unknown).
+async fn check_sources(
+    entries: &mut [HistoryEntry],
+    timeout: Duration,
+    exists: impl Fn(&Path) -> bool + Send + 'static,
+) {
+    let paths: Vec<String> = entries
+        .iter()
+        .filter_map(|entry| Some(entry.file.as_ref()?.source_path.clone()))
+        .collect();
+    if paths.is_empty() {
+        return;
+    }
+    let found = Arc::new(Mutex::new(Vec::with_capacity(paths.len())));
+    let results = Arc::clone(&found);
+    let checks = tauri::async_runtime::spawn_blocking(move || {
+        for path in paths {
+            let exists = exists(Path::new(&path));
+            results
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(exists);
+        }
+    });
+    if tokio::time::timeout(timeout, checks).await.is_err() {
+        debug!("Gave up checking the source files of history entries");
+    }
+
+    let found = found.lock().unwrap_or_else(PoisonError::into_inner);
+    let files = entries.iter_mut().filter_map(|entry| entry.file.as_mut());
+    for (file, &exists) in files.zip(found.iter()) {
+        file.source_exists = exists;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1132,12 +1175,88 @@ mod tests {
         assert_eq!(file.model_name.as_deref(), Some("Parakeet V3"));
         assert_eq!(file.status, TranscriptStatus::Partial);
         assert!(file.source_exists);
+    }
+
+    fn source_exists(entry: &HistoryEntry) -> bool {
+        entry.file.as_ref().expect("file info").source_exists
+    }
+
+    #[tokio::test]
+    async fn check_sources_marks_missing_source_files() {
+        let mut conn = setup_conn();
+        let dir = tempfile::tempdir().expect("tempdir");
+        let source = dir.path().join("interview.m4a");
+        fs::write(&source, b"audio").expect("write source");
+        insert_file(&mut conn, &file_transcript(&source.to_string_lossy()), 100);
+        insert_entry(&conn, 200, "dictated", None);
+        let read = |conn: &Connection| {
+            conn.prepare(&format!(
+                "SELECT {ENTRY_COLUMNS} {ENTRY_FROM} ORDER BY h.id DESC"
+            ))
+            .expect("prepare")
+            .query_map([], HistoryManager::map_history_entry)
+            .expect("query")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("collect")
+        };
+
+        let mut entries = read(&conn);
+        check_sources(&mut entries, SOURCE_CHECK_TIMEOUT, |path| path.exists()).await;
+        assert!(entries[0].file.is_none());
+        assert!(source_exists(&entries[1]));
 
         fs::remove_file(&source).expect("remove source");
-        let reread = HistoryManager::get_latest_entry_with_conn(&conn)
-            .expect("fetch")
-            .expect("entry exists");
-        assert!(!reread.file.expect("file info").source_exists);
+        let mut entries = read(&conn);
+        // Reading rows never touches the file system.
+        assert!(source_exists(&entries[1]));
+        check_sources(&mut entries, SOURCE_CHECK_TIMEOUT, |path| path.exists()).await;
+        assert!(!source_exists(&entries[1]));
+    }
+
+    #[tokio::test]
+    async fn check_sources_treats_stalled_checks_as_present() {
+        let file_entry = |id: i64, source_path: &str| HistoryEntry {
+            id,
+            file_name: String::new(),
+            timestamp: id,
+            saved: true,
+            title: source_path.to_string(),
+            transcription_text: "text".to_string(),
+            post_processed_text: None,
+            post_process_prompt: None,
+            post_process_requested: false,
+            file: Some(FileHistoryInfo {
+                source_path: source_path.to_string(),
+                source_name: source_path.to_string(),
+                duration_ms: 1_000,
+                model_id: None,
+                model_name: None,
+                status: TranscriptStatus::Completed,
+                source_exists: true,
+            }),
+        };
+        let mut entries = vec![
+            file_entry(4, "/local/gone.m4a"),
+            file_entry(3, "/nas/stalled.m4a"),
+            file_entry(2, "/local/after.m4a"),
+        ];
+        // Stands in for a stat on a hung network mount, until released.
+        let (release, stalled) = std::sync::mpsc::channel::<()>();
+        let exists = move |path: &Path| {
+            if path.starts_with("/nas") {
+                let _ = stalled.recv();
+            }
+            false
+        };
+
+        let started = std::time::Instant::now();
+        check_sources(&mut entries, Duration::from_secs(1), exists).await;
+
+        assert!(started.elapsed() < Duration::from_secs(10));
+        assert!(!source_exists(&entries[0]));
+        assert!(source_exists(&entries[1]), "unknown counts as present");
+        assert!(source_exists(&entries[2]), "not reached in time");
+        drop(release);
     }
 
     #[test]

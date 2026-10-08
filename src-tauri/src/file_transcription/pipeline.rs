@@ -260,6 +260,13 @@ pub fn run_pipeline(
                 message,
             });
         }
+        if let Some(message) = run.engine_failure() {
+            // No partial: there is no text to keep.
+            return Err(PipelineError::failed(
+                FileJobErrorCode::EngineFailed,
+                message,
+            ));
+        }
         Ok(run.finish(&job, &outcome))
     })
 }
@@ -338,6 +345,20 @@ struct ChunkRun {
 }
 
 impl ChunkRun {
+    /// Why a run that decoded the whole file still failed: chunks failed and
+    /// none produced text, so an empty transcript would hide an engine
+    /// failure. None when any chunk has text, or no chunk failed (silence).
+    fn engine_failure(&self) -> Option<String> {
+        if self.failed_chunks == 0 || self.transcript.has_text() {
+            return None;
+        }
+        let last = self.warnings.last().map(String::as_str).unwrap_or_default();
+        Some(match self.failed_chunks {
+            1 => last.to_string(),
+            failed => format!("{} chunks could not be transcribed. {}", failed, last),
+        })
+    }
+
     /// The result so far, marked partial with `reason`; None when no chunk
     /// was finished.
     fn partial(
@@ -1004,6 +1025,74 @@ mod tests {
         assert_eq!(done.transcript.duration_ms, 95_000);
         assert_eq!(done.transcript.status, TranscriptStatus::Completed);
         assert_eq!(done.transcript.status_detail, None);
+    }
+
+    #[test]
+    fn engine_failure_only_when_failed_chunks_left_no_text() {
+        let mut run = ChunkRun::default();
+        // An empty or all-silent file is an empty transcript, not a failure.
+        assert_eq!(run.engine_failure(), None);
+        run.chunks = 2;
+        run.skipped_chunks = 2;
+        assert_eq!(run.engine_failure(), None);
+
+        run.chunks = 3;
+        run.failed_chunks = 1;
+        run.warnings
+            .push("Could not transcribe 00:00:00–00:00:25: worker crashed".to_string());
+        assert_eq!(
+            run.engine_failure().as_deref(),
+            Some("Could not transcribe 00:00:00–00:00:25: worker crashed")
+        );
+
+        run.chunks = 4;
+        run.failed_chunks = 2;
+        run.warnings
+            .push("Could not transcribe 00:00:25–00:00:50: GPU fault".to_string());
+        assert_eq!(
+            run.engine_failure().as_deref(),
+            Some("2 chunks could not be transcribed. Could not transcribe 00:00:25–00:00:50: GPU fault")
+        );
+
+        // Once a chunk has text, the failures make the transcript partial.
+        run.transcript.push_chunk(
+            Some(segment(50_000, 60_000, "hello")),
+            vec![segment(50_000, 60_000, "hello")],
+            None,
+            TimingGrain::Chunk,
+        );
+        assert_eq!(run.engine_failure(), None);
+    }
+
+    #[test]
+    fn empty_decode_finishes_as_an_empty_completed_transcript() {
+        let job = JobInfo {
+            source_path: "/audio/empty.wav".to_string(),
+            source_name: "empty.wav".to_string(),
+            model_id: "tiny",
+            estimated_duration_ms: Some(0),
+            fallback_decoder: DecoderKind::Symphonia,
+            source_size_bytes: 44,
+            source_modified_at: None,
+        };
+        let run = ChunkRun::default();
+        assert_eq!(run.engine_failure(), None);
+
+        let done = run.finish(
+            &job,
+            &DecodeOutcome {
+                decoder: DecoderKind::Wav,
+                samples: 0,
+                truncated: None,
+            },
+        );
+
+        assert_eq!(done.chunks, 0);
+        assert!(done.warnings.is_empty());
+        assert_eq!(done.transcript.status, TranscriptStatus::Completed);
+        assert_eq!(done.transcript.status_detail, None);
+        assert_eq!(done.transcript.duration_ms, 0);
+        assert_eq!(done.transcript.text, "");
     }
 
     #[test]

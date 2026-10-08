@@ -9,10 +9,10 @@ use crate::file_transcription::types::{
     is_no_space_language, FileTranscript, TranscriptFormat, TranscriptSegment, TranscriptStatus,
 };
 use chrono::DateTime;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::ops::Range;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Longest subtitle line, in `char`s.
 const MAX_LINE_CHARS: usize = 42;
@@ -268,10 +268,78 @@ pub fn default_export_file_name(source_name: &str, format: TranscriptFormat) -> 
     format!("{stem}.{}", format.extension())
 }
 
+/// Symbolic links followed before giving up, as the OS does.
+const MAX_SYMLINK_HOPS: usize = 40;
+
 /// Replaces `path` with `contents` so readers never see a half-written file:
 /// writes `<name>.tmp-<pid>` next to it, syncs it, then renames it over the
 /// target. The temporary file is removed again if any step fails.
+///
+/// A symbolic link is followed and its target replaced, keeping the target's
+/// permissions (on Unix). A target that exists but is neither a regular file
+/// nor a folder (a pipe, a terminal, `/dev/stdout`) cannot be replaced, so
+/// it is written to directly.
 pub fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
+    if is_special_file(path) {
+        let mut file = OpenOptions::new().write(true).truncate(true).open(path)?;
+        file.write_all(contents.as_bytes())?;
+        return file.flush();
+    }
+    let path = resolve_symlinks(path)?;
+    let temp_path = temp_path_for(&path)?;
+
+    let result = write_and_replace(&temp_path, &path, contents.as_bytes());
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
+/// Fails, without touching `path`, when `write_atomic(path, ..)` surely
+/// would because its folder is missing or cannot take the temporary file.
+/// A special file (see `write_atomic`) is not opened here: opening a pipe
+/// can block, or end it for its reader.
+pub fn check_writable(path: &Path) -> io::Result<()> {
+    if is_special_file(path) {
+        return Ok(());
+    }
+    let temp_path = temp_path_for(&resolve_symlinks(path)?)?;
+    File::create(&temp_path)?;
+    fs::remove_file(&temp_path)
+}
+
+/// True when `path` (after links) exists and is neither a regular file nor
+/// a folder.
+fn is_special_file(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|metadata| !metadata.is_file() && !metadata.is_dir())
+}
+
+/// `path` with the links in its last component followed, whether or not
+/// the final target exists yet.
+fn resolve_symlinks(path: &Path) -> io::Result<PathBuf> {
+    let mut path = path.to_path_buf();
+    for _ in 0..MAX_SYMLINK_HOPS {
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                let target = fs::read_link(&path)?;
+                // A relative target is relative to the link's folder; an
+                // absolute one replaces the whole path.
+                path = match path.parent() {
+                    Some(folder) => folder.join(target),
+                    None => target,
+                };
+            }
+            _ => return Ok(path),
+        }
+    }
+    Err(io::Error::other(format!(
+        "too many levels of symbolic links: {}",
+        path.display()
+    )))
+}
+
+/// `<name>.tmp-<pid>` next to `path`.
+fn temp_path_for(path: &Path) -> io::Result<PathBuf> {
     let file_name = path.file_name().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -280,17 +348,20 @@ pub fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
     })?;
     let mut temp_name = file_name.to_os_string();
     temp_name.push(format!(".tmp-{}", std::process::id()));
-    let temp_path = path.with_file_name(temp_name);
-
-    let result = write_and_replace(&temp_path, path, contents.as_bytes());
-    if result.is_err() {
-        let _ = fs::remove_file(&temp_path);
-    }
-    result
+    Ok(path.with_file_name(temp_name))
 }
 
 fn write_and_replace(temp_path: &Path, path: &Path, contents: &[u8]) -> io::Result<()> {
     let mut file = File::create(temp_path)?;
+    // Keep the mode of the file being replaced, set before any text is
+    // written so a private transcript is never readable by others. (Windows
+    // has only a read-only flag, which would block the replace.)
+    #[cfg(unix)]
+    if let Ok(metadata) = fs::metadata(path) {
+        if metadata.is_file() {
+            file.set_permissions(metadata.permissions())?;
+        }
+    }
     file.write_all(contents)?;
     file.sync_all()?;
     drop(file);
@@ -1193,5 +1264,124 @@ chunking matters.
         assert!(write_atomic(&dir.path().join("missing").join("x.txt"), "text").is_err());
         assert!(write_atomic(&dir.path().join(".."), "text").is_err());
         assert_eq!(dir_entries(dir.path()), vec!["taken"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_writes_through_symlinks() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        let synced = dir.path().join("synced");
+        fs::create_dir(&synced).unwrap();
+        fs::write(synced.join("real.srt"), "old\n").unwrap();
+        // Relative targets resolve from the link's folder, through chains.
+        symlink("synced/real.srt", dir.path().join("hop.srt")).unwrap();
+        symlink("hop.srt", dir.path().join("link.srt")).unwrap();
+
+        write_atomic(&dir.path().join("link.srt"), "new\n").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(synced.join("real.srt")).unwrap(),
+            "new\n"
+        );
+        for link in ["link.srt", "hop.srt"] {
+            let metadata = fs::symlink_metadata(dir.path().join(link)).unwrap();
+            assert!(metadata.file_type().is_symlink(), "{link}");
+        }
+        assert_eq!(dir_entries(&synced), vec!["real.srt"]);
+
+        // A dangling link creates its target.
+        symlink(synced.join("later.txt"), dir.path().join("dangling.txt")).unwrap();
+        write_atomic(&dir.path().join("dangling.txt"), "made\n").unwrap();
+        assert_eq!(
+            fs::read_to_string(synced.join("later.txt")).unwrap(),
+            "made\n"
+        );
+        assert!(fs::symlink_metadata(dir.path().join("dangling.txt"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+
+        // A link loop is an error, not a hang.
+        symlink("loop-b", dir.path().join("loop-a")).unwrap();
+        symlink("loop-a", dir.path().join("loop-b")).unwrap();
+        assert!(write_atomic(&dir.path().join("loop-a"), "x").is_err());
+        assert!(check_writable(&dir.path().join("loop-a")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_keeps_the_replaced_files_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("private.txt");
+        fs::write(&path, "old\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+
+        write_atomic(&path, "new\n").unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new\n");
+        let mode = fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_writes_into_pipes_and_devices() {
+        use std::io::Read;
+        use std::os::unix::fs::{symlink, FileTypeExt};
+        let dir = tempfile::tempdir().unwrap();
+        let fifo = dir.path().join("out.fifo");
+        let c_path = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+
+        // Like `-o >(gzip > t.gz)`: nothing may open the pipe early.
+        check_writable(&fifo).unwrap();
+        let reader = {
+            let fifo = fifo.clone();
+            std::thread::spawn(move || {
+                let mut text = String::new();
+                File::open(fifo).unwrap().read_to_string(&mut text).unwrap();
+                text
+            })
+        };
+        write_atomic(&fifo, "through the pipe\n").unwrap();
+
+        assert_eq!(reader.join().unwrap(), "through the pipe\n");
+        assert!(fs::symlink_metadata(&fifo).unwrap().file_type().is_fifo());
+        assert_eq!(dir_entries(dir.path()), vec!["out.fifo"]);
+
+        // Like `-o /dev/stdout`: the device is written, the link kept.
+        let null_link = dir.path().join("null");
+        symlink("/dev/null", &null_link).unwrap();
+        check_writable(&null_link).unwrap();
+        write_atomic(&null_link, "discarded\n").unwrap();
+        assert!(fs::symlink_metadata(&null_link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert!(fs::metadata("/dev/null")
+            .unwrap()
+            .file_type()
+            .is_char_device());
+        assert_eq!(dir_entries(dir.path()), vec!["null", "out.fifo"]);
+    }
+
+    #[test]
+    fn check_writable_tries_the_folder_without_leaving_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let existing = dir.path().join("old.txt");
+        fs::write(&existing, "keep\n").unwrap();
+
+        check_writable(&dir.path().join("new.srt")).unwrap();
+        check_writable(&existing).unwrap();
+        assert_eq!(fs::read_to_string(&existing).unwrap(), "keep\n");
+        assert_eq!(dir_entries(dir.path()), vec!["old.txt"]);
+
+        assert!(check_writable(&dir.path().join("missing").join("x.txt")).is_err());
+        // A file where the folder should be.
+        assert!(check_writable(&existing.join("x.txt")).is_err());
+        assert!(check_writable(&dir.path().join("..")).is_err());
+        assert_eq!(dir_entries(dir.path()), vec!["old.txt"]);
     }
 }

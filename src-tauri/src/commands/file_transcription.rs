@@ -131,6 +131,14 @@ fn export_path(path: &str, format: TranscriptFormat) -> Result<PathBuf, String> 
     }
     if path.extension().is_none() {
         path.set_extension(format.extension());
+        // The dialog asked about replacing the name as typed, not this one.
+        if std::fs::symlink_metadata(&path).is_ok() {
+            return Err(format!(
+                "{} already exists. Choose another name, or include .{} in the name to replace it.",
+                path.display(),
+                format.extension()
+            ));
+        }
     }
     Ok(path)
 }
@@ -184,6 +192,42 @@ mod tests {
                 TranscriptFormat::Md
             ),
             Ok(dir_path.join("talk.final"))
+        );
+    }
+
+    #[test]
+    fn export_path_never_adds_an_extension_onto_an_existing_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let dir_path = dir.path();
+        std::fs::write(dir_path.join("interview.srt"), "1\n").expect("write file");
+
+        // The dialog confirmed "interview", which does not exist.
+        let err = export_path(
+            &dir_path.join("interview").to_string_lossy(),
+            TranscriptFormat::Srt,
+        )
+        .expect_err("would replace interview.srt unasked");
+        assert!(err.contains("interview.srt already exists"), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(dir_path.join("interview.srt")).expect("read file"),
+            "1\n"
+        );
+
+        // Named in full, the dialog asked before replacing it.
+        assert_eq!(
+            export_path(
+                &dir_path.join("interview.srt").to_string_lossy(),
+                TranscriptFormat::Srt
+            ),
+            Ok(dir_path.join("interview.srt"))
+        );
+        // Another format's extension is still free.
+        assert_eq!(
+            export_path(
+                &dir_path.join("interview").to_string_lossy(),
+                TranscriptFormat::Vtt
+            ),
+            Ok(dir_path.join("interview.vtt"))
         );
     }
 }
