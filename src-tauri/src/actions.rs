@@ -6,7 +6,7 @@ use crate::managers::audio::AudioRecordingManager;
 use crate::managers::history::HistoryManager;
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::StreamWorkKind;
-use crate::managers::transcription::TranscriptionManager;
+use crate::managers::transcription::{DictationHold, TranscriptionManager};
 use crate::settings::{get_settings, AppSettings, OverlayStyle, APPLE_INTELLIGENCE_PROVIDER_ID};
 use crate::shortcut;
 use crate::tray::{set_tray_state, TrayIconState};
@@ -32,8 +32,10 @@ struct RecordingErrorEvent {
 }
 
 /// Drop guard that finishes the transcription pipeline, including immediate
-/// model unloading on early exits.
-struct FinishGuard(AppHandle, Arc<TranscriptionManager>);
+/// model unloading on early exits. Holds the dictation's [`DictationHold`]
+/// (taken in `stop`), which keeps file transcription jobs paused until this
+/// pipeline has fully finished; it is released last.
+struct FinishGuard(AppHandle, Arc<TranscriptionManager>, Option<DictationHold>);
 impl Drop for FinishGuard {
     fn drop(&mut self) {
         self.1.maybe_unload_immediately("transcription session");
@@ -44,6 +46,9 @@ impl Drop for FinishGuard {
         // WAV copy, engine scratch); hand the cached pages back to the OS so
         // they don't sit in malloc arenas until they get swapped out (#1792).
         crate::memory::trim_freed_memory();
+        if let Some(hold) = self.2.take() {
+            self.1.release_dictation_hold(hold);
+        }
     }
 }
 
@@ -602,9 +607,12 @@ impl ShortcutAction for TranscribeAction {
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
         let post_process = self.post_process;
         let cancel_generation = rm.cancel_generation();
+        // File transcription jobs stay paused from here until the pipeline
+        // below has finished (the guard releases the hold).
+        let hold = tm.hold_for_dictation();
 
         tauri::async_runtime::spawn(async move {
-            let _guard = FinishGuard(ah.clone(), Arc::clone(&tm));
+            let _guard = FinishGuard(ah.clone(), Arc::clone(&tm), Some(hold));
             debug!(
                 "Starting async transcription task for binding: {}",
                 binding_id

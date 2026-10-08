@@ -5,7 +5,8 @@
 //! slot, the loaded model's spec and any active stream, so "at most one
 //! model worker alive" holds by construction. Callers' commands wait their
 //! turn; waiting in the queue (e.g. behind a model load) is never a timeout.
-//! Only [`EngineSupervisor::cancel`] and device probes bypass the queue: a
+//! Only cancels ([`EngineSupervisor::cancel`] and
+//! [`EngineSupervisor::cancel_work`]) and device probes bypass the queue: a
 //! probe runs its own short-lived, model-less worker on the caller's thread,
 //! so a hung GPU driver can't hold up dictation behind it.
 //!
@@ -18,7 +19,7 @@ use super::protocol::{
     encode_message, read_message, DeviceInfo, DeviceSelector, LoadedInfo, Request, Response,
 };
 use super::worker::LOG_LINE_PREFIX;
-use super::{CPU_ONLY_FLAG, LOG_LEVEL_ENV, WORKER_FLAG};
+use super::{WorkToken, CPU_ONLY_FLAG, LOG_LEVEL_ENV, WORKER_FLAG};
 use log::{debug, error, info, warn, Level};
 use std::collections::VecDeque;
 use std::fmt;
@@ -136,7 +137,8 @@ impl LoadSpec {
 
 #[derive(Debug)]
 pub enum EngineError {
-    /// [`EngineSupervisor::cancel`] stopped the work.
+    /// [`EngineSupervisor::cancel`] (or, for scoped work,
+    /// [`EngineSupervisor::cancel_work`]) stopped the work.
     Cancelled,
     /// No model, a transcribe.cpp error, or a worker failure that could not
     /// be recovered.
@@ -181,6 +183,9 @@ enum Command {
         pcm: Vec<f32>,
         run: RunOptions,
         epoch: u64,
+        /// Set for scoped work (a file transcription); see
+        /// [`EngineSupervisor::cancel_work`].
+        token: Option<WorkToken>,
         reply: Reply<Result<Transcript, EngineError>>,
     },
     StreamBegin {
@@ -314,6 +319,8 @@ impl Shared {
 struct InFlight {
     what: &'static str,
     control: Arc<Control>,
+    /// The scoped work's token, if the call carries one.
+    token: Option<WorkToken>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -401,11 +408,33 @@ impl EngineSupervisor {
     /// Transcribe 16 kHz mono PCM with the loaded model. A worker crash or
     /// hang is retried once in a fresh worker (on CPU if it was on the GPU).
     pub fn transcribe(&self, pcm: Vec<f32>, run: RunOptions) -> Result<Transcript, EngineError> {
+        self.submit_transcribe(pcm, run, None)
+    }
+
+    /// [`transcribe`](Self::transcribe) as scoped work: besides
+    /// [`cancel`](Self::cancel), [`cancel_work`](Self::cancel_work) with the
+    /// same `token` stops it. Cancelling the token never affects other work.
+    pub fn transcribe_scoped(
+        &self,
+        pcm: Vec<f32>,
+        run: RunOptions,
+        token: &WorkToken,
+    ) -> Result<Transcript, EngineError> {
+        self.submit_transcribe(pcm, run, Some(token.clone()))
+    }
+
+    fn submit_transcribe(
+        &self,
+        pcm: Vec<f32>,
+        run: RunOptions,
+        token: Option<WorkToken>,
+    ) -> Result<Transcript, EngineError> {
         let epoch = self.shared.epoch();
         self.ask(|reply| Command::Transcribe {
             pcm,
             run,
             epoch,
+            token,
             reply,
         })
         .unwrap_or_else(|| Err(engine_stopped()))
@@ -457,6 +486,27 @@ impl EngineSupervisor {
         if let Some(call) = lock(&self.shared.in_flight).take() {
             info!(
                 "Cancelling the {} by stopping its worker (pid {})",
+                call.what, call.control.pid
+            );
+            call.control.kill();
+        }
+    }
+
+    /// Stop the scoped work submitted with `token`, queued or in progress,
+    /// and nothing else: unlike [`cancel`](Self::cancel) it leaves the cancel
+    /// epoch alone, so dictation is never affected. A call in progress is
+    /// stopped by killing its worker (the next use starts a fresh one and
+    /// reloads the model); queued calls see the token and never start.
+    pub fn cancel_work(&self, token: &WorkToken) {
+        token.cancel();
+        // Checked under the lock `call_work` publishes under, after the
+        // token is set: either it sees the token and sends nothing, or this
+        // sees its call and kills its worker.
+        let ours = lock(&self.shared.in_flight)
+            .take_if(|call| call.token.as_ref().is_some_and(|t| t.same_as(token)));
+        if let Some(call) = ours {
+            info!(
+                "Cancelling the scoped {} by stopping its worker (pid {})",
                 call.what, call.control.pid
             );
             call.control.kill();
@@ -634,9 +684,10 @@ impl Owner {
                     pcm,
                     run,
                     epoch,
+                    token,
                     reply,
                 } => {
-                    let _ = reply.send(self.transcribe(&pcm, &run, epoch));
+                    let _ = reply.send(self.transcribe(&pcm, &run, epoch, token.as_ref()));
                 }
                 Command::StreamBegin {
                     active,
@@ -811,29 +862,34 @@ impl Owner {
         Deadlines::for_device(on_gpu)
     }
 
-    /// A call that [`EngineSupervisor::cancel`] can stop. Returns
-    /// `Cancelled` if a cancel came after `epoch`, whatever the worker said.
+    /// A call that [`EngineSupervisor::cancel`] (or, for scoped work,
+    /// [`EngineSupervisor::cancel_work`] with its `token`) can stop. Returns
+    /// `Cancelled` if a cancel came after `epoch`, or the token was
+    /// cancelled, whatever the worker said.
     fn call_work(
         &mut self,
         request: &Request,
         pcm: Option<&[f32]>,
         deadline: Duration,
         epoch: u64,
+        token: Option<&WorkToken>,
     ) -> Result<Response, Failure> {
         let worker = self.worker.as_mut().expect("caller ensured a worker");
         let frame = encode_request(request, pcm)?;
         let sent = {
             // Check, send and publish under the lock cancel() takes after
-            // bumping the epoch: either this sees the cancel and sends
-            // nothing, or the cancel sees the call and kills its worker.
+            // bumping the epoch (and cancel_work() after setting the token):
+            // either this sees the cancel and sends nothing, or the cancel
+            // sees the call and kills its worker.
             let mut in_flight = lock(&self.shared.in_flight);
-            if self.shared.cancelled_since(epoch) {
+            if self.shared.cancelled_since(epoch) || token.is_some_and(WorkToken::is_cancelled) {
                 return Err(Failure::Cancelled);
             }
             let sent = worker.control.send(frame);
             *in_flight = Some(InFlight {
                 what: request_name(request),
                 control: Arc::clone(&worker.control),
+                token: token.cloned(),
             });
             sent
         };
@@ -842,10 +898,13 @@ impl Owner {
         } else {
             Err(worker.died())
         };
-        // Gone if cancel() took the call, which means it killed the worker
-        // (possibly just after it answered).
+        // Gone if cancel() or cancel_work() took the call, which means it
+        // killed the worker (possibly just after it answered).
         let killed = lock(&self.shared.in_flight).take().is_none();
-        if killed || self.shared.cancelled_since(epoch) {
+        if killed
+            || self.shared.cancelled_since(epoch)
+            || token.is_some_and(WorkToken::is_cancelled)
+        {
             if killed || result.as_ref().is_err_and(Failure::worker_lost) {
                 // The next use starts a fresh worker.
                 self.worker = None;
@@ -862,6 +921,7 @@ impl Owner {
         pcm: &[f32],
         run: &RunOptions,
         epoch: u64,
+        token: Option<&WorkToken>,
     ) -> Result<Transcript, EngineError> {
         // A stream left open would make the worker refuse the run.
         self.end_stream();
@@ -870,14 +930,14 @@ impl Owner {
         };
         let mut retried = false;
         loop {
-            if self.shared.cancelled_since(epoch) {
+            if self.shared.cancelled_since(epoch) || token.is_some_and(WorkToken::is_cancelled) {
                 return Err(EngineError::Cancelled);
             }
             // A respawn here runs under the load deadline; the run's own
             // deadline starts only once the model is loaded.
             self.ensure_worker()?;
             let deadline = self.deadlines().run(pcm.len());
-            match self.call_work(&request, Some(pcm), deadline, epoch) {
+            match self.call_work(&request, Some(pcm), deadline, epoch, token) {
                 Ok(Response::Transcript(transcript)) => return Ok(transcript),
                 Ok(other) => return Err(unexpected(&other).into()),
                 Err(failure) if failure.worker_lost() => {
@@ -946,7 +1006,7 @@ impl Owner {
             .deadlines()
             .audio(pcm.len() + ms_to_samples(stream.pending_ms));
         let started = Instant::now();
-        match self.call_work(&Request::Feed, Some(pcm), deadline, epoch) {
+        match self.call_work(&Request::Feed, Some(pcm), deadline, epoch, None) {
             Ok(Response::Fed { update, text }) => {
                 let Some(stream) = self.stream.as_mut() else {
                     return;
@@ -995,7 +1055,13 @@ impl Owner {
         }
         let deadline = self.deadlines().audio(ms_to_samples(stream.pending_ms));
         let started = Instant::now();
-        match self.call_work(&Request::Finalize { want_language }, None, deadline, epoch) {
+        match self.call_work(
+            &Request::Finalize { want_language },
+            None,
+            deadline,
+            epoch,
+            None,
+        ) {
             Ok(Response::Finalized {
                 update,
                 text,
@@ -1472,6 +1538,72 @@ mod unit_tests {
         assert_eq!(ms_to_samples(1500), 24_000);
         assert_eq!(ms_to_samples(-5), 0);
     }
+
+    #[test]
+    fn work_tokens_compare_by_identity() {
+        let token = WorkToken::new();
+        let other = WorkToken::new();
+        assert!(token.same_as(&token.clone()));
+        assert!(!token.same_as(&other));
+        token.clone().cancel();
+        assert!(token.is_cancelled());
+        assert!(!other.is_cancelled());
+    }
+
+    /// A scoped cancel never counts as a global one, so dictation work
+    /// submitted before or after it is unaffected. No worker is started.
+    #[test]
+    fn cancel_work_sets_the_token_and_leaves_the_epoch_alone() {
+        let engine = EngineSupervisor::new(false);
+        let token = WorkToken::new();
+        let epoch = engine.shared.epoch();
+        engine.cancel_work(&token);
+        assert!(token.is_cancelled());
+        assert_eq!(engine.shared.epoch(), epoch);
+        assert!(!engine.shared.cancelled_since(epoch));
+    }
+
+    /// `cancel_work` kills the in-flight call only when it carries the same
+    /// token: never an unscoped (dictation) call, nor another job's.
+    #[cfg(unix)]
+    #[test]
+    fn cancel_work_kills_only_a_call_with_its_token() {
+        // A stand-in for a worker process.
+        let child = ProcessCommand::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("spawn sleep");
+        let control = Arc::new(Control {
+            pid: child.id(),
+            child: Mutex::new(child),
+            stdin: Mutex::new(None),
+        });
+        let engine = EngineSupervisor::new(false);
+        let ours = WorkToken::new();
+        let publish = |token: Option<WorkToken>| {
+            *lock(&engine.shared.in_flight) = Some(InFlight {
+                what: "transcription",
+                control: Arc::clone(&control),
+                token,
+            });
+        };
+
+        publish(None);
+        engine.cancel_work(&ours);
+        assert!(lock(&engine.shared.in_flight).is_some());
+
+        publish(Some(WorkToken::new()));
+        engine.cancel_work(&ours);
+        assert!(lock(&engine.shared.in_flight).is_some());
+        assert!(lock(&control.child).try_wait().unwrap().is_none());
+
+        publish(Some(ours.clone()));
+        engine.cancel_work(&ours);
+        assert!(lock(&engine.shared.in_flight).is_none());
+        let status = lock(&control.child).wait().unwrap();
+        assert!(!status.success(), "the stand-in worker was killed");
+        assert_eq!(engine.shared.epoch(), 0);
+    }
 }
 
 /// End-to-end checks against a real worker and model. Crash and hang tests
@@ -1484,6 +1616,7 @@ mod unit_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use transcribe_cpp::TimestampKind;
 
     fn env_path(name: &str) -> PathBuf {
         PathBuf::from(std::env::var_os(name).unwrap_or_else(|| panic!("set {name}")))
@@ -1924,6 +2057,120 @@ mod tests {
         assert!(!engine.shared.gpu_unavailable());
         engine.transcribe(pcm, RunOptions::default()).unwrap();
         set_fault(None, false);
+    }
+
+    /// A scoped cancel stops its own run at once, leaves the global epoch
+    /// alone, and the next (unscoped) run works in a fresh worker.
+    #[test]
+    #[ignore]
+    fn cancel_work_stops_a_scoped_run() {
+        let pcm = long_pcm(60);
+        set_fault(None, false);
+        let engine = EngineSupervisor::new(true);
+        engine.load(spec()).unwrap();
+        let token = WorkToken::new();
+        let run = {
+            let engine = engine.clone();
+            let token = token.clone();
+            thread::spawn(move || engine.transcribe_scoped(pcm, RunOptions::default(), &token))
+        };
+        wait_in_flight(&engine, "transcription");
+        let epoch = engine.shared.epoch();
+        let t = Instant::now();
+        engine.cancel_work(&token);
+        let result = run.join().unwrap();
+        println!("scoped run cancelled {:?} after cancel_work()", t.elapsed());
+        assert!(matches!(result, Err(EngineError::Cancelled)));
+        assert!(t.elapsed() < Duration::from_secs(2));
+        assert_eq!(engine.shared.epoch(), epoch);
+        assert!(engine.loaded().is_some());
+        assert!(!engine.shared.gpu_unavailable());
+        // Work queued with a cancelled token never starts.
+        assert!(matches!(
+            engine.transcribe_scoped(test_pcm(), RunOptions::default(), &token),
+            Err(EngineError::Cancelled)
+        ));
+        engine
+            .transcribe(test_pcm(), RunOptions::default())
+            .unwrap();
+    }
+
+    /// A scoped cancel leaves an unscoped (dictation) run alone.
+    #[test]
+    #[ignore]
+    fn cancel_work_leaves_an_unscoped_run_alone() {
+        set_fault(None, false);
+        let engine = EngineSupervisor::new(true);
+        engine.load(spec()).unwrap();
+        let run = {
+            let engine = engine.clone();
+            thread::spawn(move || engine.transcribe(long_pcm(30), RunOptions::default()))
+        };
+        wait_in_flight(&engine, "transcription");
+        engine.cancel_work(&WorkToken::new());
+        run.join().unwrap().unwrap();
+    }
+
+    /// File runs ask for segment timestamps (where the model has any) and
+    /// get timed rows inside the audio.
+    #[test]
+    #[ignore]
+    fn scoped_run_returns_segment_timestamps() {
+        set_fault(None, false);
+        let engine = EngineSupervisor::new(true);
+        let info = engine.load(spec()).unwrap();
+        let max = info.capabilities.max_timestamp_kind;
+        if matches!(max, TimestampKind::None | TimestampKind::Auto) {
+            println!("model has no timestamps ({max:?}); nothing to check");
+            return;
+        }
+        let pcm = test_pcm();
+        let audio_ms = (pcm.len() / 16) as i64;
+        let run = RunOptions {
+            timestamps: TimestampKind::Segment,
+            ..RunOptions::default()
+        };
+        let transcript = engine
+            .transcribe_scoped(pcm, run, &WorkToken::new())
+            .unwrap();
+        println!(
+            "{:?}: {:?}",
+            transcript.timestamp_kind,
+            transcript
+                .segments
+                .iter()
+                .map(|s| (s.t0_ms, s.t1_ms, s.text.as_str()))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(transcript.timestamp_kind, TimestampKind::Segment);
+        assert!(transcript
+            .segments
+            .iter()
+            .all(|s| 0 <= s.t0_ms && s.t0_ms <= s.t1_ms && s.t1_ms <= audio_ms + 1_000));
+    }
+
+    /// A global cancel (Escape) also stops a scoped run; its token stays
+    /// unset, so the file job can tell it apart and retry the chunk.
+    #[test]
+    #[ignore]
+    fn global_cancel_stops_a_scoped_run() {
+        let pcm = long_pcm(60);
+        set_fault(None, false);
+        let engine = EngineSupervisor::new(true);
+        engine.load(spec()).unwrap();
+        let token = WorkToken::new();
+        let run = {
+            let engine = engine.clone();
+            let token = token.clone();
+            thread::spawn(move || engine.transcribe_scoped(pcm, RunOptions::default(), &token))
+        };
+        wait_in_flight(&engine, "transcription");
+        engine.cancel();
+        assert!(matches!(run.join().unwrap(), Err(EngineError::Cancelled)));
+        assert!(!token.is_cancelled());
+        engine
+            .transcribe_scoped(test_pcm(), RunOptions::default(), &token)
+            .unwrap();
     }
 
     /// A worker hung in native code still exits when its parent goes away
