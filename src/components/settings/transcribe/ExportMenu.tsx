@@ -1,7 +1,14 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Download } from "lucide-react";
 import type { TranscriptSource } from "@/bindings";
+import { menuKeyAction, placeMenu } from "@/lib/utils/transcript";
 import { Button } from "../../ui/Button";
 import { IconButton } from "../../ui/IconButton";
 import {
@@ -17,7 +24,7 @@ interface ExportMenuProps {
   disabled?: boolean;
   /** "icon" for compact rows, "button" for a labelled button. */
   variant?: "icon" | "button";
-  /** Open the menu above the trigger (e.g. in a dialog footer). */
+  /** Side to open on when there is room (e.g. "top" in a dialog footer). */
   placement?: "top" | "bottom";
 }
 
@@ -34,7 +41,46 @@ export const ExportMenu: React.FC<ExportMenuProps> = ({
   const [exporting, setExporting] = useState(false);
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const getTrigger = () =>
+    rootRef.current?.querySelector<HTMLButtonElement>("[aria-haspopup='menu']");
+
+  // The menu is fixed to the viewport so that a clipping container, such as
+  // the dialog box, cannot cut it off. It is placed before paint, and before
+  // the effect below focuses its first item.
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const updatePosition = () => {
+      const menu = menuRef.current;
+      const trigger = getTrigger();
+      if (!menu || !trigger) return;
+      const position = placeMenu(
+        trigger.getBoundingClientRect(),
+        {
+          width: menu.offsetWidth,
+          // Full height, even while an earlier maxHeight caps it.
+          height: menu.scrollHeight + menu.offsetHeight - menu.clientHeight,
+        },
+        { width: window.innerWidth, height: window.innerHeight },
+        placement,
+        window.getComputedStyle(menu).direction === "rtl",
+      );
+      menu.style.top = `${position.top}px`;
+      menu.style.left = `${position.left}px`;
+      menu.style.maxHeight = `${position.maxHeight}px`;
+    };
+
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [open, placement]);
 
   useEffect(() => {
     if (!open) return;
@@ -51,9 +97,7 @@ export const ExportMenu: React.FC<ExportMenuProps> = ({
 
   const close = () => {
     setOpen(false);
-    rootRef.current
-      ?.querySelector<HTMLButtonElement>("[aria-haspopup='menu']")
-      ?.focus();
+    getTrigger()?.focus();
   };
 
   const handleSelect = async (format: ExportFormat) => {
@@ -70,34 +114,21 @@ export const ExportMenu: React.FC<ExportMenuProps> = ({
     const items = itemRefs.current.filter(
       (item): item is HTMLButtonElement => item !== null,
     );
-    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    const action = menuKeyAction(
+      event.key,
+      items.indexOf(document.activeElement as HTMLButtonElement),
+      items.length,
+    );
+    if (!action) return;
 
-    switch (event.key) {
-      case "Escape":
-        // Close only the menu, not a dialog around it.
-        event.preventDefault();
-        event.stopPropagation();
-        close();
-        break;
-      case "ArrowDown":
-        event.preventDefault();
-        items[(current + 1) % items.length]?.focus();
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        items[(current - 1 + items.length) % items.length]?.focus();
-        break;
-      case "Home":
-        event.preventDefault();
-        items[0]?.focus();
-        break;
-      case "End":
-        event.preventDefault();
-        items[items.length - 1]?.focus();
-        break;
-      case "Tab":
-        setOpen(false);
-        break;
+    event.preventDefault();
+    if (action.kind === "close") {
+      // Keep Escape from closing, and Tab from moving focus out of, a dialog
+      // around the menu.
+      event.stopPropagation();
+      close();
+    } else {
+      items[action.index]?.focus();
     }
   };
 
@@ -111,7 +142,7 @@ export const ExportMenu: React.FC<ExportMenuProps> = ({
   };
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef}>
       {variant === "icon" ? (
         <IconButton title={label} {...triggerProps}>
           <Download width={16} height={16} />
@@ -131,13 +162,12 @@ export const ExportMenu: React.FC<ExportMenuProps> = ({
       )}
       {open && (
         <div
+          ref={menuRef}
           id={menuId}
           role="menu"
           aria-label={label}
           onKeyDown={handleMenuKeyDown}
-          className={`absolute end-0 z-50 min-w-48 py-1 bg-background border border-mid-gray/80 rounded-md shadow-lg ${
-            placement === "top" ? "bottom-full mb-1" : "top-full mt-1"
-          }`}
+          className="fixed z-50 min-w-48 py-1 overflow-y-auto bg-background border border-mid-gray/80 rounded-md shadow-lg"
         >
           {EXPORT_FORMATS.map((format, index) => (
             <button
@@ -149,7 +179,7 @@ export const ExportMenu: React.FC<ExportMenuProps> = ({
               role="menuitem"
               tabIndex={-1}
               onClick={() => handleSelect(format)}
-              className="w-full px-3 py-1.5 text-sm text-start whitespace-nowrap cursor-pointer transition-colors hover:bg-logo-primary/10 focus:bg-logo-primary/10 focus:outline-none"
+              className="block w-full px-3 py-1.5 text-sm text-start whitespace-nowrap cursor-pointer transition-colors hover:bg-logo-primary/10 focus:bg-logo-primary/10 focus:outline-none"
             >
               {t(`settings.transcribeFiles.export.formats.${format}`)}
             </button>

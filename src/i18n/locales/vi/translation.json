@@ -538,7 +538,8 @@
         "partial": "Bản chép lời này chưa đầy đủ: {{reason}}",
         "partialNoReason": "Bản chép lời này chưa đầy đủ.",
         "approximateTimes": "Thời gian chỉ là ước tính vì mô hình này không cung cấp dấu thời gian.",
-        "empty": "Không tìm thấy giọng nói."
+        "empty": "Không tìm thấy giọng nói.",
+        "segmentsLabel": "Bản chép lời kèm dấu thời gian"
       },
       "export": {
         "button": "Xuất…",

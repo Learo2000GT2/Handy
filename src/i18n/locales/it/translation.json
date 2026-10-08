@@ -538,7 +538,8 @@
         "partial": "Questa trascrizione è incompleta: {{reason}}",
         "partialNoReason": "Questa trascrizione è incompleta.",
         "approximateTimes": "I tempi sono approssimativi perché questo modello non fornisce i timestamp.",
-        "empty": "Nessun parlato trovato."
+        "empty": "Nessun parlato trovato.",
+        "segmentsLabel": "Trascrizione con timestamp"
       },
       "export": {
         "button": "Esporta…",

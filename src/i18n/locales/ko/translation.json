@@ -538,7 +538,8 @@
         "partial": "이 전사 내용은 불완전합니다: {{reason}}",
         "partialNoReason": "이 전사 내용은 불완전합니다.",
         "approximateTimes": "이 모델은 타임스탬프를 제공하지 않으므로 시간은 대략적인 값입니다.",
-        "empty": "음성을 찾을 수 없습니다."
+        "empty": "음성을 찾을 수 없습니다.",
+        "segmentsLabel": "타임스탬프가 포함된 전사 내용"
       },
       "export": {
         "button": "내보내기…",

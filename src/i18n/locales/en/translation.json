@@ -538,7 +538,8 @@
         "partial": "This transcript is incomplete: {{reason}}",
         "partialNoReason": "This transcript is incomplete.",
         "approximateTimes": "Times are approximate because this model doesn't report timestamps.",
-        "empty": "No speech found."
+        "empty": "No speech found.",
+        "segmentsLabel": "Timestamped transcript"
       },
       "export": {
         "button": "Export…",

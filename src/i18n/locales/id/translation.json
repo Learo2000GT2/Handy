@@ -538,7 +538,8 @@
         "partial": "Transkripsi ini tidak lengkap: {{reason}}",
         "partialNoReason": "Transkripsi ini tidak lengkap.",
         "approximateTimes": "Waktu bersifat perkiraan karena model ini tidak menyediakan stempel waktu.",
-        "empty": "Tidak ada ucapan yang ditemukan."
+        "empty": "Tidak ada ucapan yang ditemukan.",
+        "segmentsLabel": "Transkripsi dengan stempel waktu"
       },
       "export": {
         "button": "Ekspor…",

@@ -195,3 +195,93 @@ export const previewText = (text: string, maxChars: number): string => {
  * file names keep their left-to-right order inside right-to-left sentences.
  */
 export const isolateLtr = (value: string): string => `\u2066${value}\u2069`;
+
+/** Viewport box of a menu trigger, as from `getBoundingClientRect()`. */
+export interface AnchorRect {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
+export interface MenuPosition {
+  top: number;
+  left: number;
+  /** Caps the menu's height when neither side has room for all of it. */
+  maxHeight: number;
+}
+
+// Space between the trigger and the menu, and between the menu and the edge
+// of the window (px).
+const MENU_GAP = 4;
+const MENU_MARGIN = 8;
+
+/**
+ * Fixed (viewport) position of a menu aligned with the end edge of its
+ * trigger. It opens on the `preferred` side when it fits there and otherwise
+ * on the side with more room, so it never runs past the window edges.
+ */
+export const placeMenu = (
+  trigger: AnchorRect,
+  menu: { width: number; height: number },
+  viewport: { width: number; height: number },
+  preferred: "top" | "bottom",
+  rtl = false,
+): MenuPosition => {
+  const room = {
+    top: Math.max(0, trigger.top - MENU_GAP - MENU_MARGIN),
+    bottom: Math.max(
+      0,
+      viewport.height - trigger.bottom - MENU_GAP - MENU_MARGIN,
+    ),
+  };
+  const other = preferred === "top" ? "bottom" : "top";
+  const side =
+    menu.height > room[preferred] && room[other] > room[preferred]
+      ? other
+      : preferred;
+  const height = Math.min(menu.height, room[side]);
+  const top =
+    side === "top"
+      ? trigger.top - MENU_GAP - height
+      : trigger.bottom + MENU_GAP;
+
+  const start = rtl ? trigger.left : trigger.right - menu.width;
+  const left = Math.max(
+    MENU_MARGIN,
+    Math.min(start, viewport.width - MENU_MARGIN - menu.width),
+  );
+
+  return { top, left, maxHeight: room[side] };
+};
+
+export type MenuKeyAction =
+  | { kind: "focus"; index: number }
+  | { kind: "close" };
+
+/**
+ * What a key press does in an open menu of `count` items whose item `current`
+ * has focus (-1 if none). Null leaves the key alone. "close" shuts the menu
+ * and returns focus to its trigger: for Tab too, so focus stays inside a
+ * dialog around the menu instead of leaving it from the unfocusable items.
+ */
+export const menuKeyAction = (
+  key: string,
+  current: number,
+  count: number,
+): MenuKeyAction | null => {
+  if (key === "Escape" || key === "Tab") return { kind: "close" };
+  if (count === 0) return null;
+  switch (key) {
+    case "ArrowDown":
+      return { kind: "focus", index: (current + 1) % count };
+    case "ArrowUp":
+      return { kind: "focus", index: current <= 0 ? count - 1 : current - 1 };
+    case "Home":
+      return { kind: "focus", index: 0 };
+    case "End":
+      return { kind: "focus", index: count - 1 };
+    default:
+      return null;
+  }
+};

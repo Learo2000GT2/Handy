@@ -538,7 +538,8 @@
         "partial": "この文字起こしは不完全です: {{reason}}",
         "partialNoReason": "この文字起こしは不完全です。",
         "approximateTimes": "このモデルはタイムスタンプを出力しないため、時間はおおよその値です。",
-        "empty": "音声が見つかりませんでした。"
+        "empty": "音声が見つかりませんでした。",
+        "segmentsLabel": "タイムスタンプ付きの文字起こし"
       },
       "export": {
         "button": "エクスポート…",

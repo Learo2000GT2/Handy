@@ -538,7 +538,8 @@
         "partial": "Denne transskription er ufuldstændig: {{reason}}",
         "partialNoReason": "Denne transskription er ufuldstændig.",
         "approximateTimes": "Tidspunkterne er omtrentlige, fordi denne model ikke angiver tidsstempler.",
-        "empty": "Der blev ikke fundet tale."
+        "empty": "Der blev ikke fundet tale.",
+        "segmentsLabel": "Transskription med tidsstempler"
       },
       "export": {
         "button": "Eksportér…",

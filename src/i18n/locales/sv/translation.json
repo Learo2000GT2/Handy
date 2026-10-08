@@ -538,7 +538,8 @@
         "partial": "Den här transkriptionen är ofullständig: {{reason}}",
         "partialNoReason": "Den här transkriptionen är ofullständig.",
         "approximateTimes": "Tiderna är ungefärliga eftersom den här modellen inte rapporterar tidsstämplar.",
-        "empty": "Inget tal hittades."
+        "empty": "Inget tal hittades.",
+        "segmentsLabel": "Transkription med tidsstämplar"
       },
       "export": {
         "button": "Exportera…",

@@ -538,7 +538,8 @@
         "partial": "Esta transcrição está incompleta: {{reason}}",
         "partialNoReason": "Esta transcrição está incompleta.",
         "approximateTimes": "Os tempos são aproximados porque este modelo não fornece marcações de tempo.",
-        "empty": "Nenhuma fala encontrada."
+        "empty": "Nenhuma fala encontrada.",
+        "segmentsLabel": "Transcrição com marcações de tempo"
       },
       "export": {
         "button": "Exportar…",

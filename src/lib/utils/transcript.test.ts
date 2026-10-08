@@ -11,8 +11,10 @@ import {
   isolateLtr,
   isRunningStatus,
   isSupportedPath,
+  menuKeyAction,
   mergeLiveSegments,
   pickerExtensions,
+  placeMenu,
   previewText,
   statusKey,
 } from "./transcript";
@@ -166,5 +168,82 @@ assert.equal(previewText("ab\u{1F600}cd", 3), "ab");
 assert.equal(previewText("ab\u{1F600}cd", 4), "ab\u{1F600}");
 
 assert.equal(isolateLtr("1:02"), "\u20661:02\u2069");
+
+// placeMenu: fixed to the window, so a short dialog cannot clip the menu. It
+// opens on the preferred side when it fits and flips when it does not.
+const window680 = { width: 680, height: 570 };
+const exportMenu = { width: 192, height: 142 };
+const footerButton = { top: 400, bottom: 430, left: 500, right: 590 };
+assert.deepEqual(placeMenu(footerButton, exportMenu, window680, "top"), {
+  top: 254,
+  left: 398,
+  maxHeight: 388,
+});
+const rowButton = { top: 200, bottom: 230, left: 500, right: 590 };
+assert.deepEqual(placeMenu(rowButton, exportMenu, window680, "bottom"), {
+  top: 234,
+  left: 398,
+  maxHeight: 328,
+});
+const nearTop = { top: 60, bottom: 90, left: 500, right: 590 };
+assert.deepEqual(placeMenu(nearTop, exportMenu, window680, "top"), {
+  top: 94,
+  left: 398,
+  maxHeight: 468,
+});
+const nearBottom = { top: 500, bottom: 530, left: 500, right: 590 };
+assert.deepEqual(placeMenu(nearBottom, exportMenu, window680, "bottom"), {
+  top: 354,
+  left: 398,
+  maxHeight: 488,
+});
+// Too little room on both sides: the roomier side, with a capped height.
+assert.deepEqual(
+  placeMenu(nearTop, exportMenu, { width: 680, height: 180 }, "top"),
+  { top: 94, left: 398, maxHeight: 78 },
+);
+// End-aligned with the trigger (left edge in RTL), kept inside the window.
+const nearLeft = { top: 400, bottom: 430, left: 20, right: 60 };
+assert.equal(placeMenu(nearLeft, exportMenu, window680, "top").left, 8);
+assert.equal(placeMenu(nearLeft, exportMenu, window680, "top", true).left, 20);
+const nearRight = { top: 400, bottom: 430, left: 640, right: 672 };
+assert.equal(
+  placeMenu(nearRight, exportMenu, window680, "top", true).left,
+  480,
+);
+for (let top = 0; top <= 540; top += 15) {
+  for (const preferred of ["top", "bottom"] as const) {
+    const trigger = { top, bottom: top + 30, left: 500, right: 590 };
+    const { top: menuTop, maxHeight } = placeMenu(
+      trigger,
+      exportMenu,
+      window680,
+      preferred,
+    );
+    const menuBottom = menuTop + Math.min(exportMenu.height, maxHeight);
+    assert.ok(menuTop >= 8 && menuBottom <= 562, `${preferred} at ${top}`);
+    assert.ok(menuBottom <= trigger.top || menuTop >= trigger.bottom);
+  }
+}
+
+// menuKeyAction: arrows wrap, and Tab closes the menu like Escape (focus goes
+// back to the trigger) instead of leaving a dialog around it.
+assert.deepEqual(menuKeyAction("Tab", 1, 4), { kind: "close" });
+assert.deepEqual(menuKeyAction("Escape", 0, 4), { kind: "close" });
+assert.deepEqual(menuKeyAction("Tab", -1, 0), { kind: "close" });
+assert.deepEqual(menuKeyAction("ArrowDown", 0, 4), { kind: "focus", index: 1 });
+assert.deepEqual(menuKeyAction("ArrowDown", 3, 4), { kind: "focus", index: 0 });
+assert.deepEqual(menuKeyAction("ArrowDown", -1, 4), {
+  kind: "focus",
+  index: 0,
+});
+assert.deepEqual(menuKeyAction("ArrowUp", 2, 4), { kind: "focus", index: 1 });
+assert.deepEqual(menuKeyAction("ArrowUp", 0, 4), { kind: "focus", index: 3 });
+assert.deepEqual(menuKeyAction("ArrowUp", -1, 4), { kind: "focus", index: 3 });
+assert.deepEqual(menuKeyAction("Home", 2, 4), { kind: "focus", index: 0 });
+assert.deepEqual(menuKeyAction("End", 0, 4), { kind: "focus", index: 3 });
+assert.equal(menuKeyAction("ArrowDown", -1, 0), null);
+assert.equal(menuKeyAction("Enter", 0, 4), null);
+assert.equal(menuKeyAction("a", 0, 4), null);
 
 console.log("transcript: all assertions passed");

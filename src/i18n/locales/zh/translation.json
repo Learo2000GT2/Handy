@@ -538,7 +538,8 @@
         "partial": "此转录不完整：{{reason}}",
         "partialNoReason": "此转录不完整。",
         "approximateTimes": "由于此模型不提供时间戳，时间为近似值。",
-        "empty": "未检测到语音。"
+        "empty": "未检测到语音。",
+        "segmentsLabel": "带时间戳的转录"
       },
       "export": {
         "button": "导出…",

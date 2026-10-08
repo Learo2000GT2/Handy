@@ -538,7 +538,8 @@
         "partial": "Deze transcriptie is onvolledig: {{reason}}",
         "partialNoReason": "Deze transcriptie is onvolledig.",
         "approximateTimes": "Tijden zijn bij benadering omdat dit model geen tijdstempels geeft.",
-        "empty": "Geen spraak gevonden."
+        "empty": "Geen spraak gevonden.",
+        "segmentsLabel": "Transcriptie met tijdstempels"
       },
       "export": {
         "button": "Exporteren…",

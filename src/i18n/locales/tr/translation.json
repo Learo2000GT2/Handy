@@ -538,7 +538,8 @@
         "partial": "Bu transkript eksik: {{reason}}",
         "partialNoReason": "Bu transkript eksik.",
         "approximateTimes": "Bu model zaman damgası bildirmediği için zamanlar yaklaşıktır.",
-        "empty": "Konuşma bulunamadı."
+        "empty": "Konuşma bulunamadı.",
+        "segmentsLabel": "Zaman damgalı transkript"
       },
       "export": {
         "button": "Dışa Aktar…",

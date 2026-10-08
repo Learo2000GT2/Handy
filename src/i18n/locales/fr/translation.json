@@ -538,7 +538,8 @@
         "partial": "Cette transcription est incomplète : {{reason}}",
         "partialNoReason": "Cette transcription est incomplète.",
         "approximateTimes": "Les temps sont approximatifs car ce modèle ne fournit pas d'horodatage.",
-        "empty": "Aucune parole détectée."
+        "empty": "Aucune parole détectée.",
+        "segmentsLabel": "Transcription horodatée"
       },
       "export": {
         "button": "Exporter…",

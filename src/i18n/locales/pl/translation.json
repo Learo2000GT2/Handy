@@ -538,7 +538,8 @@
         "partial": "Ta transkrypcja jest niekompletna: {{reason}}",
         "partialNoReason": "Ta transkrypcja jest niekompletna.",
         "approximateTimes": "Czasy są przybliżone, ponieważ ten model nie podaje znaczników czasu.",
-        "empty": "Nie wykryto mowy."
+        "empty": "Nie wykryto mowy.",
+        "segmentsLabel": "Transkrypcja ze znacznikami czasu"
       },
       "export": {
         "button": "Eksportuj…",

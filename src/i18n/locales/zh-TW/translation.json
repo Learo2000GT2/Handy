@@ -538,7 +538,8 @@
         "partial": "此轉錄不完整：{{reason}}",
         "partialNoReason": "此轉錄不完整。",
         "approximateTimes": "由於此模型不提供時間戳記，時間為近似值。",
-        "empty": "未偵測到語音。"
+        "empty": "未偵測到語音。",
+        "segmentsLabel": "附時間戳記的轉錄"
       },
       "export": {
         "button": "匯出…",

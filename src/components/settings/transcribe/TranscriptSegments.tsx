@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { TranscriptSegment } from "@/bindings";
 import { formatClock } from "@/lib/utils/transcript";
 
@@ -15,7 +16,8 @@ export const TranscriptSegments: React.FC<TranscriptSegmentsProps> = ({
   segments,
   follow = false,
 }) => {
-  const listRef = useRef<HTMLOListElement>(null);
+  const { t } = useTranslation();
+  const listRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
 
   const handleScroll = () => {
@@ -39,28 +41,35 @@ export const TranscriptSegments: React.FC<TranscriptSegmentsProps> = ({
     }
   }, [follow, segments.length]);
 
+  // Focusable so that arrow and page keys scroll it: WebKit (Linux and macOS)
+  // scrolls only the focused element, and nothing inside can take focus.
   return (
-    <ol
+    <div
       ref={listRef}
       onScroll={handleScroll}
-      className="max-h-[60vh] overflow-y-auto select-text cursor-text space-y-2 pe-1"
+      role="region"
+      aria-label={t("settings.transcribeFiles.transcript.segmentsLabel")}
+      tabIndex={0}
+      className="max-h-[60vh] overflow-y-auto select-text cursor-text pe-1 rounded-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-logo-primary"
     >
-      {segments.map((segment, index) => (
-        <li key={`${segment.start_ms}-${index}`} className="flex gap-3">
-          <span
-            dir="ltr"
-            className={`font-mono text-xs tabular-nums text-text/50 shrink-0 pt-0.5 text-end ${timeWidth}`}
-          >
-            {formatClock(segment.start_ms)}
-          </span>
-          <p
-            dir="auto"
-            className="text-sm text-text/90 whitespace-pre-wrap break-words min-w-0"
-          >
-            {segment.text}
-          </p>
-        </li>
-      ))}
-    </ol>
+      <ol className="space-y-2">
+        {segments.map((segment, index) => (
+          <li key={`${segment.start_ms}-${index}`} className="flex gap-3">
+            <span
+              dir="ltr"
+              className={`font-mono text-xs tabular-nums text-text/50 shrink-0 pt-0.5 text-end ${timeWidth}`}
+            >
+              {formatClock(segment.start_ms)}
+            </span>
+            <p
+              dir="auto"
+              className="text-sm text-text/90 whitespace-pre-wrap break-words min-w-0"
+            >
+              {segment.text}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 };

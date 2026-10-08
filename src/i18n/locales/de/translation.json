@@ -538,7 +538,8 @@
         "partial": "Diese Transkription ist unvollständig: {{reason}}",
         "partialNoReason": "Diese Transkription ist unvollständig.",
         "approximateTimes": "Die Zeitangaben sind ungefähr, da dieses Modell keine Zeitstempel liefert.",
-        "empty": "Keine Sprache erkannt."
+        "empty": "Keine Sprache erkannt.",
+        "segmentsLabel": "Transkription mit Zeitstempeln"
       },
       "export": {
         "button": "Exportieren…",

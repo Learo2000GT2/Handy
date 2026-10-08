@@ -538,7 +538,8 @@
         "partial": "Tento přepis je neúplný: {{reason}}",
         "partialNoReason": "Tento přepis je neúplný.",
         "approximateTimes": "Časy jsou přibližné, protože tento model neposkytuje časové značky.",
-        "empty": "Nebyla nalezena žádná řeč."
+        "empty": "Nebyla nalezena žádná řeč.",
+        "segmentsLabel": "Přepis s časovými značkami"
       },
       "export": {
         "button": "Exportovat…",
