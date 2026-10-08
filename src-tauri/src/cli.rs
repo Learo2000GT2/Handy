@@ -4,6 +4,11 @@ use std::path::PathBuf;
 
 #[derive(Parser, Debug, Clone, Default)]
 #[command(name = "handy", about = "Handy - Speech to Text")]
+#[command(group(
+    clap::ArgGroup::new("engine_use")
+        .args(["transcribe_file", "list_lemonade_models"])
+        .multiple(true)
+))]
 pub struct CliArgs {
     /// Start with the main window hidden
     #[arg(long)]
@@ -89,7 +94,7 @@ pub struct CliArgs {
 
     /// Engine for --transcribe-file: handy (the selected model) or lemonade
     /// (Lemonade Server). Default: the app's setting.
-    #[arg(long, value_enum, value_name = "ENGINE", requires = "transcribe_file")]
+    #[arg(long, value_enum, value_name = "ENGINE", requires = "engine_use")]
     pub engine: Option<crate::settings::FileTranscriptionEngine>,
 
     /// Lemonade Server address (default: the app's setting, else http://localhost:13305).
@@ -237,6 +242,8 @@ mod tests {
     fn engine_requires_a_file() {
         assert!(parse(&["--engine", "lemonade"]).is_err());
         assert!(parse(&["--engine", "lemonade", "-f", "a.wav"]).is_ok());
+        // Naming the engine while listing its models is redundant but fine.
+        assert!(parse(&["--engine", "lemonade", "--list-lemonade-models"]).is_ok());
     }
 
     #[test]

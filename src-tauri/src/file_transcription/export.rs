@@ -262,11 +262,15 @@ fn cues_with_prefix(
         } else {
             MAX_LINE_CHARS
         };
-        let text = match prefix(segment) {
-            Some(prefix) => collapse_whitespace(&format!("{prefix}{text}")),
-            None => text,
+        let (text, label_units) = match prefix(segment) {
+            Some(prefix) => (
+                collapse_whitespace(&format!("{prefix}{text}")),
+                split_units(&collapse_whitespace(&prefix), no_space, limit).len(),
+            ),
+            None => (text, 0),
         };
-        let units = split_units(&text, no_space, limit);
+        let mut units = split_units(&text, no_space, limit);
+        keep_label_with_first_word(&mut units, label_units, limit);
 
         let mut segment_cues = Vec::new();
         layout_cues(&units, start, end, limit, &mut segment_cues);
@@ -276,6 +280,29 @@ fn cues_with_prefix(
         }
     }
     cues
+}
+
+/// Joins a speaker label's units ("Speaker", "1:") with the first word after
+/// it, so neither a line break nor a cue split can leave the label on its
+/// own. Left alone when the joined text would not fit on one line.
+fn keep_label_with_first_word(units: &mut Vec<Unit>, label_units: usize, limit: usize) {
+    if label_units == 0 || units.len() <= label_units {
+        return;
+    }
+    let text = line_text(&units[..=label_units]);
+    let chars = text.chars().count();
+    if chars > limit {
+        return;
+    }
+    let space_before = units[0].space_before;
+    units.splice(
+        ..=label_units,
+        [Unit {
+            text,
+            chars,
+            space_before,
+        }],
+    );
 }
 
 fn collapse_whitespace(text: &str) -> String {
@@ -874,6 +901,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_speaker_label_never_stands_alone_in_a_cue() {
+        // Few words over 13 s: the 7 s cap forces a split inside the turn.
+        let mut segment = TranscriptSegment::new(0, 13_000, "Request one first half.");
+        segment.speaker = Some(1);
+        let cues = build_labeled_cues(&[segment], Some("en"), &|id| format!("Speaker {id}"));
+        assert!(cues.len() >= 2, "{cues:?}");
+        assert!(
+            cues[0].lines.join(" ").starts_with("Speaker 1: Request"),
+            "{cues:?}"
+        );
+        assert!(cues.iter().all(|cue| cue.lines.join(" ") != "Speaker 1:"));
+    }
     #[test]
     fn txt_golden() {
         assert_eq!(
