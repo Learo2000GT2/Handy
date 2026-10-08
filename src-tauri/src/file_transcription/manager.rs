@@ -96,8 +96,9 @@ impl FileTranscriptionManager {
             })
             .collect();
 
-        let (snapshots, evicted) = {
+        let (refreshed, snapshots, evicted) = {
             let mut state = self.lock_state();
+            let refreshed = state.refresh_queued_engine(engine);
             let snapshots: Vec<FileJobSnapshot> = checked
                 .into_iter()
                 .map(|(path, validation)| {
@@ -112,10 +113,17 @@ impl FileTranscriptionManager {
                     )
                 })
                 .collect();
-            (snapshots, state.evict_finished(MAX_FINISHED_JOBS))
+            (
+                refreshed,
+                snapshots,
+                state.evict_finished(MAX_FINISHED_JOBS),
+            )
         };
         self.wake.notify_one();
 
+        for job in refreshed {
+            self.emit(FileTranscriptionEvent::Updated { job });
+        }
         for snapshot in &snapshots {
             match &snapshot.error {
                 Some(error) => warn!("Not transcribing {}: {}", snapshot.path, error.message),
@@ -155,9 +163,23 @@ impl FileTranscriptionManager {
         }
     }
 
-    /// Enqueue order.
+    /// Enqueue order. Queued jobs show the engine selected now.
     pub fn list(&self) -> Vec<FileJobSnapshot> {
-        self.lock_state().snapshots()
+        let engine = crate::settings::get_settings(&self.app).file_transcription_engine;
+        let mut state = self.lock_state();
+        state.refresh_queued_engine(engine);
+        state.snapshots()
+    }
+
+    /// Shows `engine` (the engine setting) on the queued jobs, which start
+    /// on whatever engine is selected then; emits Updated for each one that
+    /// changed. Call it when the engine setting changes; the manager also
+    /// calls it whenever it lists jobs, queues jobs or starts one.
+    pub fn refresh_queued_engine(&self, engine: FileTranscriptionEngine) {
+        let refreshed = self.lock_state().refresh_queued_engine(engine);
+        for job in refreshed {
+            self.emit(FileTranscriptionEvent::Updated { job });
+        }
     }
 
     /// Only finished jobs; frees the result; emits Removed.
@@ -187,6 +209,28 @@ impl FileTranscriptionManager {
         self.lock_state().edit_result(job_id, edit)
     }
 
+    /// The History entry a finished job's result was saved as. Err like
+    /// [`Self::edit_job_transcript`] when there is no result to edit.
+    pub fn job_history_id(&self, job_id: u64) -> Result<Option<i64>, String> {
+        self.lock_state()
+            .result_mut(job_id)
+            .map(|result| result.history_id)
+    }
+
+    /// After the speakers of History entry `stored.history_id` were renamed,
+    /// gives every finished job whose result was saved as that entry the
+    /// entry's labels and text, so the History rename shows there too and a
+    /// later rename from the job keeps it. Emits Updated for each such job.
+    pub fn sync_history_speakers(&self, stored: &FileTranscript) {
+        let Some(history_id) = stored.history_id else {
+            return;
+        };
+        let synced = self.lock_state().sync_history_speakers(history_id, stored);
+        for job in synced {
+            self.emit(FileTranscriptionEvent::Updated { job });
+        }
+    }
+
     fn lock_state(&self) -> MutexGuard<'_, JobTable> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -209,6 +253,7 @@ impl FileTranscriptionManager {
             self.emit(FileTranscriptionEvent::Updated {
                 job: job.snapshot.clone(),
             });
+            self.refresh_queued_engine(settings.file_transcription_engine);
 
             self.run_job(&job, &settings);
 
@@ -562,6 +607,19 @@ impl JobTable {
         })
     }
 
+    /// Sets `engine` on the queued jobs; returns the snapshots that changed.
+    fn refresh_queued_engine(&mut self, engine: FileTranscriptionEngine) -> Vec<FileJobSnapshot> {
+        self.jobs
+            .iter_mut()
+            .filter(|job| job.snapshot.status == FileJobStatus::Queued)
+            .filter(|job| job.snapshot.engine != engine)
+            .map(|job| {
+                job.snapshot.engine = engine;
+                job.snapshot.clone()
+            })
+            .collect()
+    }
+
     fn cancel(&mut self, job_id: u64) -> Result<Cancellation, String> {
         let record = self
             .record_mut(job_id)
@@ -624,6 +682,16 @@ impl JobTable {
         job_id: u64,
         edit: impl FnOnce(&mut FileTranscript) -> Result<(), String>,
     ) -> Result<FileTranscript, String> {
+        let result = self.result_mut(job_id)?;
+        let mut edited = result.clone();
+        edit(&mut edited)?;
+        *result = edited.clone();
+        Ok(edited)
+    }
+
+    /// A finished job's result; Err if the job is unknown, still running or
+    /// has no result.
+    fn result_mut(&mut self, job_id: u64) -> Result<&mut FileTranscript, String> {
         let record = self
             .record_mut(job_id)
             .ok_or_else(|| format!("Unknown file transcription job {}", job_id))?;
@@ -633,14 +701,32 @@ impl JobTable {
                 job_id
             ));
         }
-        let result = record
+        record
             .result
             .as_mut()
-            .ok_or_else(|| format!("File transcription job {} has no transcript", job_id))?;
-        let mut edited = result.clone();
-        edit(&mut edited)?;
-        *result = edited.clone();
-        Ok(edited)
+            .ok_or_else(|| format!("File transcription job {} has no transcript", job_id))
+    }
+
+    /// Copies the speaker labels and text of History entry `history_id`
+    /// (`stored`) into the results saved as that entry; returns those jobs'
+    /// snapshots.
+    fn sync_history_speakers(
+        &mut self,
+        history_id: i64,
+        stored: &FileTranscript,
+    ) -> Vec<FileJobSnapshot> {
+        self.jobs
+            .iter_mut()
+            .filter_map(|job| {
+                let result = job
+                    .result
+                    .as_mut()
+                    .filter(|result| result.history_id == Some(history_id))?;
+                result.speakers = stored.speakers.clone();
+                result.text = stored.text.clone();
+                Some(job.snapshot.clone())
+            })
+            .collect()
     }
 
     fn transcript(&self, job_id: u64, now_secs: i64) -> Option<FileTranscript> {
@@ -799,7 +885,9 @@ fn set_status(snapshot: &mut FileJobSnapshot, status: FileJobStatus) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file_transcription::types::{TimingGrain, TranscriptSegment};
+    use crate::file_transcription::types::{
+        TimingGrain, TranscriptSegment, TranscriptSpeaker, TranscriptSpeakers,
+    };
 
     const WITH_HISTORY: FileTranscriptionOptions = FileTranscriptionOptions {
         save_to_history: true,
@@ -1369,11 +1457,38 @@ mod tests {
             table.record(1).expect("job").snapshot.engine,
             FileTranscriptionEngine::Lemonade
         );
-        // Still queued: shows the engine it was queued with.
+        // Still queued: start_next leaves it to refresh_queued_engine.
         assert_eq!(
             table.record(2).expect("job").snapshot.engine,
             FileTranscriptionEngine::Handy
         );
+    }
+
+    #[test]
+    fn queued_jobs_show_the_engine_selected_now() {
+        let mut table = table_with_queued(3);
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+        table.cancel(3).expect("cancel");
+
+        // The engine setting changes while job 2 waits: it starts on the new
+        // engine, so it shows it.
+        let refreshed = table.refresh_queued_engine(FileTranscriptionEngine::Lemonade);
+        assert_eq!(
+            refreshed.iter().map(|job| job.job_id).collect::<Vec<_>>(),
+            [2]
+        );
+        assert_eq!(refreshed[0].engine, FileTranscriptionEngine::Lemonade);
+        let engine = |job_id| table.record(job_id).expect("job").snapshot.engine;
+        assert_eq!(engine(1), FileTranscriptionEngine::Handy, "running");
+        assert_eq!(engine(2), FileTranscriptionEngine::Lemonade);
+        assert_eq!(engine(3), FileTranscriptionEngine::Handy, "cancelled");
+
+        // Nothing changed, nothing to send.
+        assert!(table
+            .refresh_queued_engine(FileTranscriptionEngine::Lemonade)
+            .is_empty());
     }
 
     #[test]
@@ -1444,5 +1559,61 @@ mod tests {
         table.finish(2, finished(FileJobStatus::Cancelled, None));
         let err = table.edit_result(2, rename).unwrap_err();
         assert!(err.contains("no transcript"), "{err}");
+    }
+
+    #[test]
+    fn job_history_id_is_read_from_finished_results() {
+        let mut table = table_with_queued(2);
+        assert!(table.result_mut(42).is_err(), "unknown job");
+        assert!(table.result_mut(1).is_err(), "queued");
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+        table.finish(
+            1,
+            finished(FileJobStatus::Completed, Some(transcript("Hi."))),
+        );
+        assert_eq!(table.result_mut(1).map(|t| t.history_id), Ok(Some(9)));
+    }
+
+    #[test]
+    fn a_history_rename_reaches_the_job_saved_as_that_entry() {
+        let mut table = table_with_queued(3);
+        for job_id in 1..=2 {
+            table
+                .start_next(FileTranscriptionEngine::Handy)
+                .expect("start");
+            let mut result = transcript("Speaker 1: Hi.");
+            result.history_id = Some(8 + job_id as i64);
+            table.finish(job_id, finished(FileJobStatus::Completed, Some(result)));
+        }
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+
+        let stored = FileTranscript {
+            text: "Ann: Hi.".to_string(),
+            speakers: Some(TranscriptSpeakers {
+                speakers: vec![TranscriptSpeaker {
+                    id: 1,
+                    name: Some("Ann".to_string()),
+                }],
+                approximate: true,
+                unassigned_segments: 0,
+                model: "test".to_string(),
+            }),
+            ..transcript("Ann: Hi.")
+        };
+        let synced = table.sync_history_speakers(10, &stored);
+
+        assert_eq!(synced.iter().map(|job| job.job_id).collect::<Vec<_>>(), [2]);
+        let result = table.transcript(2, 0).expect("result");
+        assert_eq!(result.text, "Ann: Hi.");
+        assert_eq!(result.speakers, stored.speakers);
+        // Other entries' jobs and running jobs keep what they have.
+        let other = table.transcript(1, 0).expect("result");
+        assert_eq!(other.text, "Speaker 1: Hi.");
+        assert_eq!(other.speakers, None);
+        assert!(table.record(3).expect("job").result.is_none());
     }
 }

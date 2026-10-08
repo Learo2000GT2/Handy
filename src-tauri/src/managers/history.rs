@@ -982,59 +982,62 @@ impl HistoryManager {
         Ok(Some(transcript))
     }
 
-    /// Rewrites speakers_json and transcription_text (labels changed) of a
-    /// file entry in one transaction; emits HistoryUpdatePayload::Updated.
-    /// Err if not a file entry.
-    pub fn update_file_speakers(
+    /// Applies `edit` (a speaker rename) to the stored transcript of a file
+    /// entry and saves its speakers_json and transcription_text in one
+    /// transaction; emits HistoryUpdatePayload::Updated. Returns the edited
+    /// transcript, or None when the entry no longer exists or is a dictation.
+    /// A failed edit changes nothing.
+    pub fn edit_file_speakers(
         &self,
         history_id: i64,
-        transcript: &FileTranscript,
-    ) -> Result<HistoryEntry> {
+        edit: impl FnOnce(&mut FileTranscript) -> Result<(), String>,
+    ) -> Result<Option<FileTranscript>> {
         let mut conn = self.get_connection()?;
-        let entry = Self::update_file_speakers_with_conn(&mut conn, history_id, transcript)?;
+        let Some((transcript, entry)) =
+            Self::edit_file_speakers_with_conn(&mut conn, history_id, edit)?
+        else {
+            return Ok(None);
+        };
         debug!("Updated the speaker labels of history entry {}", history_id);
-        if let Err(e) = (HistoryUpdatePayload::Updated {
-            entry: entry.clone(),
-        })
-        .emit(&self.app_handle)
-        {
+        if let Err(e) = (HistoryUpdatePayload::Updated { entry }).emit(&self.app_handle) {
             error!("Failed to emit history-updated event: {}", e);
         }
-        Ok(entry)
+        Ok(Some(transcript))
     }
 
-    fn update_file_speakers_with_conn(
+    fn edit_file_speakers_with_conn(
         conn: &mut Connection,
         history_id: i64,
-        transcript: &FileTranscript,
-    ) -> Result<HistoryEntry> {
+        edit: impl FnOnce(&mut FileTranscript) -> Result<(), String>,
+    ) -> Result<Option<(FileTranscript, HistoryEntry)>> {
+        // Read and write in one transaction, so a rename starts from the
+        // stored labels and keeps every earlier one.
+        let tx = conn.transaction()?;
+        let Some(mut transcript) = Self::get_file_transcript_with_conn(&tx, history_id)? else {
+            return Ok(None);
+        };
+        edit(&mut transcript).map_err(|e| anyhow!(e))?;
         let speakers_json = transcript
             .speakers
             .as_ref()
             .map(serde_json::to_string)
             .transpose()?;
-        let tx = conn.transaction()?;
-        let updated = tx.execute(
+        tx.execute(
             "UPDATE file_transcription SET speakers_json = ?1 WHERE history_id = ?2",
             params![speakers_json, history_id],
         )?;
-        if updated == 0 {
-            return Err(anyhow!(
-                "History entry {} is not a file transcription",
-                history_id
-            ));
-        }
         tx.execute(
             "UPDATE transcription_history SET transcription_text = ?1 WHERE id = ?2",
             params![&transcript.text, history_id],
         )?;
         tx.commit()?;
 
-        Ok(conn.query_row(
+        let entry = conn.query_row(
             &format!("SELECT {ENTRY_COLUMNS} {ENTRY_FROM} WHERE h.id = ?1"),
             params![history_id],
             Self::map_history_entry,
-        )?)
+        )?;
+        Ok(Some((transcript, entry)))
     }
 
     fn format_timestamp_title(&self, timestamp: i64) -> String {
@@ -1546,17 +1549,15 @@ mod tests {
     }
 
     #[test]
-    fn update_file_speakers_rewrites_text_and_names() {
+    fn edit_file_speakers_rewrites_text_and_names() {
         let mut conn = setup_conn();
         let entry = insert_file(&mut conn, &labelled_transcript("/missing/a.m4a"), 100);
-        let mut transcript = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
-            .expect("read transcript")
-            .expect("file transcript exists");
-        rename_speaker(&mut transcript, 1, Some("Ann")).expect("rename");
+        let rename = |id, name| move |t: &mut FileTranscript| rename_speaker(t, id, Some(name));
 
-        let updated =
-            HistoryManager::update_file_speakers_with_conn(&mut conn, entry.id, &transcript)
-                .expect("update");
+        let (transcript, updated) =
+            HistoryManager::edit_file_speakers_with_conn(&mut conn, entry.id, rename(1, "Ann"))
+                .expect("update")
+                .expect("file entry exists");
         assert_eq!(
             updated.transcription_text,
             "Ann: Hello there.\n\nDoug: Second part."
@@ -1567,13 +1568,36 @@ mod tests {
             .expect("file transcript exists");
         assert_eq!(stored, transcript);
 
+        // A later rename starts from the stored labels, so "Ann" stays
+        // whichever view the rename comes from.
+        let (transcript, _) =
+            HistoryManager::edit_file_speakers_with_conn(&mut conn, entry.id, rename(2, "Bob"))
+                .expect("update")
+                .expect("file entry exists");
+        assert_eq!(transcript.text, "Ann: Hello there.\n\nBob: Second part.");
+
+        // A failed edit changes nothing.
+        assert!(HistoryManager::edit_file_speakers_with_conn(
+            &mut conn,
+            entry.id,
+            rename(7, "Nobody")
+        )
+        .is_err());
+        let stored = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("read transcript")
+            .expect("file transcript exists");
+        assert_eq!(stored, transcript);
+
         // Not a file entry.
         insert_entry(&conn, 300, "dictation", None);
         let dictation = conn.last_insert_rowid();
-        assert!(
-            HistoryManager::update_file_speakers_with_conn(&mut conn, dictation, &transcript)
-                .is_err()
-        );
+        assert!(HistoryManager::edit_file_speakers_with_conn(
+            &mut conn,
+            dictation,
+            rename(1, "Ann")
+        )
+        .expect("no error")
+        .is_none());
         let text: String = conn
             .query_row(
                 "SELECT transcription_text FROM transcription_history WHERE id = ?1",
@@ -1582,6 +1606,16 @@ mod tests {
             )
             .expect("read text");
         assert_eq!(text, "dictation");
+
+        // A deleted entry is reported as gone, not as an error.
+        HistoryManager::delete_entry_rows(&conn, entry.id).expect("delete");
+        assert!(HistoryManager::edit_file_speakers_with_conn(
+            &mut conn,
+            entry.id,
+            rename(1, "Ann")
+        )
+        .expect("no error")
+        .is_none());
     }
 
     #[test]

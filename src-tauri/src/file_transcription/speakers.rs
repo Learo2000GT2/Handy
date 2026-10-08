@@ -684,8 +684,9 @@ fn coalesce(source: &[TranscriptSegment], pieces: Vec<Piece>) -> Vec<TranscriptS
 
 /// Paragraphs as speaker turns: a new one when the speaker changes, or when
 /// a monologue reaches `max_paragraph_ms` at a sentence end (twice that
-/// anywhere). An unlabelled segment joins the paragraph it follows; a
-/// paragraph takes the speaker of its first labelled segment.
+/// anywhere). An unlabelled segment joins the paragraph it follows; one that
+/// comes first starts an unlabelled paragraph, which a labelled segment never
+/// joins (its text would be shown under that speaker).
 fn speaker_paragraphs(
     segments: &[TranscriptSegment],
     opts: &MergeOptions,
@@ -696,10 +697,7 @@ fn speaker_paragraphs(
     for segment in segments {
         let continues = paragraphs.last().is_some_and(|current| {
             let span = current.end_ms.saturating_sub(current.start_ms);
-            let speaker_changed = matches!(
-                (current.speaker, segment.speaker),
-                (Some(a), Some(b)) if a != b
-            );
+            let speaker_changed = segment.speaker.is_some() && segment.speaker != current.speaker;
             let monologue_ends = span >= 2 * opts.max_paragraph_ms
                 || (span >= opts.max_paragraph_ms && last_text.is_some_and(ends_sentence));
             !speaker_changed && !monologue_ends
@@ -709,7 +707,6 @@ fn speaker_paragraphs(
                 current.text.push_str(separator);
                 current.text.push_str(&segment.text);
                 current.end_ms = current.end_ms.max(segment.end_ms);
-                current.speaker = current.speaker.or(segment.speaker);
             }
             _ => paragraphs.push(segment.clone()),
         }
@@ -1027,15 +1024,46 @@ mod tests {
             ]
         );
 
-        // An unlabelled first segment starts a paragraph that takes the
-        // speaker of its first labelled segment.
+        // An unlabelled first segment starts an unlabelled paragraph: the
+        // next speaker's paragraph does not claim its text.
         let mut t = transcript(
             TimingGrain::Segment,
-            vec![seg(0, 1_000, "Um."), seg(5_000, 7_000, "Hello.")],
+            vec![
+                seg(0, 1_000, "Um."),
+                seg(5_000, 7_000, "Hello."),
+                seg(7_000, 8_000, "Hi."),
+            ],
         );
-        apply(&mut t, &[turn(5_000, 7_000, 3)]);
-        assert_eq!(speakers_of(&t.segments), [None, Some(1)]);
-        assert_eq!(t.paragraphs, vec![labelled(0, 7_000, "Um. Hello.", 1)]);
+        apply(&mut t, &[turn(5_000, 7_000, 3), turn(7_000, 8_000, 4)]);
+        assert_eq!(speakers_of(&t.segments), [None, Some(1), Some(2)]);
+        assert_eq!(
+            t.paragraphs,
+            vec![
+                seg(0, 1_000, "Um."),
+                labelled(5_000, 7_000, "Hello.", 1),
+                labelled(7_000, 8_000, "Hi.", 2),
+            ]
+        );
+        assert_eq!(t.text, "Um.\n\nSpeaker 1: Hello.\n\nSpeaker 2: Hi.");
+    }
+
+    #[test]
+    fn a_monologue_break_before_an_unlabelled_segment_keeps_it_unlabelled() {
+        let opts = MergeOptions::for_transcript(&transcript(TimingGrain::Segment, Vec::new()));
+        let long = opts.max_paragraph_ms;
+        let segments = vec![
+            labelled(0, long, "Long story.", 1),
+            seg(long, long + 1_000, "Hmm."),
+            labelled(long + 5_000, long + 6_000, "Anyway.", 1),
+        ];
+        assert_eq!(
+            speaker_paragraphs(&segments, &opts),
+            vec![
+                labelled(0, long, "Long story.", 1),
+                seg(long, long + 1_000, "Hmm."),
+                labelled(long + 5_000, long + 6_000, "Anyway.", 1),
+            ]
+        );
     }
 
     #[test]
