@@ -5,12 +5,15 @@ import type {
   AppSettings as Settings,
   AudioDevice,
   ChineseScript,
+  FileTranscriptionEngine,
+  LemonadeSettings,
   TranscribeAcceleratorSetting,
   OrtAcceleratorSetting,
   ShortcutActivation,
   VadBackend,
 } from "@/bindings";
 import { commands } from "@/bindings";
+import i18n from "@/i18n";
 import { toast } from "sonner";
 
 interface SettingsStore {
@@ -197,6 +200,28 @@ const settingUpdaters: {
     commands.changeTranscribeGpuDevice(value as string | null),
   extra_recording_buffer_ms: (value) =>
     commands.changeExtraRecordingBufferSetting(value as number),
+  file_transcription_engine: async (value) => {
+    const result = await commands.changeFileTranscriptionEngineSetting(
+      value as FileTranscriptionEngine,
+    );
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
+  },
+  lemonade: async (value) => {
+    const result = await commands.changeLemonadeSettings(
+      value as LemonadeSettings,
+    );
+    if (result.status === "error") {
+      // The field rolls back via the throw below; the toast says why.
+      toast.error(
+        i18n.t("settings.transcribeFiles.lemonade.saveError", {
+          error: result.error,
+        }),
+      );
+      throw new Error(result.error);
+    }
+  },
 };
 
 export const useSettingsStore = create<SettingsStore>()(

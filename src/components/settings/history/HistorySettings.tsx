@@ -409,6 +409,13 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
                   {t("settings.history.incomplete")}
                 </span>
               )}
+              {file.speaker_count > 0 && (
+                <span className="rounded-full bg-mid-gray/20 px-2 text-text/70">
+                  {t("settings.history.speakerCount", {
+                    count: file.speaker_count,
+                  })}
+                </span>
+              )}
             </p>
           </div>
         ) : (

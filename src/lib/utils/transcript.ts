@@ -9,9 +9,13 @@ import type {
   FileJobErrorCode,
   FileJobSnapshot,
   FileJobStatus,
+  LemonadeErrorKind,
+  LemonadeSettings,
+  SpeakerSkipReason,
   SupportedAudioFormats,
   TranscriptFormat,
   TranscriptSegment,
+  TranscriptSpeakers,
 } from "@/bindings";
 
 /** Formats listed on the drop zone. The full list comes from the backend. */
@@ -163,6 +167,161 @@ export type JobErrorKey = (typeof ERROR_KEYS)[FileJobErrorCode];
 
 export const errorKey = (code: FileJobErrorCode): JobErrorKey =>
   ERROR_KEYS[code];
+
+/** Lemonade settings before the user changes them (as in `settings.rs`). */
+export const DEFAULT_LEMONADE_SETTINGS: LemonadeSettings = {
+  base_url: "http://localhost:13305",
+  model: "",
+  api_key: "",
+};
+
+/**
+ * Lower-case host of a Lemonade Server address, or null when the address is
+ * not an http(s) URL with a host. The scheme must be written out, as the
+ * backend requires.
+ */
+export const serverUrlHost = (address: string): string | null => {
+  const trimmed = address.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return null;
+  try {
+    const url = new URL(trimmed);
+    return url.hostname === "" ? null : url.hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+};
+
+/** The address can be saved as a Lemonade Server address. */
+export const isValidServerUrl = (address: string): boolean =>
+  serverUrlHost(address) !== null;
+
+/**
+ * The address points at this computer: "localhost", 127.0.0.0/8 or ::1.
+ * False for anything else, including invalid addresses. URL parsing has
+ * already normalised forms such as "127.1" and "[0:0:0:0:0:0:0:1]".
+ */
+export const isLoopbackUrl = (address: string): boolean => {
+  const host = serverUrlHost(address)?.replace(/\.$/, "");
+  if (host === undefined) return false;
+  return (
+    host === "localhost" ||
+    host === "[::1]" ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+  );
+};
+
+const LEMONADE_ERROR_KEYS = {
+  invalid_url: "invalidUrl",
+  unreachable: "unreachable",
+  timeout: "timeout",
+  unauthorized: "unauthorized",
+  model_not_found: "modelNotFound",
+  http: "http",
+  bad_response: "badResponse",
+  cancelled: "cancelled",
+} as const satisfies Record<LemonadeErrorKind, string>;
+
+/** Keys under `settings.transcribeFiles.lemonade.errors`. */
+export const lemonadeErrorKey = (
+  kind: LemonadeErrorKind,
+): (typeof LEMONADE_ERROR_KEYS)[LemonadeErrorKind] => LEMONADE_ERROR_KEYS[kind];
+
+const SPEAKER_SKIP_KEYS = {
+  model_missing: "modelMissing",
+  no_speech: "noSpeech",
+} as const satisfies Record<SpeakerSkipReason, string>;
+
+/** Keys under `settings.transcribeFiles.speakers.state.skipped`. */
+export const speakerSkipKey = (
+  reason: SpeakerSkipReason,
+): (typeof SPEAKER_SKIP_KEYS)[SpeakerSkipReason] => SPEAKER_SKIP_KEYS[reason];
+
+/** What a job row says about speaker labels. */
+export type JobSpeakerView =
+  | { kind: "running" }
+  | { kind: "done"; speakers: number }
+  | { kind: "failed"; message: string }
+  | { kind: "skipped"; reason: SpeakerSkipReason };
+
+/**
+ * The speaker label line of a job row, or null for none: labels were not
+ * requested, the job has not started, or it was cancelled or failed (its
+ * transcript is not labelled either way).
+ */
+export const jobSpeakerView = (
+  job: Pick<FileJobSnapshot, "status" | "speakers">,
+): JobSpeakerView | null => {
+  const state = job.speakers;
+  const running = isRunningStatus(job.status);
+  if (state === null || (!running && job.status !== "completed")) {
+    return null;
+  }
+  switch (state.state) {
+    case "pending":
+    case "running":
+      return running ? { kind: "running" } : null;
+    case "done":
+      return { kind: "done", speakers: state.speakers };
+    case "failed":
+      return { kind: "failed", message: state.message };
+    case "skipped":
+      return { kind: "skipped", reason: state.reason };
+  }
+};
+
+/**
+ * All the audio is transcribed and the job only waits for its speaker labels,
+ * so its progress reads "Identifying speakers…" rather than "10:00 of 10:00".
+ */
+export const awaitingSpeakers = (
+  job: Pick<
+    FileJobSnapshot,
+    "status" | "speakers" | "duration_ms" | "processed_ms"
+  >,
+): boolean =>
+  job.status === "transcribing" &&
+  job.duration_ms !== null &&
+  job.duration_ms > 0 &&
+  job.processed_ms >= job.duration_ms &&
+  (job.speakers?.state === "pending" || job.speakers?.state === "running");
+
+/** Whole percent of a download; 0 while the total is unknown. */
+export const downloadPercent = (downloaded: number, total: number): number =>
+  total > 0 && downloaded > 0
+    ? Math.min(100, Math.floor((downloaded / total) * 100))
+    : 0;
+
+/**
+ * Display name of speaker `id`: the name the user gave, or `defaultName(id)`
+ * (the translated "Speaker 2").
+ */
+export const speakerName = (
+  speakers: TranscriptSpeakers | null | undefined,
+  id: number,
+  defaultName: (id: number) => string,
+): string => {
+  const name = speakers?.speakers.find((speaker) => speaker.id === id)?.name;
+  const trimmed = name?.trim() ?? "";
+  return trimmed !== "" ? trimmed : defaultName(id);
+};
+
+// Text colours for speakers 1-4, repeating from the first after that. Each
+// hue (Tailwind's sky, emerald, amber and violet 500) is mixed with the theme's
+// text colour, so it darkens on the light theme and lightens on the dark one,
+// including when the theme setting overrides the system (`dark:` follows only
+// the system). The name is always shown too: colour is never the only cue.
+const SPEAKER_STYLES = [
+  "text-[color-mix(in_srgb,var(--color-text)_40%,#0ea5e9)]",
+  "text-[color-mix(in_srgb,var(--color-text)_40%,#10b981)]",
+  "text-[color-mix(in_srgb,var(--color-text)_40%,#f59e0b)]",
+  "text-[color-mix(in_srgb,var(--color-text)_40%,#8b5cf6)]",
+] as const;
+
+/** Tailwind text colour classes for speaker `id` (1-based). */
+export const speakerStyle = (id: number): string => {
+  const index = Number.isInteger(id) && id > 0 ? (id - 1) % 4 : 0;
+  return SPEAKER_STYLES[index];
+};
 
 /**
  * Segments of a running job: what `get_file_transcript` returned, followed by

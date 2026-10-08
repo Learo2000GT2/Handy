@@ -133,9 +133,14 @@ export const ExportMenu: React.FC<ExportMenuProps> = ({
   };
 
   const label = t("settings.transcribeFiles.export.button");
+  // While exporting, the trigger is only marked disabled: it keeps focus, so
+  // focus stays in a dialog around the menu instead of dropping to the page.
   const triggerProps = {
-    onClick: () => setOpen((value) => !value),
-    disabled: disabled || exporting,
+    onClick: () => {
+      if (!exporting) setOpen((value) => !value);
+    },
+    disabled,
+    "aria-disabled": exporting || undefined,
     "aria-haspopup": "menu" as const,
     "aria-expanded": open,
     "aria-controls": open ? menuId : undefined,
@@ -144,7 +149,11 @@ export const ExportMenu: React.FC<ExportMenuProps> = ({
   return (
     <div ref={rootRef}>
       {variant === "icon" ? (
-        <IconButton title={label} {...triggerProps}>
+        <IconButton
+          title={label}
+          className="aria-disabled:cursor-not-allowed aria-disabled:text-text/20"
+          {...triggerProps}
+        >
           <Download width={16} height={16} />
         </IconButton>
       ) : (
@@ -152,7 +161,7 @@ export const ExportMenu: React.FC<ExportMenuProps> = ({
           type="button"
           variant="secondary"
           size="sm"
-          className="flex items-center gap-1.5"
+          className="flex items-center gap-1.5 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
           {...triggerProps}
         >
           <Download className="w-3.5 h-3.5" aria-hidden="true" />

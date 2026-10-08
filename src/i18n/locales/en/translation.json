@@ -468,8 +468,11 @@
       "title": "Transcribe Files",
       "description": "Turn existing recordings into text on this computer. Your files never leave your device.",
       "settingsNote": "Uses your selected model and your language, translation, custom word and filler word settings.",
+      "settingsNoteLemonade": "Uses your language, custom word and filler word settings.",
       "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} on Lemonade Server",
       "noModel": "Select a downloaded model on the Models page to transcribe files.",
+      "noLemonadeModel": "Choose a Lemonade model to transcribe files.",
       "dropzone": {
         "title": "Drop audio or video files here",
         "hint": "Interviews, meetings, lectures and voice memos of any length",
@@ -489,6 +492,85 @@
       "saveToHistory": {
         "label": "Save to History",
         "description": "Finished transcripts are saved and starred so automatic cleanup keeps them."
+      },
+      "engine": {
+        "title": "Transcription Engine",
+        "label": "Transcribe With",
+        "description": "Dictation always uses Handy's own model. This choice is only for files.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "lemonade": {
+        "url": {
+          "label": "Server Address",
+          "description": "Usually http://localhost:13305. Older Lemonade versions used port 8000."
+        },
+        "apiKey": {
+          "label": "API Key",
+          "description": "Only needed if your Lemonade Server asks for one.",
+          "placeholder": "Optional"
+        },
+        "model": {
+          "label": "Model",
+          "description": "The Lemonade model that transcribes your files, such as Whisper-Base.",
+          "placeholder": "Choose a Whisper model",
+          "notDownloaded": "{{model}} (downloads on first use)",
+          "none": "No transcription models found on this server.",
+          "use": "Use “{{model}}”"
+        },
+        "test": "Test Connection",
+        "testing": "Connecting…",
+        "connected_one": "Connected. {{count}} transcription model available.",
+        "connected_other": "Connected. {{count}} transcription models available.",
+        "checkFailed": "Couldn't check Lemonade Server: {{error}}",
+        "saveError": "Couldn't save the Lemonade settings: {{error}}",
+        "firstChunkSlow": "Lemonade may be downloading or loading the model. This can take a few minutes the first time.",
+        "errors": {
+          "invalidUrl": "Enter an address like http://localhost:13305.",
+          "unreachable": "Can't reach Lemonade Server at {{url}}. Make sure it's running.",
+          "timeout": "Lemonade Server didn't answer in time.",
+          "unauthorized": "Lemonade Server didn't accept the API key.",
+          "modelNotFound": "Lemonade Server doesn't have this model.",
+          "http": "Lemonade Server returned an error.",
+          "badResponse": "Lemonade Server sent an answer Handy couldn't read.",
+          "cancelled": "The connection test was cancelled."
+        },
+        "notes": {
+          "noTranslate": "Translate to English isn't available with Lemonade Server. Files are transcribed in the language spoken.",
+          "remote": "This address isn't on this computer. Your recordings will be sent to it."
+        }
+      },
+      "speakers": {
+        "label": "Label Speakers",
+        "description": "Mark who said what, for up to 4 speakers. Runs on this computer and needs a one-time {{size}} MB download.",
+        "download": "Download Speaker Model ({{size}} MB)",
+        "downloading": "Downloading speaker model… {{percent}}%",
+        "verifying": "Checking the download…",
+        "cancelDownload": "Cancel Download",
+        "downloadFailed": "Couldn't download the speaker model: {{error}}",
+        "installed": "Speaker model installed ({{size}} MB)",
+        "remove": "Remove Speaker Model",
+        "removeError": "Couldn't remove the speaker model: {{error}}",
+        "license": "Speaker model by NVIDIA, under the NVIDIA Open Model License (<link>model page</link>).",
+        "title": "Speakers",
+        "defaultName": "Speaker {{number}}",
+        "rename": "Rename {{name}}",
+        "nameLabel": "New name for {{name}}",
+        "save": "Save",
+        "cancel": "Cancel",
+        "renameError": "Couldn't rename the speaker: {{error}}",
+        "approximate": "Speaker changes are approximate because this model doesn't report timestamps.",
+        "unassigned": "Some passages couldn't be matched to a speaker.",
+        "state": {
+          "running": "Identifying speakers…",
+          "done_one": "{{count}} speaker",
+          "done_other": "{{count}} speakers",
+          "failed": "Couldn't label speakers",
+          "skipped": {
+            "modelMissing": "Speaker labels skipped: the speaker model isn't downloaded.",
+            "noSpeech": "Speaker labels skipped: no speech found."
+          }
+        }
       },
       "queue": {
         "title": "Files",
@@ -526,6 +608,9 @@
         "modelChanged": "The model changed while this file was being transcribed.",
         "decodeFailed": "The audio in this file couldn't be read.",
         "engineFailed": "Transcription failed.",
+        "serverUnreachable": "Lemonade Server can't be reached. Make sure it's running.",
+        "serverUnauthorized": "Lemonade Server didn't accept the API key.",
+        "serverModelMissing": "Lemonade Server doesn't have the selected model.",
         "internal": "Something went wrong.",
         "enqueue": "Couldn't add files: {{error}}",
         "cancel": "Couldn't cancel: {{error}}",
@@ -575,6 +660,8 @@
       "originalMissing": "The original file has been moved or deleted.",
       "fileDuration": "Length {{duration}}",
       "incomplete": "Incomplete",
+      "speakerCount_one": "{{count}} speaker",
+      "speakerCount_other": "{{count}} speakers",
       "retranscribeFileUnavailable": "To transcribe this file again, use the Transcribe page."
     },
     "debug": {

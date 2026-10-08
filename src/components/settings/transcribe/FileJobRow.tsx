@@ -14,6 +14,7 @@ import {
   Loader2,
   Pause,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,17 +25,22 @@ import {
 } from "@/bindings";
 import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
 import {
+  awaitingSpeakers,
   errorKey,
   formatDuration,
   isFinishedStatus,
   isolateLtr,
   isRunningStatus,
+  jobSpeakerView,
+  speakerSkipKey,
   statusKey,
+  type JobSpeakerView,
   type JobStatusKey,
 } from "@/lib/utils/transcript";
 import { IconButton } from "../../ui/IconButton";
 import { copyToClipboard } from "../history/clipboard";
 import { ExportMenu } from "./ExportMenu";
+import { PROGRESS_CLASSES } from "./progress";
 
 const STATUS_ICONS: Record<
   JobStatusKey,
@@ -50,8 +56,45 @@ const STATUS_ICONS: Record<
   failed: { icon: CircleX, className: "text-red-500" },
 };
 
-const PROGRESS_CLASSES =
-  "w-full h-1.5 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-mid-gray/20 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-logo-primary";
+// A Lemonade job still on its first chunk after this long is probably
+// waiting for the server to download or load the model.
+const FIRST_CHUNK_SLOW_MS = 15_000;
+
+const SpeakerStatus: React.FC<{ view: JobSpeakerView }> = ({ view }) => {
+  const { t } = useTranslation();
+  switch (view.kind) {
+    case "running":
+      return (
+        <span className="flex items-center gap-1">
+          <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+          {t("settings.transcribeFiles.speakers.state.running")}
+        </span>
+      );
+    case "done":
+      return (
+        <span className="flex items-center gap-1">
+          <Users className="w-3 h-3" aria-hidden="true" />
+          {t("settings.transcribeFiles.speakers.state.done", {
+            count: view.speakers,
+          })}
+        </span>
+      );
+    case "failed":
+      return (
+        <span className="text-yellow-500" title={view.message}>
+          {t("settings.transcribeFiles.speakers.state.failed")}
+        </span>
+      );
+    case "skipped":
+      return (
+        <span>
+          {t(
+            `settings.transcribeFiles.speakers.state.skipped.${speakerSkipKey(view.reason)}`,
+          )}
+        </span>
+      );
+  }
+};
 
 interface FileJobRowProps {
   job: FileJobSnapshot;
@@ -76,6 +119,24 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
     return () => clearTimeout(timer);
   }, [showCopied]);
 
+  // Lemonade loads (or first downloads) the model on the first request.
+  const onFirstChunk =
+    job.engine === "lemonade" &&
+    job.status === "transcribing" &&
+    job.chunks_done === 0;
+  const [firstChunkSlow, setFirstChunkSlow] = useState(false);
+  useEffect(() => {
+    if (!onFirstChunk) return;
+    const timer = setTimeout(
+      () => setFirstChunkSlow(true),
+      FIRST_CHUNK_SLOW_MS,
+    );
+    return () => {
+      clearTimeout(timer);
+      setFirstChunkSlow(false);
+    };
+  }, [onFirstChunk]);
+
   const source: TranscriptSource = { kind: "job", job_id: job.job_id };
   const status = statusKey(job);
   const running = isRunningStatus(job.status);
@@ -85,8 +146,13 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
 
   const duration =
     job.duration_ms !== null && job.duration_ms > 0 ? job.duration_ms : null;
+  const speakerWait = awaitingSpeakers(job);
+  // While the job only waits for its labels, the progress text says so.
+  const speakerView = noSpeech || speakerWait ? null : jobSpeakerView(job);
   let progressText: string | null = null;
-  if (running && duration !== null) {
+  if (speakerWait) {
+    progressText = t("settings.transcribeFiles.speakers.state.running");
+  } else if (running && duration !== null) {
     progressText = t("settings.transcribeFiles.progress", {
       processed: isolateLtr(formatDuration(job.processed_ms)),
       total: isolateLtr(formatDuration(duration)),
@@ -147,6 +213,10 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
             {progressText && (
               <span className="tabular-nums">{progressText}</span>
             )}
+            {speakerView && <SpeakerStatus view={speakerView} />}
+            <span className="text-text/50" title={job.model_id ?? undefined}>
+              {t(`settings.transcribeFiles.engine.${job.engine}`)}
+            </span>
             {job.history_id !== null && (
               <span className="text-text/50">
                 {t("settings.transcribeFiles.savedToHistory")}
@@ -210,7 +280,7 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
 
       {running && (
         <progress
-          className={`${PROGRESS_CLASSES} ${duration === null ? "animate-pulse" : ""}`}
+          className={`${PROGRESS_CLASSES} ${duration === null || speakerWait ? "animate-pulse" : ""}`}
           max={duration ?? undefined}
           value={
             duration === null ? undefined : Math.min(job.processed_ms, duration)
@@ -218,6 +288,12 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
           aria-label={job.file_name}
           aria-valuetext={progressText ?? undefined}
         />
+      )}
+
+      {onFirstChunk && firstChunkSlow && (
+        <p className="text-xs text-text/60">
+          {t("settings.transcribeFiles.lemonade.firstChunkSlow")}
+        </p>
       )}
 
       {job.status === "failed" && job.error && (

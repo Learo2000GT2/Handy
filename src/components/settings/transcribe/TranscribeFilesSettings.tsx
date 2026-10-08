@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { FileJobSnapshot, ModelInfo } from "@/bindings";
+import { useSettings } from "@/hooks/useSettings";
 import { useModelStore } from "@/stores/modelStore";
 import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
 import { getTranslatedModelName } from "@/lib/utils/modelTranslation";
@@ -9,8 +10,10 @@ import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { SettingsGroup } from "../../ui/SettingsGroup";
 import { ToggleSwitch } from "../../ui/ToggleSwitch";
+import { EngineCard } from "./EngineCard";
 import { FileDropZone } from "./FileDropZone";
 import { FileJobRow } from "./FileJobRow";
+import { SpeakerLabelsToggle } from "./SpeakerLabelsToggle";
 import { TranscriptDialog } from "./TranscriptDialog";
 
 interface ViewedJob {
@@ -21,6 +24,7 @@ interface ViewedJob {
 export const TranscribeFilesSettings: React.FC = () => {
   const { t } = useTranslation();
   const { models, currentModel, loading: modelsLoading } = useModelStore();
+  const { settings, isLoading: settingsLoading } = useSettings();
   const jobs = useFileTranscriptionStore((state) => state.jobs);
   const order = useFileTranscriptionStore((state) => state.order);
   const noSpeech = useFileTranscriptionStore((state) => state.noSpeech);
@@ -48,6 +52,16 @@ export const TranscribeFilesSettings: React.FC = () => {
     (model: ModelInfo) => model.id === currentModel,
   );
   const modelReady = modelInfo?.is_downloaded ?? false;
+  const lemonade = settings?.file_transcription_engine === "lemonade";
+  const lemonadeModel = settings?.lemonade?.model ?? "";
+  const ready = lemonade ? lemonadeModel !== "" : modelReady;
+  const notReadyMessage = lemonade
+    ? !settingsLoading && lemonadeModel === ""
+      ? t("settings.transcribeFiles.noLemonadeModel")
+      : null
+    : !modelsLoading && !modelReady
+      ? t("settings.transcribeFiles.noModel")
+      : null;
 
   const queue = order
     .map((id) => jobs[id])
@@ -65,22 +79,35 @@ export const TranscribeFilesSettings: React.FC = () => {
           {t("settings.transcribeFiles.description")}
         </p>
         <p className="mt-2 text-xs text-text/50">
-          {t("settings.transcribeFiles.settingsNote")}
+          {lemonade
+            ? t("settings.transcribeFiles.settingsNoteLemonade")
+            : t("settings.transcribeFiles.settingsNote")}
         </p>
-        {modelInfo && modelReady && (
-          <p className="text-xs text-text/50">
-            {t("settings.transcribeFiles.model", {
-              model: getTranslatedModelName(modelInfo, t),
-            })}
-          </p>
-        )}
+        {lemonade
+          ? lemonadeModel !== "" && (
+              <p className="text-xs text-text/50">
+                {t("settings.transcribeFiles.modelLemonade", {
+                  model: lemonadeModel,
+                })}
+              </p>
+            )
+          : modelInfo &&
+            modelReady && (
+              <p className="text-xs text-text/50">
+                {t("settings.transcribeFiles.model", {
+                  model: getTranslatedModelName(modelInfo, t),
+                })}
+              </p>
+            )}
       </div>
 
-      {!modelsLoading && !modelReady && (
-        <Alert variant="warning">{t("settings.transcribeFiles.noModel")}</Alert>
+      <EngineCard />
+
+      {notReadyMessage !== null && (
+        <Alert variant="warning">{notReadyMessage}</Alert>
       )}
 
-      <FileDropZone disabled={!modelReady} />
+      <FileDropZone disabled={!ready} />
 
       <SettingsGroup>
         <ToggleSwitch
@@ -91,6 +118,7 @@ export const TranscribeFilesSettings: React.FC = () => {
           descriptionMode="tooltip"
           grouped={true}
         />
+        <SpeakerLabelsToggle />
       </SettingsGroup>
 
       {queue.length > 0 && (

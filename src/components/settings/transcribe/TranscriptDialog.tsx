@@ -14,6 +14,7 @@ import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { copyToClipboard } from "../history/clipboard";
 import { ExportMenu } from "./ExportMenu";
+import { SpeakerPanel } from "./SpeakerPanel";
 import { TranscriptSegments } from "./TranscriptSegments";
 
 interface TranscriptDialogProps {
@@ -115,6 +116,21 @@ export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
 
   const hasText =
     !live && transcript !== null && transcript.text.trim().length > 0;
+  // Labels come with the final transcript; live chunks have none.
+  const speakers = live ? null : (transcript?.speakers ?? null);
+  // A labelled transcript reads as speaker turns (its paragraphs).
+  const turns =
+    speakers !== null && transcript !== null && transcript.paragraphs.length > 0
+      ? transcript.paragraphs
+      : null;
+
+  const handleRenamed = (renamed: FileTranscript) => {
+    setLoaded((previous) =>
+      previous !== null && previous.key === key
+        ? { ...previous, transcript: renamed }
+        : previous,
+    );
+  };
 
   const handleCopy = async () => {
     if (!transcript) return;
@@ -154,12 +170,32 @@ export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
               : t("settings.transcribeFiles.transcript.partialNoReason")}
           </Alert>
         )}
-        {transcript?.timing === "chunk" && segments.length > 0 && (
+        {speakers && source && (
+          <SpeakerPanel
+            key={key}
+            source={source}
+            speakers={speakers}
+            onRenamed={handleRenamed}
+          />
+        )}
+        {transcript?.timing === "chunk" && (turns ?? segments).length > 0 && (
           <p className="text-xs text-text/60">
             {t("settings.transcribeFiles.transcript.approximateTimes")}
           </p>
         )}
-        {segments.length > 0 ? (
+        {speakers?.approximate && (
+          <p className="text-xs text-text/60">
+            {t("settings.transcribeFiles.speakers.approximate")}
+          </p>
+        )}
+        {speakers !== null && speakers.unassigned_segments > 0 && (
+          <p className="text-xs text-text/60">
+            {t("settings.transcribeFiles.speakers.unassigned")}
+          </p>
+        )}
+        {turns !== null && speakers !== null ? (
+          <TranscriptSegments segments={turns} speakers={speakers} />
+        ) : segments.length > 0 ? (
           <TranscriptSegments segments={segments} follow={live} />
         ) : (
           <p className="py-4 text-center text-sm text-text/60">

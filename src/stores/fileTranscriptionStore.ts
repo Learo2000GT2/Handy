@@ -7,25 +7,30 @@ import {
   events,
   type FileJobSnapshot,
   type FileTranscriptionEvent,
+  type SpeakerModelEvent,
+  type SpeakerModelStatus,
   type SupportedAudioFormats,
   type TranscriptSegment,
 } from "@/bindings";
 import { isFinishedStatus } from "@/lib/utils/transcript";
 
 const SAVE_TO_HISTORY_STORAGE_KEY = "handy.transcribeFiles.saveToHistory";
+const LABEL_SPEAKERS_STORAGE_KEY = "handy.transcribeFiles.labelSpeakers";
 
-const readSaveToHistory = (): boolean => {
+/** A stored "true"/"false"; anything else reads as `defaultValue`. */
+const readFlag = (key: string, defaultValue: boolean): boolean => {
   try {
-    return localStorage.getItem(SAVE_TO_HISTORY_STORAGE_KEY) !== "false";
+    const value = localStorage.getItem(key);
+    return defaultValue ? value !== "false" : value === "true";
   } catch {
     // localStorage may be unavailable; fall back to the default.
-    return true;
+    return defaultValue;
   }
 };
 
-const writeSaveToHistory = (value: boolean): void => {
+const writeFlag = (key: string, value: boolean): void => {
   try {
-    localStorage.setItem(SAVE_TO_HISTORY_STORAGE_KEY, String(value));
+    localStorage.setItem(key, String(value));
   } catch {
     // Not persisted; the choice still applies for this session.
   }
@@ -46,6 +51,14 @@ interface FileTranscriptionState {
   formats: SupportedAudioFormats | null;
   /** Persisted per device in localStorage; defaults to true. */
   saveToHistory: boolean;
+  /** Persisted per device in localStorage; defaults to false. */
+  labelSpeakers: boolean;
+  /** The speaker model on disk; null until first loaded. */
+  speakerModel: SpeakerModelStatus | null;
+  /** Set while the speaker model downloads. */
+  speakerDownload: SpeakerDownload | null;
+  /** Why the last speaker model download failed. */
+  speakerDownloadError: string | null;
   initialized: boolean;
 
   initialize: () => Promise<void>;
@@ -57,6 +70,19 @@ interface FileTranscriptionState {
   /** Dismisses every completed, cancelled or failed job. */
   clearFinished: () => Promise<void>;
   setSaveToHistory: (value: boolean) => void;
+  setLabelSpeakers: (value: boolean) => void;
+  refreshSpeakerModel: () => Promise<void>;
+  /** Resolves once the download has ended (or failed to start). */
+  downloadSpeakerModel: () => Promise<void>;
+  cancelSpeakerModelDownload: () => Promise<void>;
+  deleteSpeakerModel: () => Promise<void>;
+}
+
+export interface SpeakerDownload {
+  downloaded: number;
+  total: number;
+  /** The file is complete and its checksum is being verified. */
+  verifying: boolean;
 }
 
 export const useFileTranscriptionStore = create<FileTranscriptionState>()((
@@ -68,6 +94,9 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
   const removedJobIds = new Set<number>();
   // Completed jobs whose transcript text has been checked for speech.
   const checkedCompletedJobIds = new Set<number>();
+  // The user cancelled the running speaker model download, so its error (if
+  // the command reports one) is not a failure to show.
+  let speakerDownloadCancelled = false;
 
   const insertJobId = (order: number[], jobId: number) => {
     // Job ids grow with every enqueue, so sorting by id keeps enqueue order
@@ -184,6 +213,42 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
     }
   };
 
+  const handleSpeakerModelEvent = (event: SpeakerModelEvent) => {
+    switch (event.kind) {
+      case "progress":
+        set({
+          speakerDownload: {
+            downloaded: event.downloaded,
+            total: event.total,
+            verifying: false,
+          },
+          speakerDownloadError: null,
+        });
+        break;
+      case "verifying":
+        set((state) => ({
+          speakerDownload: {
+            downloaded: state.speakerDownload?.total ?? 0,
+            total: state.speakerDownload?.total ?? 0,
+            verifying: true,
+          },
+        }));
+        break;
+      case "completed":
+        set({ speakerDownload: null, speakerDownloadError: null });
+        void get().refreshSpeakerModel();
+        break;
+      case "failed":
+        set({ speakerDownload: null, speakerDownloadError: event.message });
+        void get().refreshSpeakerModel();
+        break;
+      case "cancelled":
+        set({ speakerDownload: null });
+        void get().refreshSpeakerModel();
+        break;
+    }
+  };
+
   /** Returns the error text, or null on success. */
   const dismissJob = async (jobId: number): Promise<string | null> => {
     try {
@@ -204,7 +269,11 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
     liveSegments: {},
     noSpeech: {},
     formats: null,
-    saveToHistory: readSaveToHistory(),
+    saveToHistory: readFlag(SAVE_TO_HISTORY_STORAGE_KEY, true),
+    labelSpeakers: readFlag(LABEL_SPEAKERS_STORAGE_KEY, false),
+    speakerModel: null,
+    speakerDownload: null,
+    speakerDownloadError: null,
     initialized: false,
 
     initialize: async () => {
@@ -218,6 +287,13 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
         );
       } catch (error) {
         console.error("Failed to listen for file transcription events:", error);
+      }
+      try {
+        await events.speakerModelEvent.listen((event) =>
+          handleSpeakerModelEvent(event.payload),
+        );
+      } catch (error) {
+        console.error("Failed to listen for speaker model events:", error);
       }
 
       await Promise.all([
@@ -237,6 +313,7 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
           }
         })(),
         get().refreshFormats(),
+        get().refreshSpeakerModel(),
       ]);
     },
 
@@ -258,6 +335,7 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
       try {
         const result = await commands.enqueueFileTranscriptions(paths, {
           save_to_history: get().saveToHistory,
+          label_speakers: get().labelSpeakers,
         });
         if (result.status === "ok") {
           addJobs(result.data);
@@ -340,8 +418,113 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
     },
 
     setSaveToHistory: (value) => {
-      writeSaveToHistory(value);
+      writeFlag(SAVE_TO_HISTORY_STORAGE_KEY, value);
       set({ saveToHistory: value });
+    },
+
+    setLabelSpeakers: (value) => {
+      writeFlag(LABEL_SPEAKERS_STORAGE_KEY, value);
+      set({ labelSpeakers: value });
+    },
+
+    refreshSpeakerModel: async () => {
+      try {
+        const result = await commands.getSpeakerModelStatus();
+        if (result.status === "error") {
+          console.error(
+            "Failed to load the speaker model status:",
+            result.error,
+          );
+          return;
+        }
+        const status = result.data;
+        // The backend knows whether a download runs: it may have started
+        // before this window loaded, or ended without an event reaching us.
+        set((state) => ({
+          speakerModel: status,
+          speakerDownload: status.downloading
+            ? (state.speakerDownload ?? {
+                downloaded: 0,
+                total: status.size_bytes,
+                verifying: false,
+              })
+            : null,
+        }));
+      } catch (error) {
+        console.error("Failed to load the speaker model status:", error);
+      }
+    },
+
+    downloadSpeakerModel: async () => {
+      if (get().speakerDownload !== null) return;
+      speakerDownloadCancelled = false;
+      set({
+        speakerDownload: {
+          downloaded: 0,
+          total: get().speakerModel?.size_bytes ?? 0,
+          verifying: false,
+        },
+        speakerDownloadError: null,
+      });
+
+      let error: string | null = null;
+      try {
+        const result = await commands.downloadSpeakerModel();
+        if (result.status === "error") error = result.error;
+      } catch (caught) {
+        error = errorText(caught);
+      }
+      await get().refreshSpeakerModel();
+      // A "failed" event usually reported this already; this also covers
+      // failures before the download started. "Already downloading" is no
+      // failure: the status then still says a download runs.
+      if (
+        error !== null &&
+        !speakerDownloadCancelled &&
+        get().speakerModel?.downloading !== true
+      ) {
+        set({ speakerDownload: null, speakerDownloadError: error });
+      }
+    },
+
+    cancelSpeakerModelDownload: async () => {
+      speakerDownloadCancelled = true;
+      try {
+        const result = await commands.cancelSpeakerModelDownload();
+        if (result.status === "error") {
+          toast.error(
+            i18n.t("settings.transcribeFiles.errors.cancel", {
+              error: result.error,
+            }),
+          );
+        }
+      } catch (error) {
+        toast.error(
+          i18n.t("settings.transcribeFiles.errors.cancel", {
+            error: errorText(error),
+          }),
+        );
+      }
+    },
+
+    deleteSpeakerModel: async () => {
+      try {
+        const result = await commands.deleteSpeakerModel();
+        if (result.status === "error") {
+          toast.error(
+            i18n.t("settings.transcribeFiles.speakers.removeError", {
+              error: result.error,
+            }),
+          );
+        }
+      } catch (error) {
+        toast.error(
+          i18n.t("settings.transcribeFiles.speakers.removeError", {
+            error: errorText(error),
+          }),
+        );
+      }
+      await get().refreshSpeakerModel();
     },
   };
 });

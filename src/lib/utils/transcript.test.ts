@@ -1,21 +1,38 @@
 import assert from "node:assert/strict";
-import type { FileJobErrorCode, SupportedAudioFormats } from "@/bindings";
+import type {
+  FileJobErrorCode,
+  FileJobSnapshot,
+  LemonadeErrorKind,
+  SpeakerJobState,
+  SupportedAudioFormats,
+  TranscriptSpeakers,
+} from "@/bindings";
 import {
+  awaitingSpeakers,
   defaultExportName,
+  downloadPercent,
   errorKey,
   extensionOf,
   fileNameFromPath,
   formatClock,
   formatDuration,
   isFinishedStatus,
+  isLoopbackUrl,
   isolateLtr,
   isRunningStatus,
   isSupportedPath,
+  isValidServerUrl,
+  jobSpeakerView,
+  lemonadeErrorKey,
   menuKeyAction,
   mergeLiveSegments,
   pickerExtensions,
   placeMenu,
   previewText,
+  serverUrlHost,
+  speakerName,
+  speakerSkipKey,
+  speakerStyle,
   statusKey,
 } from "./transcript";
 
@@ -248,5 +265,166 @@ assert.deepEqual(menuKeyAction("End", 0, 4), { kind: "focus", index: 3 });
 assert.equal(menuKeyAction("ArrowDown", -1, 0), null);
 assert.equal(menuKeyAction("Enter", 0, 4), null);
 assert.equal(menuKeyAction("a", 0, 4), null);
+
+// Lemonade Server addresses: http(s) with a host, the scheme written out.
+assert.equal(serverUrlHost("http://localhost:13305"), "localhost");
+assert.equal(
+  serverUrlHost("  HTTPS://Lemonade.Example:8000/api/v1/ "),
+  "lemonade.example",
+);
+assert.equal(serverUrlHost("http://[::1]:13305/v1"), "[::1]");
+assert.equal(serverUrlHost("localhost:13305"), null);
+assert.equal(serverUrlHost("ftp://localhost"), null);
+assert.equal(serverUrlHost("http://"), null);
+assert.equal(serverUrlHost("http:localhost"), null);
+assert.equal(serverUrlHost(""), null);
+assert.equal(isValidServerUrl("http://127.0.0.1:8000/api/v1"), true);
+assert.equal(isValidServerUrl("http//localhost"), false);
+
+// isLoopbackUrl: localhost, 127.0.0.0/8 and ::1 only; invalid reads false.
+for (const address of [
+  "http://localhost:13305",
+  "http://LOCALHOST:13305/",
+  "http://localhost.:13305",
+  "https://127.0.0.1",
+  "http://127.12.0.3:8000/api/v1",
+  "http://127.1:13305",
+  "http://[::1]:13305",
+  "http://[0:0:0:0:0:0:0:1]:13305",
+]) {
+  assert.equal(isLoopbackUrl(address), true, address);
+}
+for (const address of [
+  "http://192.168.1.20:13305",
+  "http://10.0.0.5",
+  "http://lemonade.local:13305",
+  "http://localhost.example.com",
+  "http://128.0.0.1",
+  "http://[::2]",
+  "localhost:13305",
+  "",
+]) {
+  assert.equal(isLoopbackUrl(address), false, address);
+}
+
+// lemonadeErrorKey: every check error maps to its camelCase i18n key.
+const expectedLemonadeKeys: Record<LemonadeErrorKind, string> = {
+  invalid_url: "invalidUrl",
+  unreachable: "unreachable",
+  timeout: "timeout",
+  unauthorized: "unauthorized",
+  model_not_found: "modelNotFound",
+  http: "http",
+  bad_response: "badResponse",
+  cancelled: "cancelled",
+};
+for (const [kind, key] of Object.entries(expectedLemonadeKeys)) {
+  assert.equal(lemonadeErrorKey(kind as LemonadeErrorKind), key);
+}
+assert.equal(speakerSkipKey("model_missing"), "modelMissing");
+assert.equal(speakerSkipKey("no_speech"), "noSpeech");
+
+// jobSpeakerView: nothing unless requested; "running" only while the job runs;
+// cancelled and failed jobs say nothing about labels.
+const speakerJob = (
+  status: FileJobSnapshot["status"],
+  speakers: SpeakerJobState | null,
+) => ({ status, speakers });
+assert.equal(jobSpeakerView(speakerJob("transcribing", null)), null);
+assert.equal(jobSpeakerView(speakerJob("queued", { state: "pending" })), null);
+assert.deepEqual(
+  jobSpeakerView(speakerJob("preparing", { state: "pending" })),
+  { kind: "running" },
+);
+assert.deepEqual(jobSpeakerView(speakerJob("waiting", { state: "running" })), {
+  kind: "running",
+});
+assert.deepEqual(
+  jobSpeakerView(
+    speakerJob("transcribing", { state: "skipped", reason: "model_missing" }),
+  ),
+  { kind: "skipped", reason: "model_missing" },
+);
+assert.deepEqual(
+  jobSpeakerView(speakerJob("completed", { state: "done", speakers: 2 })),
+  { kind: "done", speakers: 2 },
+);
+assert.deepEqual(
+  jobSpeakerView(
+    speakerJob("completed", { state: "failed", message: "worker crashed" }),
+  ),
+  { kind: "failed", message: "worker crashed" },
+);
+assert.equal(
+  jobSpeakerView(speakerJob("completed", { state: "running" })),
+  null,
+);
+assert.equal(
+  jobSpeakerView(
+    speakerJob("cancelled", { state: "failed", message: "cancelled" }),
+  ),
+  null,
+);
+assert.equal(jobSpeakerView(speakerJob("failed", { state: "running" })), null);
+
+// awaitingSpeakers: transcribing, all audio processed, labels still coming.
+const progressJob = {
+  status: "transcribing" as const,
+  speakers: { state: "running" } as SpeakerJobState,
+  duration_ms: 60_000,
+  processed_ms: 60_000,
+};
+assert.equal(awaitingSpeakers(progressJob), true);
+assert.equal(
+  awaitingSpeakers({ ...progressJob, speakers: { state: "pending" } }),
+  true,
+);
+assert.equal(awaitingSpeakers({ ...progressJob, processed_ms: 59_000 }), false);
+assert.equal(awaitingSpeakers({ ...progressJob, duration_ms: null }), false);
+assert.equal(awaitingSpeakers({ ...progressJob, duration_ms: 0 }), false);
+assert.equal(awaitingSpeakers({ ...progressJob, speakers: null }), false);
+assert.equal(
+  awaitingSpeakers({
+    ...progressJob,
+    speakers: { state: "done", speakers: 2 },
+  }),
+  false,
+);
+assert.equal(awaitingSpeakers({ ...progressJob, status: "completed" }), false);
+
+// downloadPercent: whole percent, clamped, 0 while the total is unknown.
+assert.equal(downloadPercent(0, 139_310_336), 0);
+assert.equal(downloadPercent(69_655_168, 139_310_336), 50);
+assert.equal(downloadPercent(139_310_335, 139_310_336), 99);
+assert.equal(downloadPercent(139_310_336, 139_310_336), 100);
+assert.equal(downloadPercent(200, 100), 100);
+assert.equal(downloadPercent(50, 0), 0);
+
+// speakerName: the given name (trimmed), else the default for that id.
+const transcriptSpeakers: TranscriptSpeakers = {
+  speakers: [
+    { id: 1, name: "Doug" },
+    { id: 2, name: null },
+    { id: 3, name: "   " },
+  ],
+  approximate: false,
+  unassigned_segments: 0,
+  model: "sortformer-4spk-v2.1-q8_0",
+};
+const defaultName = (id: number) => `Speaker ${id}`;
+assert.equal(speakerName(transcriptSpeakers, 1, defaultName), "Doug");
+assert.equal(speakerName(transcriptSpeakers, 2, defaultName), "Speaker 2");
+assert.equal(speakerName(transcriptSpeakers, 3, defaultName), "Speaker 3");
+assert.equal(speakerName(transcriptSpeakers, 7, defaultName), "Speaker 7");
+assert.equal(speakerName(null, 1, defaultName), "Speaker 1");
+
+// speakerStyle: one colour per speaker, repeating after four.
+const styles = [1, 2, 3, 4].map(speakerStyle);
+assert.equal(new Set(styles).size, 4);
+assert.ok(styles.every((style) => style.startsWith("text-[")));
+assert.equal(speakerStyle(5), speakerStyle(1));
+assert.equal(speakerStyle(8), speakerStyle(4));
+assert.equal(speakerStyle(0), speakerStyle(1));
+assert.equal(speakerStyle(Number.NaN), speakerStyle(1));
 
 console.log("transcript: all assertions passed");
