@@ -99,9 +99,12 @@ impl SpeakerModelManager {
             token
         };
         // Clears the slot however this ends, the future being dropped included.
-        let _downloading = DownloadSlot(&self.cancel);
+        let downloading = DownloadSlot(&self.cancel);
 
         let result = self.fetch(&token).await;
+        // Free the slot before announcing the outcome, so a status read in
+        // reply to the event never still says a download runs.
+        drop(downloading);
         let event = match &result {
             Ok(Downloaded::Completed) => SpeakerModelEvent::Completed,
             Ok(Downloaded::Cancelled) => SpeakerModelEvent::Cancelled,

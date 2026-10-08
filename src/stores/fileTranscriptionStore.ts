@@ -97,6 +97,9 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
   // The user cancelled the running speaker model download, so its error (if
   // the command reports one) is not a failure to show.
   let speakerDownloadCancelled = false;
+  // Status replies can arrive out of order; only the newest request's
+  // reply is applied, so a stale "downloading" never outlives the download.
+  let speakerStatusRequest = 0;
 
   const insertJobId = (order: number[], jobId: number) => {
     // Job ids grow with every enqueue, so sorting by id keeps enqueue order
@@ -428,8 +431,10 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
     },
 
     refreshSpeakerModel: async () => {
+      const request = ++speakerStatusRequest;
       try {
         const result = await commands.getSpeakerModelStatus();
+        if (request !== speakerStatusRequest) return;
         if (result.status === "error") {
           console.error(
             "Failed to load the speaker model status:",
