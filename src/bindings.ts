@@ -1050,8 +1050,11 @@ async deleteSpeakerModel() : Promise<Result<null, string>> {
 },
 /**
  * Renames (or with name None/"" resets) speaker `speaker_id` in a job's result or
- * a History entry; returns the updated transcript. For a job whose transcript has
- * history_id, the History entry is updated too. Running jobs: Err("still running").
+ * a History entry; returns the updated transcript. History is the source of truth
+ * for a saved transcript: a job whose result has a history_id is renamed in History
+ * first and then takes the entry's labels, so a failure changes neither copy (if
+ * that entry was deleted, only the job is renamed). A History rename also updates
+ * the jobs saved as that entry. Running jobs: Err("still running").
  */
 async renameTranscriptSpeaker(source: TranscriptSource, speakerId: number, name: string | null) : Promise<Result<FileTranscript, string>> {
     try {
@@ -1062,8 +1065,10 @@ async renameTranscriptSpeaker(source: TranscriptSource, speakerId: number, name:
 }
 },
 /**
- * Stub implementation for non-macOS platforms
- * Always returns false since laptop detection is macOS-specific
+ * Checks if the Mac is a laptop by detecting battery presence
+ * 
+ * This uses pmset to check for battery information.
+ * Returns true if a battery is detected (laptop), false otherwise (desktop)
  */
 async isLaptop() : Promise<Result<boolean, string>> {
     try {

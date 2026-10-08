@@ -3,8 +3,10 @@
 use crate::file_transcription::lemonade::{
     normalize_base_url, LemonadeCheck, LemonadeClient, LemonadeTimeouts,
 };
+use crate::file_transcription::FileTranscriptionManager;
 use crate::settings::{self, FileTranscriptionEngine, LemonadeSettings};
-use tauri::AppHandle;
+use std::sync::Arc;
+use tauri::{AppHandle, Manager};
 
 /// Lists the server's transcription models. Server problems are reported in
 /// `LemonadeCheck.error`; Err only for internal failures.
@@ -32,6 +34,10 @@ pub fn change_file_transcription_engine_setting(
     let mut settings = settings::get_settings(&app);
     settings.file_transcription_engine = engine;
     settings::write_settings(&app, settings);
+    // Queued jobs show the engine they will start on; let their rows follow.
+    if let Some(manager) = app.try_state::<Arc<FileTranscriptionManager>>() {
+        manager.refresh_queued_engine(engine);
+    }
     Ok(())
 }
 
