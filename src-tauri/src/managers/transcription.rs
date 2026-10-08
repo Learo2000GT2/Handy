@@ -233,6 +233,29 @@ impl Drop for LoadingGuard {
     }
 }
 
+/// Wait until no model load is in progress; then, unless `loaded()`, mark a
+/// load as started and return its guard, which the caller holds while it
+/// loads. Checked and claimed under one lock, so no other load can start in
+/// between. `None` means the model is loaded and the flag was not touched.
+fn claim_load_unless_loaded(
+    is_loading: &Arc<Mutex<bool>>,
+    loading_condvar: &Arc<Condvar>,
+    loaded: impl FnOnce() -> bool,
+) -> Option<LoadingGuard> {
+    let mut flag = is_loading.lock().unwrap();
+    while *flag {
+        flag = loading_condvar.wait(flag).unwrap();
+    }
+    if loaded() {
+        return None;
+    }
+    *flag = true;
+    Some(LoadingGuard {
+        is_loading: Arc::clone(is_loading),
+        loading_condvar: Arc::clone(loading_condvar),
+    })
+}
+
 /// RAII guard that clears [`TranscriptionManager::onnx_in_use`] on every exit
 /// from an ONNX run, including an unwinding panic.
 struct OnnxInUse(Arc<AtomicBool>);
@@ -1248,17 +1271,24 @@ impl TranscriptionManager {
             return Ok(String::new());
         }
 
-        // Check if model is loaded, if not try to load it
+        // Wait for a model load in progress. If the model is still not
+        // loaded, it was unloaded after this dictation's start saw it loaded
+        // (e.g. "Immediately" as a file job ended): load it now rather than
+        // fail. Not under the run gate, which a load never waits for.
+        if let Some(_loading) =
+            claim_load_unless_loaded(&self.is_loading, &self.loading_condvar, || {
+                self.is_model_loaded()
+            })
         {
-            // If the model is loading, wait for it to complete.
-            let mut is_loading = self.is_loading.lock().unwrap();
-            while *is_loading {
-                is_loading = self.loading_condvar.wait(is_loading).unwrap();
-            }
-
-            if !self.is_model_loaded() {
-                return Err(anyhow::anyhow!("Model is not loaded for transcription."));
-            }
+            self.reload_model_on_next_use
+                .store(false, Ordering::Release);
+            let settings = get_settings(&self.app_handle);
+            info!(
+                "Model is not loaded for transcription; loading '{}'",
+                settings.selected_model
+            );
+            self.load_model(&settings.selected_model)
+                .map_err(|e| anyhow::anyhow!("Model is not loaded for transcription: {}", e))?;
         }
 
         // Get current settings for configuration
@@ -3820,6 +3850,80 @@ mod tests {
             ChunkError::Cancelled.to_string(),
             "file transcription was cancelled"
         );
+    }
+
+    fn loading_flag() -> (Arc<Mutex<bool>>, Arc<Condvar>) {
+        (Arc::new(Mutex::new(false)), Arc::new(Condvar::new()))
+    }
+
+    #[test]
+    fn claim_load_leaves_a_loaded_model_alone() {
+        let (is_loading, condvar) = loading_flag();
+        assert!(claim_load_unless_loaded(&is_loading, &condvar, || true).is_none());
+        assert!(!*is_loading.lock().unwrap());
+    }
+
+    /// A model unloaded under a dictation that is starting is loaded by its
+    /// transcribe() rather than failing it; the flag is held for the load.
+    #[test]
+    fn claim_load_claims_the_flag_for_an_unloaded_model() {
+        let (is_loading, condvar) = loading_flag();
+        let guard = claim_load_unless_loaded(&is_loading, &condvar, || false);
+        assert!(guard.is_some());
+        assert!(*is_loading.lock().unwrap());
+        drop(guard);
+        assert!(!*is_loading.lock().unwrap());
+    }
+
+    /// Callers racing for an unloaded model load it once: the rest wait for
+    /// that load and then find the model loaded.
+    #[test]
+    fn claim_load_loads_once_for_concurrent_callers() {
+        let (is_loading, condvar) = loading_flag();
+        let loaded = Arc::new(AtomicBool::new(false));
+        let loads = Arc::new(AtomicUsize::new(0));
+        let threads: Vec<_> = (0..8)
+            .map(|_| {
+                let (is_loading, condvar) = (Arc::clone(&is_loading), Arc::clone(&condvar));
+                let (loaded, loads) = (Arc::clone(&loaded), Arc::clone(&loads));
+                thread::spawn(move || {
+                    let claimed = claim_load_unless_loaded(&is_loading, &condvar, || {
+                        loaded.load(Ordering::SeqCst)
+                    });
+                    if let Some(_loading) = claimed {
+                        loads.fetch_add(1, Ordering::SeqCst);
+                        thread::sleep(Duration::from_millis(20));
+                        loaded.store(true, Ordering::SeqCst);
+                    }
+                    assert!(loaded.load(Ordering::SeqCst));
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert_eq!(loads.load(Ordering::SeqCst), 1);
+        assert!(!*is_loading.lock().unwrap());
+    }
+
+    /// A load already in progress is waited for, not duplicated.
+    #[test]
+    fn claim_load_waits_for_a_load_in_progress() {
+        let (is_loading, condvar) = loading_flag();
+        let loaded = Arc::new(AtomicBool::new(false));
+        let guard = claim_load_unless_loaded(&is_loading, &condvar, || false).unwrap();
+        let loader = {
+            let loaded = Arc::clone(&loaded);
+            thread::spawn(move || {
+                thread::sleep(Duration::from_millis(50));
+                loaded.store(true, Ordering::SeqCst);
+                drop(guard);
+            })
+        };
+        let claimed =
+            claim_load_unless_loaded(&is_loading, &condvar, || loaded.load(Ordering::SeqCst));
+        assert!(claimed.is_none());
+        loader.join().unwrap();
     }
 }
 
