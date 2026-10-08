@@ -98,4 +98,27 @@ mod tests {
         assert!(check.api_url.is_none());
         assert!(check.models.is_empty());
     }
+
+    #[test]
+    fn checking_an_address_with_a_password_never_shows_it() {
+        use crate::file_transcription::lemonade::tests::{json, MockServer, MODELS};
+        let server = MockServer::start(vec![json(200, MODELS)]);
+        let check = tauri::async_runtime::block_on(check_lemonade_server(
+            server
+                .url()
+                .replacen("http://", "http://alice:s3cretpw@", 1),
+            String::new(),
+        ))
+        .unwrap();
+        assert!(check.ok);
+        assert_eq!(check.api_url, Some(format!("{}/api/v1", server.url())));
+
+        let check = tauri::async_runtime::block_on(check_lemonade_server(
+            "http://alice:s3cretpw@lemon.lan/?x=1".to_string(),
+            String::new(),
+        ))
+        .unwrap();
+        assert_eq!(check.error, Some(LemonadeErrorKind::InvalidUrl));
+        assert!(!check.detail.unwrap().contains("s3cretpw"));
+    }
 }

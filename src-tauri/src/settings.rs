@@ -406,7 +406,10 @@ impl Default for LemonadeSettings {
 impl fmt::Debug for LemonadeSettings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LemonadeSettings")
-            .field("base_url", &self.base_url)
+            .field(
+                "base_url",
+                &crate::file_transcription::lemonade::redact_url(&self.base_url),
+            )
             .field("model", &self.model)
             .field(
                 "api_key",
@@ -1858,6 +1861,13 @@ mod tests {
         let debug_output = format!("{:?}", settings.lemonade);
         assert!(!debug_output.contains("[REDACTED]"));
         assert!(debug_output.contains(DEFAULT_LEMONADE_URL));
+
+        // A password in the address is never printed either.
+        settings.lemonade.base_url = "http://alice:s3cretpw@lemon.lan:13305".to_string();
+        let debug_output = format!("{:?}", settings);
+        assert!(!debug_output.contains("s3cretpw"), "{debug_output}");
+        assert!(!debug_output.contains("alice"), "{debug_output}");
+        assert!(debug_output.contains("http://lemon.lan:13305"));
     }
 
     #[test]

@@ -300,7 +300,8 @@ fn cli_engine(
             if lemonade::normalize_base_url(&config.base_url).is_err() {
                 return Err(format!(
                     "invalid Lemonade Server address: {} (expected something like {})",
-                    config.base_url, DEFAULT_LEMONADE_URL
+                    lemonade::redact_url(&config.base_url),
+                    DEFAULT_LEMONADE_URL
                 ));
             }
             Ok((CliEngine::Lemonade(config), warnings))
@@ -1360,6 +1361,20 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.starts_with("invalid Lemonade Server address"), "{err}");
+        // A password in the address is not echoed.
+        let err = cli_engine(
+            &args(&[
+                "--engine",
+                "lemonade",
+                "--lemonade-url",
+                "http://alice:s3cretpw@lemon.lan:13305/?x=1",
+            ]),
+            &handy,
+            None,
+        )
+        .unwrap_err();
+        assert!(err.contains("http://lemon.lan:13305/?x=1"), "{err}");
+        assert!(!err.contains("s3cretpw"), "{err}");
 
         let mut unselected = settings_with(FileTranscriptionEngine::Handy);
         unselected.selected_model = String::new();

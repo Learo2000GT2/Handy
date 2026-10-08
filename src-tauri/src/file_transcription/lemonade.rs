@@ -42,6 +42,13 @@ const OPENAI_PREFIX: &str = "/v1";
 const CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// Longest excerpt of an error body kept for messages.
 const BODY_EXCERPT_CHARS: usize = 300;
+/// Largest transcription answer read (decompressed); a chunk's verbose_json
+/// is a few KB.
+const MAX_TRANSCRIPTION_BODY: usize = 8 << 20;
+/// Largest model list read (decompressed).
+const MAX_MODELS_BODY: usize = 2 << 20;
+/// `LemonadeTranscriber::first_chunk_ms` before the first request.
+const NO_CHUNK_YET: u64 = u64::MAX;
 /// Bodies that say a model is unknown contain "model" and one of these.
 const MODEL_MISSING_PHRASES: &[&str] = &[
     "not found",
@@ -61,11 +68,21 @@ pub fn display_model_name(model_id: &str) -> Option<String> {
 }
 
 /// The Lemonade Server a job uses, captured when the job starts.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct LemonadeJobConfig {
     pub base_url: String,
     pub model: String,
     pub api_key: Option<String>,
+}
+
+impl fmt::Debug for LemonadeJobConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LemonadeJobConfig")
+            .field("base_url", &redact_url(&self.base_url))
+            .field("model", &self.model)
+            .field("api_key", &self.api_key.as_ref().map(|_| "[REDACTED]"))
+            .finish()
+    }
 }
 
 impl LemonadeJobConfig {
@@ -256,11 +273,11 @@ impl std::error::Error for LemonadeError {}
 pub struct LemonadeTimeouts {
     pub connect: Duration,
     pub list: Duration,
-    /// First request of a job when the server did not list the model as
-    /// downloaded: Lemonade downloads and loads it on first use.
+    /// Each attempt at a job's first chunk when the server did not list the
+    /// model as downloaded: Lemonade downloads and loads it on first use.
     pub first_request: Duration,
-    /// First request of a job when the model is downloaded (it may still
-    /// have to be loaded).
+    /// Each attempt at a job's first chunk when the model is downloaded (it
+    /// may still have to be loaded).
     pub first_request_loaded: Duration,
     pub request_base: Duration,
     /// Added per second of chunk audio to `request_base`.
@@ -308,7 +325,9 @@ pub struct LemonadeTranscription {
 /// HTTP client for one Lemonade Server.
 pub struct LemonadeClient {
     http: reqwest::Client,
-    /// The address without a trailing "/" or API prefix.
+    /// The address without a trailing "/" or API prefix, for building request
+    /// URLs only: it may hold userinfo ("http://user:pass@host"), which must
+    /// never be logged or shown (see [`api_url`](Self::api_url)).
     root: String,
     /// The API prefix in use: given in the address, or found by `list_models`.
     prefix: Mutex<&'static str>,
@@ -327,6 +346,19 @@ impl LemonadeClient {
         timeouts: LemonadeTimeouts,
     ) -> Result<Self, LemonadeError> {
         let (root, prefix) = normalize_base_url(base_url)?;
+        let api_key = api_key
+            .map(str::trim)
+            .filter(|key| !key.is_empty())
+            .map(str::to_string);
+        // Userinfo in the address ("http://user:pass@host", e.g. for a
+        // reverse proxy) is sent by reqwest as Basic auth. With an API key the
+        // Bearer header is the credential, so the userinfo is dropped rather
+        // than sending two Authorization headers.
+        let root = if api_key.is_some() {
+            redact_url(&root)
+        } else {
+            root
+        };
         let mut builder = reqwest::Client::builder().connect_timeout(timeouts.connect);
         // A server on this computer is never reached through a system proxy.
         if is_loopback_url(&root) {
@@ -340,18 +372,21 @@ impl LemonadeClient {
             root,
             prefix: Mutex::new(prefix.unwrap_or(API_PREFIX)),
             explicit_prefix: prefix.is_some(),
-            api_key: api_key
-                .map(str::trim)
-                .filter(|key| !key.is_empty())
-                .map(str::to_string),
+            api_key,
             verbose_json: AtomicBool::new(true),
             timeouts,
         })
     }
 
-    /// The API base in use, e.g. "http://localhost:13305/api/v1".
+    /// The API base in use, e.g. "http://localhost:13305/api/v1", without
+    /// any userinfo: for logs and display, never for requests.
     pub fn api_url(&self) -> String {
-        format!("{}{}", self.root, self.prefix())
+        redact_url(&self.endpoint(""))
+    }
+
+    /// A request URL under the API prefix in use (with any userinfo).
+    fn endpoint(&self, path: &str) -> String {
+        format!("{}{}{}", self.root, self.prefix(), path)
     }
 
     fn prefix(&self) -> &'static str {
@@ -383,10 +418,7 @@ impl LemonadeClient {
                 .await
                 .map_err(|e| transport_error(&e, timeout))?;
             let status = response.status().as_u16();
-            let body = response
-                .bytes()
-                .await
-                .map_err(|e| transport_error(&e, timeout))?;
+            let body = read_body(response, MAX_MODELS_BODY, timeout).await?;
             match status {
                 200..=299 => {
                     *self.prefix.lock().unwrap_or_else(|e| e.into_inner()) = prefix;
@@ -394,7 +426,7 @@ impl LemonadeClient {
                 }
                 401 | 403 => return Err(LemonadeError::Unauthorized { status }),
                 404 => {
-                    debug!("No Lemonade API at {}{}", self.root, prefix);
+                    debug!("No Lemonade API at {}{}", redact_url(&self.root), prefix);
                     not_found = Some(body_excerpt(&body));
                 }
                 _ => {
@@ -460,7 +492,7 @@ impl LemonadeClient {
             "audio/wav",
             req.wav,
         );
-        let url = format!("{}/audio/transcriptions", self.api_url());
+        let url = self.endpoint("/audio/transcriptions");
         let response = self
             .request(Method::POST, &url)?
             .header(
@@ -478,10 +510,7 @@ impl LemonadeClient {
             .get(CONTENT_TYPE)
             .and_then(|value| value.to_str().ok())
             .map(str::to_string);
-        let body = response
-            .bytes()
-            .await
-            .map_err(|e| transport_error(&e, req.timeout))?;
+        let body = read_body(response, MAX_TRANSCRIPTION_BODY, req.timeout).await?;
         if !(200..300).contains(&status) {
             return Err(classify_status(
                 status,
@@ -493,7 +522,7 @@ impl LemonadeClient {
     }
 
     fn request(&self, method: Method, url: &str) -> Result<reqwest::RequestBuilder, LemonadeError> {
-        let url = Url::parse(url).map_err(|_| LemonadeError::InvalidUrl(url.to_string()))?;
+        let url = Url::parse(url).map_err(|_| LemonadeError::InvalidUrl(redact_url(url)))?;
         let mut request = self.http.request(method, url);
         if let Some(key) = &self.api_key {
             request = request.header(AUTHORIZATION, format!("Bearer {}", key));
@@ -571,6 +600,43 @@ fn block_on_cancellable<T>(
     })
 }
 
+/// Reads a response body (decompressed) of at most `limit` bytes, so a small
+/// compressed answer can't grow without bound. A longer 2xx body is a
+/// `BadResponse`; a longer error body is cut, as only an excerpt is kept.
+async fn read_body(
+    mut response: reqwest::Response,
+    limit: usize,
+    timeout: Duration,
+) -> Result<Vec<u8>, LemonadeError> {
+    let success = response.status().is_success();
+    let too_large =
+        || LemonadeError::BadResponse(format!("the answer is larger than {} MiB", limit >> 20));
+    if success
+        && response
+            .content_length()
+            .is_some_and(|len| len > limit as u64)
+    {
+        return Err(too_large());
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|e| transport_error(&e, timeout))?
+    {
+        let room = limit - body.len();
+        if chunk.len() > room {
+            if success {
+                return Err(too_large());
+            }
+            body.extend_from_slice(&chunk[..room]);
+            break;
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
+}
+
 /// A transport failure: a timeout, a body that broke off, or a server that
 /// can't be reached (refused, DNS, reset before an answer).
 fn transport_error(error: &reqwest::Error, timeout: Duration) -> LemonadeError {
@@ -619,11 +685,39 @@ fn is_loopback_url(url: &str) -> bool {
     }
 }
 
+/// An address without its userinfo ("http://user:pass@host/api/v1" →
+/// "http://host/api/v1"), for logs and anything shown; it is otherwise kept
+/// as typed. Also takes text that isn't a valid URL.
+pub fn redact_url(url: &str) -> String {
+    let start = url.find("://").map_or(0, |scheme_end| scheme_end + 3);
+    let rest = &url[start..];
+    let authority = &rest[..rest.find(['/', '\\', '?', '#']).unwrap_or(rest.len())];
+    let shown = match authority.rfind('@') {
+        Some(at) => format!("{}{}", &url[..start], &rest[at + 1..]),
+        None => url.to_string(),
+    };
+    // Forms the rule above misses ("http:/user:pass@host") still parse with
+    // userinfo; those are shown as the parser writes them, less the "/" it
+    // adds to an empty path.
+    match Url::parse(&shown) {
+        Ok(mut parsed) if !parsed.username().is_empty() || parsed.password().is_some() => {
+            let _ = parsed.set_username("");
+            let _ = parsed.set_password(None);
+            let mut text = parsed.to_string();
+            if !shown.ends_with('/') && text.ends_with('/') {
+                text.pop();
+            }
+            text
+        }
+        _ => shown,
+    }
+}
+
 /// Splits an address as typed into its root and the API prefix it names, if
 /// any: trims, drops trailing "/", then a trailing "/api/v1" or "/v1".
 /// Requires http(s) and a host.
 pub fn normalize_base_url(input: &str) -> Result<(String, Option<&'static str>), LemonadeError> {
-    let invalid = || LemonadeError::InvalidUrl(input.trim().to_string());
+    let invalid = || LemonadeError::InvalidUrl(redact_url(input.trim()));
     let mut root = input.trim().trim_end_matches('/');
     let mut prefix = None;
     for candidate in [API_PREFIX, OPENAI_PREFIX] {
@@ -938,8 +1032,9 @@ pub struct LemonadeTranscriber {
     timeouts: LemonadeTimeouts,
     /// The server listed the model as downloaded.
     model_downloaded: bool,
-    /// A request of this job has succeeded, so the model is loaded.
-    first_done: AtomicBool,
+    /// Offset of the job's first chunk ([`NO_CHUNK_YET`] before it): only
+    /// its attempts may wait for the model to be downloaded or loaded.
+    first_chunk_ms: AtomicU64,
     /// Requests sent, for the uploaded file names.
     requests: AtomicU32,
 }
@@ -1004,20 +1099,35 @@ impl LemonadeTranscriber {
             token,
             timeouts,
             model_downloaded,
-            first_done: AtomicBool::new(false),
+            first_chunk_ms: AtomicU64::new(NO_CHUNK_YET),
             requests: AtomicU32::new(0),
         })
     }
 
-    /// The job's first request may wait for the model to be downloaded or
-    /// loaded; later ones are given time in proportion to their audio.
-    fn request_timeout(&self, real_len_ms: u64) -> Duration {
+    /// Whether the chunk at `offset_ms` is the job's first; the first call
+    /// claims its offset, so the pipeline's retry of that chunk is first too,
+    /// and no other chunk is, even when the first one failed.
+    fn claim_first_chunk(&self, offset_ms: u64) -> bool {
+        match self.first_chunk_ms.compare_exchange(
+            NO_CHUNK_YET,
+            offset_ms,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => true,
+            Err(first) => first == offset_ms,
+        }
+    }
+
+    /// The job's first chunk may wait for the model to be downloaded or
+    /// loaded; other chunks are given time in proportion to their audio.
+    fn request_timeout(&self, first_chunk: bool, real_len_ms: u64) -> Duration {
         let secs = u32::try_from(real_len_ms.div_ceil(1000)).unwrap_or(u32::MAX);
         let scaled = self
             .timeouts
             .request_base
             .saturating_add(self.timeouts.request_per_audio_sec.saturating_mul(secs));
-        if self.first_done.load(Ordering::Acquire) {
+        if !first_chunk {
             return scaled;
         }
         let first = if self.model_downloaded {
@@ -1113,13 +1223,12 @@ impl ChunkTranscriber for LemonadeTranscriber {
             wav: &wav,
             file_name: &file_name,
             language: self.language.as_deref(),
-            timeout: self.request_timeout(real_len_ms),
+            timeout: self.request_timeout(self.claim_first_chunk(offset_ms), real_len_ms),
         };
         let transcription = self
             .client
             .transcribe_blocking(&request, self.token.flag())
             .map_err(|error| self.chunk_error(error))?;
-        self.first_done.store(true, Ordering::Release);
         let run = ExternalRun {
             text: transcription.text,
             segments: transcription.segments,
@@ -1181,6 +1290,8 @@ pub(crate) mod tests {
     pub(crate) enum Reply {
         Status(u16, &'static str, String),
         Delay(Duration, Box<Reply>),
+        /// Like `Status`, with the body sent gzip-compressed.
+        Gzip(u16, &'static str, String),
         /// Closes the connection without an answer.
         Close,
     }
@@ -1294,6 +1405,20 @@ pub(crate) mod tests {
                     body
                 );
                 let _ = stream.write_all(response.as_bytes());
+            }
+            Reply::Gzip(status, content_type, body) => {
+                let mut encoder =
+                    flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+                encoder.write_all(body.as_bytes()).unwrap();
+                let body = encoder.finish().unwrap();
+                let head = format!(
+                    "HTTP/1.1 {} Mock\r\nContent-Type: {}\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    status,
+                    content_type,
+                    body.len()
+                );
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(&body);
             }
         }
     }
@@ -2071,9 +2196,9 @@ pub(crate) mod tests {
         assert_eq!(transcriber.model_id(), "lemonade:Whisper-Base");
         assert!(!transcriber.yields_to_dictation());
         assert_eq!(transcriber.limits().max_chunk_ms, 28_000);
-        // Not downloaded yet: the first request may wait for the download.
+        // Not downloaded yet: the first chunk may wait for the download.
         assert_eq!(
-            transcriber.request_timeout(28_000),
+            transcriber.request_timeout(true, 28_000),
             fast_timeouts().first_request
         );
 
@@ -2094,9 +2219,10 @@ pub(crate) mod tests {
                 (57_520, 59_900, "General Kenobi.")
             ]
         );
-        // Later requests get time in proportion to their audio.
+        // Later chunks get time in proportion to their audio.
+        assert!(!transcriber.claim_first_chunk(84_000));
         assert_eq!(
-            transcriber.request_timeout(28_000),
+            transcriber.request_timeout(false, 28_000),
             Duration::from_secs(10) + Duration::from_millis(100) * 28
         );
         let sent = &server.requests()[1];
@@ -2104,5 +2230,177 @@ pub(crate) mod tests {
             &sent.body,
             b"filename=\"chunk-0000.wav\""
         ));
+    }
+
+    #[test]
+    fn redact_url_drops_userinfo_only() {
+        for (input, shown) in [
+            ("http://localhost:13305", "http://localhost:13305"),
+            ("HTTP://Box.lan:8000/API/V1/", "HTTP://Box.lan:8000/API/V1/"),
+            (
+                "http://alice:s3cretpw@lemon.lan:13305",
+                "http://lemon.lan:13305",
+            ),
+            ("https://alice@lemon.lan/api/v1", "https://lemon.lan/api/v1"),
+            ("http://a:b@c@[::1]:13305/v1", "http://[::1]:13305/v1"),
+            ("http://alice:s3cretpw@host/?q=a@b", "http://host/?q=a@b"),
+            ("http://host/a@b", "http://host/a@b"),
+            ("alice:s3cretpw@host:13305", "host:13305"),
+            ("http://alice:s3cretpw@", "http://"),
+            ("http:/alice:s3cretpw@host", "http://host"),
+            ("not a url", "not a url"),
+            ("", ""),
+        ] {
+            assert_eq!(redact_url(input), shown, "{input:?}");
+        }
+    }
+
+    #[test]
+    fn address_userinfo_is_never_shown_and_not_sent_beside_a_key() {
+        const SECRET: &str = "s3cretpw";
+        let server = MockServer::start(vec![json(200, MODELS), json(200, MODELS)]);
+        let with_userinfo =
+            server
+                .url()
+                .replacen("http://", &format!("http://alice:{}@", SECRET), 1);
+
+        // Without a key the userinfo is the credential (reqwest sends it as
+        // Basic auth), but it is never in what is shown or logged.
+        let lemonade = LemonadeClient::new(&with_userinfo, None, fast_timeouts()).unwrap();
+        assert_eq!(lemonade.api_url(), format!("{}/api/v1", server.url()));
+        let result = lemonade.list_models_blocking(&AtomicBool::new(false));
+        let check = LemonadeCheck::from_result(Some(lemonade.api_url()), result);
+        assert!(check.ok);
+        assert!(!check.api_url.unwrap().contains(SECRET));
+
+        // With a key only the Bearer header is sent.
+        let lemonade = LemonadeClient::new(&with_userinfo, Some("k1"), fast_timeouts()).unwrap();
+        assert!(!lemonade.api_url().contains(SECRET));
+        lemonade
+            .list_models_blocking(&AtomicBool::new(false))
+            .unwrap();
+
+        let requests = server.requests();
+        let auth = |sent: &Captured| -> Vec<String> {
+            sent.headers
+                .iter()
+                .filter(|(name, _)| name.eq_ignore_ascii_case("authorization"))
+                .map(|(_, value)| value.clone())
+                .collect()
+        };
+        // base64("alice:s3cretpw")
+        assert_eq!(auth(&requests[0]), ["Basic YWxpY2U6czNjcmV0cHc="]);
+        assert_eq!(auth(&requests[1]), ["Bearer k1"]);
+
+        // Nor in an address error, a job config's Debug or a log line.
+        let error = normalize_base_url(&format!("{}/?x=1", with_userinfo)).unwrap_err();
+        assert!(!error.to_string().contains(SECRET), "{error}");
+        let config = LemonadeJobConfig {
+            base_url: with_userinfo,
+            model: "Whisper-Tiny".to_string(),
+            api_key: Some("key-24680".to_string()),
+        };
+        let debug = format!("{:?}", config);
+        assert!(
+            !debug.contains(SECRET) && !debug.contains("key-24680"),
+            "{debug}"
+        );
+    }
+
+    #[test]
+    fn only_the_first_chunk_waits_for_the_model() {
+        let timeouts = LemonadeTimeouts {
+            first_request_loaded: Duration::from_secs(5),
+            request_base: Duration::from_millis(300),
+            request_per_audio_sec: Duration::ZERO,
+            ..fast_timeouts()
+        };
+        let slow = |reply: Reply| Reply::Delay(Duration::from_millis(700), Box::new(reply));
+        let server = MockServer::start(vec![
+            json(200, MODELS),
+            json(500, "worker crashed"),
+            slow(json(500, "worker crashed")),
+            slow(json(200, r#"{"text":"late"}"#)),
+        ]);
+        let transcriber = LemonadeTranscriber::begin_with(
+            &config(&server, "Whisper-Tiny"),
+            AppSettings::default(),
+            WorkToken::new(),
+            timeouts,
+        )
+        .unwrap();
+        let failure = |result: Result<ChunkTranscript, TranscribeError>| match result {
+            Err(TranscribeError::Failed(error)) => error.downcast::<LemonadeError>().unwrap(),
+            other => panic!("expected Failed, got {:?}", other.err()),
+        };
+
+        // The first chunk fails; its retry still has the long timeout.
+        let samples = [0.0; 16_000];
+        assert!(matches!(
+            failure(transcriber.transcribe(&samples, 0, 1_000)),
+            LemonadeError::Http { status: 500, .. }
+        ));
+        assert!(matches!(
+            failure(transcriber.transcribe(&samples, 0, 1_000)),
+            LemonadeError::Http { status: 500, .. }
+        ));
+        // The next chunk doesn't, although no request has succeeded yet.
+        assert_eq!(
+            failure(transcriber.transcribe(&samples, 28_000, 1_000)),
+            LemonadeError::Timeout(Duration::from_millis(300))
+        );
+    }
+
+    #[test]
+    fn oversized_answers_fail_cleanly() {
+        // Compressed, each is a few KB; decompressed, just over the limit.
+        let models = format!(r#"{{"data":[],"pad":"{}"}}"#, "x".repeat(MAX_MODELS_BODY));
+        let transcript = format!(r#"{{"text":"{}"}}"#, "x".repeat(MAX_TRANSCRIPTION_BODY));
+        let server = MockServer::start(vec![
+            Reply::Gzip(200, "application/json", models.clone()),
+            Reply::Status(200, "application/json", models),
+            Reply::Gzip(200, "application/json", transcript.clone()),
+            // An error body is cut to an excerpt instead.
+            Reply::Gzip(503, "text/plain", "y".repeat(MAX_TRANSCRIPTION_BODY + 1)),
+        ]);
+        let lemonade =
+            LemonadeClient::new(&format!("{}/api/v1", server.url()), None, fast_timeouts())
+                .unwrap();
+        for _ in 0..2 {
+            let error = lemonade
+                .list_models_blocking(&AtomicBool::new(false))
+                .unwrap_err();
+            assert_eq!(
+                error,
+                LemonadeError::BadResponse("the answer is larger than 2 MiB".to_string())
+            );
+        }
+        let wav = encode_wav_16k_mono(&[0.0; 16]);
+        let error = lemonade
+            .transcribe_blocking(&request(&wav, "Whisper-Tiny"), &AtomicBool::new(false))
+            .unwrap_err();
+        assert_eq!(
+            error,
+            LemonadeError::BadResponse("the answer is larger than 8 MiB".to_string())
+        );
+        let error = lemonade
+            .transcribe_blocking(&request(&wav, "Whisper-Tiny"), &AtomicBool::new(false))
+            .unwrap_err();
+        assert!(
+            matches!(error, LemonadeError::Http { status: 503, ref body } if body.chars().count() == BODY_EXCERPT_CHARS + 1),
+            "{error:?}"
+        );
+
+        // Within the limits nothing changes.
+        let small = MockServer::start(vec![Reply::Gzip(
+            200,
+            "application/json",
+            MODELS.to_string(),
+        )]);
+        let models = LemonadeClient::new(&small.url(), None, fast_timeouts())
+            .unwrap()
+            .list_models_blocking(&AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(models.len(), 3);
     }
 }
