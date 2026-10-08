@@ -80,6 +80,12 @@ impl StreamResampler {
         self.in_hz
     }
 
+    /// Output length of the stream so far, as `finish` will make it:
+    /// round(input frames pushed × out / in).
+    pub fn output_len(&self) -> u64 {
+        self.expected()
+    }
+
     pub fn push(&mut self, mut src: &[f32], out: &mut Vec<f32>) -> anyhow::Result<()> {
         self.in_total += src.len() as u64;
         if self.inner.is_none() {
@@ -231,6 +237,10 @@ mod tests {
                 let input = vec![0.25f32; n];
                 let out = resample_all(rate, &input);
                 assert_eq!(out.len(), expected_len(n, rate), "{rate} Hz, {n} frames");
+
+                let mut resampler = StreamResampler::new(rate, 16_000).unwrap();
+                resampler.push(&input, &mut Vec::new()).unwrap();
+                assert_eq!(resampler.output_len(), out.len() as u64, "{rate} Hz, {n}");
             }
         }
     }

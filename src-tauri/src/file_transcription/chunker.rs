@@ -29,6 +29,9 @@ const MIN_SPEECH_FRAMES: usize = 6;
 /// Chunks shorter than 1 s are zero-padded to this length (some models
 /// reject very short input).
 const MIN_TRANSCRIBE_SAMPLES: usize = 16_000;
+/// Most samples reserved for a chunk up front (60 s); a larger maximum (any
+/// `--chunk-secs` the CLI accepts) grows the buffer only as audio arrives.
+const MAX_RESERVED_SAMPLES: usize = 60 * 16_000;
 
 #[derive(Debug, Clone)]
 pub struct AudioChunk {
@@ -86,7 +89,7 @@ impl SilenceChunker {
         Self {
             max_len,
             min_cut,
-            buf: Vec::with_capacity(max_len.unwrap_or(0)),
+            buf: Vec::with_capacity(reserved(max_len)),
             buf_start: 0,
             next_index: 0,
         }
@@ -106,7 +109,7 @@ impl SilenceChunker {
             // exactly the maximum length stays one chunk.
             if self.buf.len() == max_len {
                 let cut = self.find_cut();
-                let mut rest = Vec::with_capacity(max_len);
+                let mut rest = Vec::with_capacity(reserved(self.max_len));
                 rest.extend_from_slice(&self.buf[cut..]);
                 self.buf.truncate(cut);
                 let samples = std::mem::replace(&mut self.buf, rest);
@@ -194,6 +197,11 @@ impl SilenceChunker {
 
 fn ms_to_samples(ms: u32) -> usize {
     ms as usize * SAMPLES_PER_MS as usize
+}
+
+/// Capacity to reserve for a chunk buffer of at most `max_len` samples.
+fn reserved(max_len: Option<usize>) -> usize {
+    max_len.map_or(0, |max_len| max_len.min(MAX_RESERVED_SAMPLES))
 }
 
 pub enum ChunkVerdict {
@@ -466,6 +474,31 @@ mod tests {
         for chunk in &chunks[..chunks.len() - 1] {
             assert_eq!(chunk.samples.len(), ms_to_samples(6_000));
         }
+    }
+
+    #[test]
+    fn huge_maximum_reserves_only_what_arrives() {
+        // u32::MAX ms would be 275 GB if reserved up front: the process aborts.
+        let input = Rng(23).noise(0.5, 16_000 * 7);
+        let mut chunker = SilenceChunker::new(u32::MAX, WINDOW_MS);
+        assert!(chunker.buf.capacity() <= MAX_RESERVED_SAMPLES);
+        let mut chunks = Vec::new();
+        let mut emit = |chunk: AudioChunk| {
+            chunks.push(chunk);
+            Ok(())
+        };
+        chunker.push(&input, &mut emit).unwrap();
+        chunker.finish(&mut emit).unwrap();
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].samples, input);
+
+        // The buffer that follows a cut is reserved the same way.
+        assert_eq!(
+            reserved(Some(ms_to_samples(u32::MAX))),
+            MAX_RESERVED_SAMPLES
+        );
+        assert_eq!(reserved(Some(ms_to_samples(MAX_MS))), ms_to_samples(MAX_MS));
+        assert_eq!(reserved(None), 0);
     }
 
     #[test]

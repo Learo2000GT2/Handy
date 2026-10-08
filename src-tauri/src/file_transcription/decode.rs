@@ -12,6 +12,10 @@
 //! Once any audio has reached the sink, a later failure is reported as a
 //! truncated `Ok`, never as an error (except cancel and sink failures), so
 //! callers keep what was already transcribed.
+//!
+//! Both symphonia and ffmpeg keep the file's timeline: audio that starts
+//! after the video, and stretches lost from the middle, come out as silence,
+//! so that times in the output are times in the file.
 
 use crate::file_transcription::{
     ffmpeg::{self, InputInfo},
@@ -21,7 +25,7 @@ use crate::file_transcription::{
 };
 use log::debug;
 use std::fs::File;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Read, Seek, SeekFrom};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,6 +44,12 @@ pub const TARGET_SAMPLE_RATE: u32 = 16_000;
 const WAV_BLOCK: usize = 64_000;
 /// Consecutive undecodable packets after which a stream is given up.
 const MAX_BAD_PACKETS: u32 = 64;
+/// Timestamp gaps up to 100 ms (in 16 kHz samples) are left alone: codec
+/// delay and rounding, not missing audio. The ffmpeg route does the same.
+const MAX_IGNORED_GAP: u64 = 1_600;
+/// A timestamp jump of more than an hour is a broken or restarted
+/// timestamp, not a pause, and gets no silence.
+const MAX_FILLED_GAP: u64 = 3_600 * 16_000;
 
 #[derive(Clone, Debug, Default)]
 pub struct DecodeOptions {
@@ -125,13 +135,15 @@ pub fn probe(path: &Path, opts: &DecodeOptions) -> Result<AudioProbe, DecodeErro
                     };
                     match unusable {
                         // symphonia saw nothing it could use: ffmpeg decides.
-                        Unusable::Unrecognised(_) | Unusable::NoAudioTrack => {
-                            probe_with_ffmpeg(ffmpeg, path)?
-                        }
+                        Unusable::Unrecognised(_)
+                        | Unusable::Container(_)
+                        | Unusable::NoAudioTrack => probe_with_ffmpeg(ffmpeg, path)?,
                         Unusable::Codec { duration_ms, .. } => {
                             duration_ms.or_else(|| ffmpeg::probe_duration_ms(ffmpeg, path))
                         }
-                        Unusable::Corrupt(_) => ffmpeg::probe_duration_ms(ffmpeg, path),
+                        Unusable::Corrupt(_) | Unusable::Empty => {
+                            ffmpeg::probe_duration_ms(ffmpeg, path)
+                        }
                     }
                 }
             },
@@ -188,13 +200,21 @@ pub fn decode_to_16k_mono(
         "symphonia cannot decode {}: {unusable}; trying ffmpeg",
         path.display()
     );
-    let Some(ffmpeg) = ffmpeg::find_ffmpeg(opts.ffmpeg.as_deref()) else {
-        return Err(unusable.into_error(path));
+    let ffmpeg_error = match ffmpeg::find_ffmpeg(opts.ffmpeg.as_deref()) {
+        Some(ffmpeg) => match decode_ffmpeg(&ffmpeg, path, cancel, &mut sink) {
+            Ok(outcome) => return Ok(outcome),
+            Err(Stop::Unusable(err)) => Some(err),
+            Err(Stop::Halted(err)) => return Err(err),
+        },
+        None => None,
     };
-    match decode_ffmpeg(&ffmpeg, path, cancel, &mut sink) {
-        Ok(outcome) => Ok(outcome),
-        Err(Stop::Unusable(err)) => Err(unusable.with_ffmpeg_error(err)),
-        Err(Stop::Halted(err)) => Err(err),
+    match (unusable, ffmpeg_error) {
+        // The file says it holds no audio, and ffmpeg (which reads the WAV of
+        // a crashed recorder to its end) found none either: an empty
+        // recording (a header-only WAV), not an error.
+        (Unusable::Empty, _) => Ok(sink.outcome(DecoderKind::Symphonia, None)),
+        (unusable, None) => Err(unusable.into_error(path)),
+        (unusable, Some(err)) => Err(unusable.with_ffmpeg_error(err)),
     }
 }
 
@@ -214,6 +234,10 @@ fn check_source(path: &Path) -> Result<std::fs::Metadata, DecodeError> {
     }
     File::open(path)
         .map_err(|err| DecodeError::NotFound(format!("cannot read {}: {err}", path.display())))?;
+    // Nothing can decode it, so ffmpeg is no help either.
+    if metadata.len() == 0 {
+        return Err(DecodeError::Unsupported("the file is empty".to_string()));
+    }
     Ok(metadata)
 }
 
@@ -227,13 +251,14 @@ fn route_for(path: &Path) -> Result<DecodeRoute, DecodeError> {
 }
 
 fn needs_ffmpeg_for_extension(path: &Path) -> DecodeError {
-    let ext = formats::lowercase_extension(path).unwrap_or_default();
+    let ext = formats::format_extension(path).unwrap_or_default();
     DecodeError::NeedsFfmpeg(format!("{ext} files need ffmpeg"))
 }
 
+/// Named .wav/.wave, or a RIFF/WAVE file without a known extension.
 fn is_wav(path: &Path) -> bool {
     matches!(
-        formats::lowercase_extension(path).as_deref(),
+        formats::format_extension(path).as_deref(),
         Some("wav" | "wave")
     )
 }
@@ -276,6 +301,17 @@ impl<'a> Sink<'a> {
         }
         (self.inner)(block)?;
         self.samples += block.len() as u64;
+        Ok(())
+    }
+
+    fn send_silence(&mut self, samples: u64) -> anyhow::Result<()> {
+        let zeros = vec![0.0; usize::try_from(samples).map_or(WAV_BLOCK, |n| n.min(WAV_BLOCK))];
+        let mut left = samples;
+        while left > 0 {
+            let n = usize::try_from(left).map_or(zeros.len(), |n| n.min(zeros.len()));
+            self.send(&zeros[..n])?;
+            left -= n as u64;
+        }
         Ok(())
     }
 
@@ -389,8 +425,12 @@ fn decode_ffmpeg(
 /// Why symphonia produced no audio for a file.
 #[derive(Debug)]
 enum Unusable {
-    /// No container format recognised (or its header is unreadable).
+    /// No container format recognised, or its header is damaged or cut short.
     Unrecognised(String),
+    /// A container symphonia recognised but does not support in this form
+    /// (an unusual WAV codec, compressed AIFC, a QuickTime file without
+    /// `ftyp`, ...): ffmpeg may read it.
+    Container(String),
     /// A container without any audio track.
     NoAudioTrack,
     /// Audio exists but no track has a usable decoder.
@@ -401,12 +441,16 @@ enum Unusable {
     },
     /// Recognised and decodable, but failed before any audio came out.
     Corrupt(String),
+    /// Read to the end without a failure, from a container that declares
+    /// its audio track empty.
+    Empty,
 }
 
 impl std::fmt::Display for Unusable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unrecognised(detail) => write!(f, "unrecognised format ({detail})"),
+            Self::Container(detail) => write!(f, "unsupported container ({detail})"),
             Self::NoAudioTrack => f.write_str("no audio track"),
             Self::Codec { name, detail, .. } => {
                 write!(
@@ -416,16 +460,28 @@ impl std::fmt::Display for Unusable {
                 )
             }
             Self::Corrupt(detail) => f.write_str(detail),
+            Self::Empty => f.write_str(NO_SAMPLES),
         }
     }
 }
 
+const NO_SAMPLES: &str = "the audio track holds no samples";
+
 impl Unusable {
-    /// The error when no ffmpeg is available to fall back to.
+    /// The error when no ffmpeg is available to fall back to. NeedsFfmpeg
+    /// only when the file shows that ffmpeg could help.
     fn into_error(self, path: &Path) -> DecodeError {
         match self {
-            Self::Unrecognised(detail) => {
-                let ext = formats::lowercase_extension(path).unwrap_or_default();
+            // Junk, or damage: unless the first bytes name a container only
+            // ffmpeg reads (RF64 named .wav, say), ffmpeg would fail too.
+            Self::Unrecognised(detail) => match formats::sniff(path) {
+                Some(sniffed) if sniffed.route == DecodeRoute::Ffmpeg => {
+                    DecodeError::NeedsFfmpeg(format!("{} files need ffmpeg", sniffed.ext))
+                }
+                _ => DecodeError::Unsupported(format!("not a readable audio file ({detail})")),
+            },
+            Self::Container(detail) => {
+                let ext = formats::format_extension(path).unwrap_or_default();
                 DecodeError::NeedsFfmpeg(format!(
                     "this .{ext} file can only be read with ffmpeg ({detail})"
                 ))
@@ -438,19 +494,20 @@ impl Unusable {
                 None => "this audio codec needs ffmpeg".to_string(),
             }),
             Self::Corrupt(detail) => DecodeError::Failed(anyhow::anyhow!(detail)),
+            Self::Empty => DecodeError::Failed(anyhow::anyhow!(NO_SAMPLES)),
         }
     }
 
     /// The error when the ffmpeg fallback failed too, before any audio.
     fn with_ffmpeg_error(self, err: anyhow::Error) -> DecodeError {
         match self {
-            Self::Unrecognised(detail) => DecodeError::Unsupported(format!(
-                "not a readable audio file (symphonia: {detail}; {err:#})"
-            )),
+            Self::Unrecognised(detail) | Self::Container(detail) => DecodeError::Unsupported(
+                format!("not a readable audio file (symphonia: {detail}; {err:#})"),
+            ),
             Self::NoAudioTrack => {
                 DecodeError::Unsupported(format!("the file has no audio track ({err:#})"))
             }
-            unusable @ (Self::Codec { .. } | Self::Corrupt(_)) => {
+            unusable @ (Self::Codec { .. } | Self::Corrupt(_) | Self::Empty) => {
                 DecodeError::Failed(err.context(unusable.to_string()))
             }
         }
@@ -470,14 +527,24 @@ fn decode_symphonia(
         if cancel.load(Ordering::Relaxed) {
             return Err(Stop::Halted(DecodeError::Cancelled));
         }
-        let rate = match guarded(|| input.next_block(&mut mono)) {
-            Ok(Ok(Some(rate))) => rate,
+        let block = match guarded(|| input.next_block(&mut mono)) {
+            Ok(Ok(Some(block))) => block,
             Ok(Ok(None)) => break None,
             Ok(Err(unusable)) => break Some(unusable),
             // The reader's state is unknown after a panic: stop using it.
             Err(panic) => break Some(Unusable::Corrupt(panic)),
         };
-        match to_16k.push(rate, &mono) {
+        let silence = input.timeline.silence_before(block.ts, to_16k.position());
+        if silence > 0 {
+            // The resampler's audio comes first, then the missing stretch.
+            match to_16k.finish() {
+                Ok(held) => sink.send(held).map_err(halt)?,
+                Err(err) => break Some(Unusable::Corrupt(format!("{err:#}"))),
+            }
+            sink.send_silence(silence).map_err(halt)?;
+            to_16k.skip(silence);
+        }
+        match to_16k.push(block.rate, &mono) {
             Ok(block) => sink.send(block).map_err(halt)?,
             Err(err) => break Some(Unusable::Corrupt(format!("{err:#}"))),
         }
@@ -498,9 +565,11 @@ fn decode_symphonia(
         }
     }
     if sink.samples == 0 {
-        return Err(Stop::Unusable(Unusable::Corrupt(truncated.unwrap_or_else(
-            || "the audio track holds no samples".to_string(),
-        ))));
+        return Err(Stop::Unusable(match truncated {
+            Some(reason) => Unusable::Corrupt(reason),
+            None if input.params.n_frames == Some(0) => Unusable::Empty,
+            None => Unusable::Corrupt(NO_SAMPLES.to_string()),
+        }));
     }
     if let Some(reason) = &truncated {
         debug!(
@@ -520,16 +589,25 @@ fn decode_symphonia(
 struct To16k {
     resampler: Option<StreamResampler>,
     out: Vec<f32>,
+    /// Output of the resamplers already finished, and silence skipped.
+    finished: u64,
 }
 
 impl To16k {
+    /// Where the audio pushed next lands in the 16 kHz output.
+    fn position(&self) -> u64 {
+        self.finished
+            + self
+                .resampler
+                .as_ref()
+                .map_or(0, StreamResampler::output_len)
+    }
+
     /// Returns the 16 kHz audio that became available.
     fn push(&mut self, rate: u32, mono: &[f32]) -> anyhow::Result<&[f32]> {
         self.out.clear();
         if self.resampler.as_ref().map(StreamResampler::in_hz) != Some(rate) {
-            if let Some(mut previous) = self.resampler.take() {
-                previous.finish(&mut self.out)?;
-            }
+            self.finish_resampler()?;
             self.resampler = Some(StreamResampler::new(rate, TARGET_SAMPLE_RATE)?);
         }
         if let Some(resampler) = self.resampler.as_mut() {
@@ -541,10 +619,21 @@ impl To16k {
     /// Returns the audio still held by the resampler.
     fn finish(&mut self) -> anyhow::Result<&[f32]> {
         self.out.clear();
+        self.finish_resampler()?;
+        Ok(&self.out)
+    }
+
+    /// Moves the output position past silence the caller sent after `finish`.
+    fn skip(&mut self, samples: u64) {
+        self.finished += samples;
+    }
+
+    fn finish_resampler(&mut self) -> anyhow::Result<()> {
         if let Some(mut resampler) = self.resampler.take() {
+            self.finished += resampler.output_len();
             resampler.finish(&mut self.out)?;
         }
-        Ok(&self.out)
+        Ok(())
     }
 }
 
@@ -572,6 +661,14 @@ struct SymphoniaInput {
     params: CodecParameters,
     sample_buf: Option<SampleBuffer<f32>>,
     bad_packets: u32,
+    timeline: Timeline,
+}
+
+/// A decoded packet, downmixed into the caller's buffer.
+struct Block {
+    rate: u32,
+    /// The packet's timestamp, in the track's time base.
+    ts: u64,
 }
 
 impl SymphoniaInput {
@@ -595,10 +692,11 @@ impl SymphoniaInput {
             )
         })
         .map_err(Unusable::Corrupt)?
-        .map_err(|err| Unusable::Unrecognised(err.to_string()))?
+        .map_err(probe_failure)?
         .format;
 
         let (track_id, params, decoder) = select_track(format.as_ref())?;
+        let timeline = Timeline::new(&params, mp4_lead(path, track_id));
         Ok(Self {
             format,
             decoder,
@@ -606,16 +704,19 @@ impl SymphoniaInput {
             params,
             sample_buf: None,
             bad_packets: 0,
+            timeline,
         })
     }
 
+    /// The track's length, plus the silence it starts with.
     fn duration_ms(&self) -> Option<u64> {
-        duration_ms(&self.params)
+        let lead_ms = self.timeline.lead * 1000 / u64::from(TARGET_SAMPLE_RATE);
+        duration_ms(&self.params).map(|ms| ms + lead_ms)
     }
 
     /// Decodes up to the next packet of the selected track that holds audio,
-    /// downmixed into `mono`. Returns its sample rate, or None at the end.
-    fn next_block(&mut self, mono: &mut Vec<f32>) -> Result<Option<u32>, Unusable> {
+    /// downmixed into `mono`. None at the end.
+    fn next_block(&mut self, mono: &mut Vec<f32>) -> Result<Option<Block>, Unusable> {
         loop {
             let packet = match self.format.next_packet() {
                 Ok(packet) => packet,
@@ -661,7 +762,10 @@ impl SymphoniaInput {
                         };
                         buf.copy_interleaved_ref(decoded);
                         downmix(buf.samples(), channels, mono);
-                        return Ok(Some(spec.rate));
+                        return Ok(Some(Block {
+                            rate: spec.rate,
+                            ts: packet.ts(),
+                        }));
                     }
                 }
                 Err(err) => err,
@@ -694,11 +798,230 @@ impl SymphoniaInput {
     /// after `ResetRequired`.
     fn reset(&mut self) -> Result<(), Unusable> {
         let (track_id, params, decoder) = select_track(self.format.as_ref())?;
+        // A new stream (chained Ogg) starts a new clock where the last ended.
+        self.timeline = Timeline::new(&params, 0);
         self.track_id = track_id;
         self.params = params;
         self.decoder = decoder;
         Ok(())
     }
+}
+
+/// Sorts out why symphonia could not open a file.
+fn probe_failure(err: SymphoniaError) -> Unusable {
+    match &err {
+        // A reader took the file but lacks a feature it uses. Not so for
+        // the probe finding no reader at all, nor for an mp4 that lost its
+        // index (an interrupted recording), which ffmpeg cannot read either.
+        SymphoniaError::Unsupported(detail)
+            if !detail.starts_with("core (probe)") && !detail.contains("missing moov") =>
+        {
+            Unusable::Container(err.to_string())
+        }
+        _ => Unusable::Unrecognised(err.to_string()),
+    }
+}
+
+/// Places decoded packets in the 16 kHz output by their timestamps, so that
+/// stretches the file does not hold (a delayed start, lost packets) can be
+/// filled with silence, as the ffmpeg route does. Audio is never dropped:
+/// a packet that comes early is kept where the audio before it ends.
+struct Timeline {
+    /// Seconds per timestamp tick, as (numerator, denominator).
+    time_base: Option<(u64, u64)>,
+    /// Output position of the first packet: where an mp4 track starts.
+    lead: u64,
+    /// A timestamp and the output position it maps to.
+    anchor: Option<(u64, u64)>,
+}
+
+impl Timeline {
+    fn new(params: &CodecParameters, lead: u64) -> Self {
+        let time_base = match (params.time_base, params.sample_rate) {
+            (Some(base), _) => Some((u64::from(base.numer), u64::from(base.denom))),
+            (None, Some(rate)) => Some((1, u64::from(rate))),
+            (None, None) => None,
+        };
+        Self {
+            time_base: time_base.filter(|&(numer, denom)| numer > 0 && denom > 0),
+            lead,
+            anchor: None,
+        }
+    }
+
+    /// Samples of silence that belong before a packet with timestamp `ts`,
+    /// when the audio so far ends at `position`.
+    fn silence_before(&mut self, ts: u64, position: u64) -> u64 {
+        let lead = self.lead;
+        let (anchor_ts, anchor_position) = *self
+            .anchor
+            .get_or_insert_with(|| (ts, position.saturating_add(lead)));
+        let gap = ts
+            .checked_sub(anchor_ts)
+            .and_then(|ticks| self.to_samples(ticks))
+            .map(|offset| {
+                anchor_position
+                    .saturating_add(offset)
+                    .saturating_sub(position)
+            });
+        match gap {
+            Some(gap) if gap <= MAX_IGNORED_GAP => 0,
+            Some(gap) if gap <= MAX_FILLED_GAP => gap,
+            // Earlier than the anchor, implausibly late or no time base: the
+            // timestamps restarted or cannot be trusted. Measure from here.
+            _ => {
+                self.anchor = Some((ts, position));
+                0
+            }
+        }
+    }
+
+    fn to_samples(&self, ticks: u64) -> Option<u64> {
+        let (numer, denom) = self.time_base?;
+        let samples = u128::from(ticks) * u128::from(numer) * u128::from(TARGET_SAMPLE_RATE)
+            / u128::from(denom);
+        u64::try_from(samples).ok()
+    }
+}
+
+/// An mp4 atom: its type and where its body lies in the file.
+struct Atom {
+    kind: [u8; 4],
+    body: u64,
+    end: u64,
+}
+
+/// Output position, in 16 kHz samples, at which an mp4/mov track starts:
+/// how much its leading empty edits exceed the earliest track's. symphonia
+/// 0.5 ignores edit lists, so audio recorded to start after the video would
+/// otherwise move to the start. 0 for other files, and when in doubt.
+fn mp4_lead(path: &Path, track_id: u32) -> u64 {
+    let is_mp4 = matches!(
+        formats::format_extension(path).as_deref(),
+        Some("mp4" | "m4a" | "m4b" | "m4v" | "mov" | "3gp")
+    );
+    let lead = is_mp4
+        .then(|| mp4_leads(path))
+        .flatten()
+        .and_then(|(timescale, leads)| {
+            let earliest = *leads.iter().min()?;
+            let ticks = leads.get(usize::try_from(track_id).ok()?)? - earliest;
+            u64::try_from(
+                u128::from(ticks) * u128::from(TARGET_SAMPLE_RATE) / u128::from(timescale),
+            )
+            .ok()
+        });
+    lead.unwrap_or(0)
+}
+
+/// The movie timescale, and the leading empty-edit time of each track in
+/// file order (symphonia's track ids), in movie ticks.
+fn mp4_leads(path: &Path) -> Option<(u64, Vec<u64>)> {
+    let mut file = File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    let find = |file: &mut File, start: u64, end: u64, kind: &[u8; 4]| {
+        mp4_atoms(file, start, end)
+            .ok()?
+            .into_iter()
+            .find(|atom| &atom.kind == kind)
+    };
+    let moov = find(&mut file, 0, len, b"moov")?;
+    let mut timescale = None;
+    let mut leads = Vec::new();
+    for atom in mp4_atoms(&mut file, moov.body, moov.end).ok()? {
+        match &atom.kind {
+            b"mvhd" => {
+                let body = mp4_body(&mut file, &atom)?;
+                let at = if *body.first()? == 1 { 20 } else { 12 };
+                timescale = Some(u64::from(u32::from_be_bytes(
+                    body.get(at..at + 4)?.try_into().ok()?,
+                )));
+            }
+            b"trak" => {
+                let elst = find(&mut file, atom.body, atom.end, b"edts")
+                    .and_then(|edts| find(&mut file, edts.body, edts.end, b"elst"));
+                let lead = match elst {
+                    Some(elst) => empty_edits(&mp4_body(&mut file, &elst)?)?,
+                    None => 0,
+                };
+                leads.push(lead);
+            }
+            _ => {}
+        }
+    }
+    Some((timescale.filter(|&ticks| ticks > 0)?, leads))
+}
+
+/// Total duration of the empty edits (media time −1) an `elst` body starts with.
+fn empty_edits(elst: &[u8]) -> Option<u64> {
+    let version = *elst.first()?;
+    let count = u32::from_be_bytes(elst.get(4..8)?.try_into().ok()?);
+    let entry_len = if version == 1 { 20 } else { 12 };
+    let mut lead = 0u64;
+    for entry in elst
+        .get(8..)?
+        .chunks_exact(entry_len)
+        .take(usize::try_from(count).ok()?)
+    {
+        let (duration, media_time) = if version == 1 {
+            (
+                u64::from_be_bytes(entry[..8].try_into().ok()?),
+                i64::from_be_bytes(entry[8..16].try_into().ok()?),
+            )
+        } else {
+            (
+                u64::from(u32::from_be_bytes(entry[..4].try_into().ok()?)),
+                i64::from(i32::from_be_bytes(entry[4..8].try_into().ok()?)),
+            )
+        };
+        if media_time != -1 {
+            break;
+        }
+        lead = lead.saturating_add(duration);
+    }
+    Some(lead)
+}
+
+/// The atoms in `start..end`, up to the first one that does not fit.
+fn mp4_atoms(file: &mut File, mut pos: u64, end: u64) -> std::io::Result<Vec<Atom>> {
+    let mut atoms = Vec::new();
+    while end.saturating_sub(pos) >= 8 {
+        file.seek(SeekFrom::Start(pos))?;
+        let mut header = [0u8; 16];
+        file.read_exact(&mut header[..8])?;
+        let kind = [header[4], header[5], header[6], header[7]];
+        let (size, header_len) =
+            match u32::from_be_bytes([header[0], header[1], header[2], header[3]]) {
+                0 => (end - pos, 8),
+                1 => {
+                    file.read_exact(&mut header[8..])?;
+                    let mut large = [0u8; 8];
+                    large.copy_from_slice(&header[8..]);
+                    (u64::from_be_bytes(large), 16)
+                }
+                size => (u64::from(size), 8),
+            };
+        if size < header_len || size > end - pos {
+            break;
+        }
+        atoms.push(Atom {
+            kind,
+            body: pos + header_len,
+            end: pos + size,
+        });
+        pos += size;
+    }
+    Ok(atoms)
+}
+
+/// The body of a small atom (at most 1 MiB of it).
+fn mp4_body(file: &mut File, atom: &Atom) -> Option<Vec<u8>> {
+    file.seek(SeekFrom::Start(atom.body)).ok()?;
+    let mut body = Vec::new();
+    file.take((atom.end - atom.body).min(1 << 20))
+        .read_to_end(&mut body)
+        .ok()?;
+    Some(body)
 }
 
 /// The default track if it can be decoded, else the first track that can.
@@ -1089,16 +1412,131 @@ mod tests {
         let path = dir.path().join("junk.wav");
         std::fs::write(&path, "this is not audio, just some text. ".repeat(500)).unwrap();
 
+        // Nothing suggests that ffmpeg could read it.
         let err = decode_with(&path, &no_ffmpeg()).err().unwrap();
-        assert!(matches!(err, DecodeError::NeedsFfmpeg(_)), "{err}");
+        assert!(matches!(err, DecodeError::Unsupported(_)), "{err}");
         let err = probe(&path, &no_ffmpeg()).unwrap_err();
-        assert!(matches!(err, DecodeError::NeedsFfmpeg(_)), "{err}");
+        assert!(matches!(err, DecodeError::Unsupported(_)), "{err}");
 
         if ffmpeg_or_skip("junk_named_wav_is_rejected (with ffmpeg)").is_some() {
             let err = decode_with(&path, &DecodeOptions::default()).err().unwrap();
             assert!(matches!(err, DecodeError::Unsupported(_)), "{err}");
             let err = probe(&path, &DecodeOptions::default()).unwrap_err();
             assert!(matches!(err, DecodeError::Unsupported(_)), "{err}");
+        }
+    }
+
+    #[test]
+    fn empty_files_are_unsupported_whatever_the_decoder() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["memo.wav", "call.m4a", "voice.opus", "noext"] {
+            let path = dir.path().join(name);
+            std::fs::write(&path, b"").unwrap();
+            for opts in [no_ffmpeg(), DecodeOptions::default()] {
+                let err = probe(&path, &opts).unwrap_err();
+                assert!(
+                    matches!(&err, DecodeError::Unsupported(m) if m == "the file is empty"),
+                    "{name}: {err}"
+                );
+                let err = decode_with(&path, &opts).err().unwrap();
+                assert!(
+                    matches!(&err, DecodeError::Unsupported(m) if m == "the file is empty"),
+                    "{name}: {err}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn header_only_wavs_decode_to_no_samples() {
+        let dir = tempfile::tempdir().unwrap();
+        for (name, rate, channels) in [
+            ("memo.wav", 16_000, 1),
+            ("music.wav", 44_100, 2),
+            ("rec.tmp", 16_000, 1),
+        ] {
+            let path = dir.path().join(name);
+            write_wav_i16(&path, rate, channels, 0);
+            for opts in [no_ffmpeg(), DecodeOptions::default()] {
+                let decoded =
+                    decode_with(&path, &opts).unwrap_or_else(|err| panic!("{name}: {err}"));
+                assert!(decoded.samples.is_empty(), "{name}");
+                assert_eq!(decoded.outcome.truncated, None, "{name}");
+                assert!(probe(&path, &opts).is_ok(), "{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn wavs_without_a_known_extension_are_read_by_content() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["noext", "rec.tmp", "tmp.Ab12Cd"] {
+            let path = dir.path().join(name);
+            write_wav_i16(&path, 16_000, 1, 16_000 * 3 + 7);
+            let decoded = decode_with(&path, &no_ffmpeg()).unwrap();
+            assert_eq!(decoded.outcome.decoder, DecoderKind::Wav, "{name}");
+            assert_eq!(decoded.samples, read_wav_samples(&path).unwrap(), "{name}");
+            let probe = probe(&path, &no_ffmpeg()).unwrap();
+            assert_eq!(probe.route, DecodeRoute::Symphonia);
+            assert_eq!(probe.duration_ms, Some(3_000));
+        }
+
+        let path = dir.path().join("take");
+        write_wav_i16(&path, 44_100, 2, 44_100 * 2);
+        let decoded = decode_with(&path, &no_ffmpeg()).unwrap();
+        assert_eq!(decoded.outcome.decoder, DecoderKind::Symphonia);
+        assert_len_within(decoded.samples.len(), 32_000, 1, "44.1k without extension");
+    }
+
+    #[test]
+    fn containers_symphonia_lacks_need_ffmpeg() {
+        let dir = tempfile::tempdir().unwrap();
+        // GSM 6.10 in WAV: symphonia knows WAV but not this codec.
+        let gsm = dir.path().join("dictation.wav");
+        let mut fmt = Vec::new();
+        for field in [0x31u16, 1] {
+            fmt.extend_from_slice(&field.to_le_bytes());
+        }
+        fmt.extend_from_slice(&8_000u32.to_le_bytes());
+        fmt.extend_from_slice(&1_625u32.to_le_bytes());
+        for field in [65u16, 0, 2, 320] {
+            fmt.extend_from_slice(&field.to_le_bytes());
+        }
+        let data = vec![0u8; 650];
+        let mut wav = b"RIFF".to_vec();
+        wav.extend_from_slice(&((4 + 8 + fmt.len() + 8 + data.len()) as u32).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&(fmt.len() as u32).to_le_bytes());
+        wav.extend_from_slice(&fmt);
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        wav.extend_from_slice(&data);
+        std::fs::write(&gsm, wav).unwrap();
+
+        // RF64 (a WAV over 4 GB) named .wav: symphonia reads no RF64.
+        let rf64 = dir.path().join("broadcast.wav");
+        let mut bytes = b"RF64\xff\xff\xff\xffWAVEds64".to_vec();
+        bytes.extend_from_slice(&28u32.to_le_bytes());
+        bytes.extend_from_slice(&[0u8; 28]);
+        bytes.extend_from_slice(b"fmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        for field in [1u16, 1] {
+            bytes.extend_from_slice(&field.to_le_bytes());
+        }
+        bytes.extend_from_slice(&16_000u32.to_le_bytes());
+        bytes.extend_from_slice(&32_000u32.to_le_bytes());
+        for field in [2u16, 16] {
+            bytes.extend_from_slice(&field.to_le_bytes());
+        }
+        bytes.extend_from_slice(b"data\xff\xff\xff\xff");
+        bytes.extend_from_slice(&[0u8; 3_200]);
+        std::fs::write(&rf64, bytes).unwrap();
+
+        for path in [&gsm, &rf64] {
+            let err = probe(path, &no_ffmpeg()).unwrap_err();
+            assert!(matches!(err, DecodeError::NeedsFfmpeg(_)), "{err}");
+            let err = decode_with(path, &no_ffmpeg()).err().unwrap();
+            assert!(matches!(err, DecodeError::NeedsFfmpeg(_)), "{err}");
         }
     }
 
@@ -1296,6 +1734,115 @@ mod tests {
     }
 
     #[test]
+    fn timeline_fills_gaps_but_not_jitter() {
+        let mut params = CodecParameters::new();
+        params
+            .with_sample_rate(48_000)
+            .with_time_base(symphonia::core::units::TimeBase::new(1, 48_000));
+        let mut timeline = Timeline::new(&params, 0);
+        // The first packet sets the clock, whatever its timestamp.
+        let start = 1_000_000;
+        assert_eq!(timeline.silence_before(start, 0), 0);
+        // On time or early (priming): nothing.
+        assert_eq!(timeline.silence_before(start + 1_024, 341), 0);
+        assert_eq!(timeline.silence_before(start + 2_048, 2_000), 0);
+        // 1 s in: 90 ms late is left alone, 150 ms late is filled exactly.
+        assert_eq!(timeline.silence_before(start + 48_000 + 4_320, 16_000), 0);
+        assert_eq!(
+            timeline.silence_before(start + 48_000 + 7_200, 16_000),
+            2_400
+        );
+        // Small deficits add up until they count.
+        assert_eq!(timeline.silence_before(start + 96_000, 30_500), 0);
+        assert_eq!(timeline.silence_before(start + 96_000, 30_300), 1_700);
+        // A timestamp that goes back restarts the clock there.
+        assert_eq!(timeline.silence_before(5, 40_000), 0);
+        assert_eq!(timeline.silence_before(5 + 96_000, 40_000 + 16_000), 16_000);
+        // So does a jump of hours: a broken timestamp, not a pause.
+        assert_eq!(timeline.silence_before(5 + 48_000 * 7_200, 72_000), 0);
+        assert_eq!(
+            timeline.silence_before(5 + 48_000 * 7_201, 72_000 + 16_000),
+            0
+        );
+
+        // An mp4 track's lead comes before its first packet.
+        assert_eq!(Timeline::new(&params, 8_000).silence_before(0, 0), 8_000);
+        assert_eq!(Timeline::new(&params, 800).silence_before(0, 0), 0);
+        // Without a time base nothing is known.
+        let mut timeline = Timeline::new(&CodecParameters::new(), 8_000);
+        assert_eq!(timeline.silence_before(0, 0), 0);
+        assert_eq!(timeline.silence_before(1 << 40, 10), 0);
+    }
+
+    /// An mp4 atom with `body`.
+    fn atom(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
+        let mut atom = ((body.len() + 8) as u32).to_be_bytes().to_vec();
+        atom.extend_from_slice(kind);
+        atom.extend_from_slice(body);
+        atom
+    }
+
+    #[test]
+    fn mp4_leads_come_from_leading_empty_edits() {
+        // mvhd version 0: timescale 1000.
+        let mut mvhd = vec![0u8; 12];
+        mvhd.extend_from_slice(&1_000u32.to_be_bytes());
+        mvhd.extend_from_slice(&[0u8; 84]);
+        // Track 0: 500 ms of empty edits, then media. Version 0 entries.
+        let mut elst0 = vec![0u8, 0, 0, 0, 0, 0, 0, 3];
+        for (duration, media_time) in [(300u32, -1i32), (200, -1), (2_000, 0)] {
+            elst0.extend_from_slice(&duration.to_be_bytes());
+            elst0.extend_from_slice(&media_time.to_be_bytes());
+            elst0.extend_from_slice(&0x0001_0000u32.to_be_bytes());
+        }
+        // Track 1: 250 ms. Version 1 entries.
+        let mut elst1 = vec![1u8, 0, 0, 0, 0, 0, 0, 1];
+        elst1.extend_from_slice(&250u64.to_be_bytes());
+        elst1.extend_from_slice(&(-1i64).to_be_bytes());
+        elst1.extend_from_slice(&0x0001_0000u32.to_be_bytes());
+        // Track 2: no edit list, so it starts at 0.
+        let moov = atom(
+            b"moov",
+            &[
+                atom(b"mvhd", &mvhd),
+                atom(b"trak", &atom(b"edts", &atom(b"elst", &elst0))),
+                atom(b"trak", &atom(b"edts", &atom(b"elst", &elst1))),
+                atom(b"trak", &atom(b"tkhd", &[0u8; 84])),
+            ]
+            .concat(),
+        );
+        // A 64-bit sized mdat in front, as in long recordings.
+        let mut mdat = 1u32.to_be_bytes().to_vec();
+        mdat.extend_from_slice(b"mdat");
+        mdat.extend_from_slice(&(16u64 + 100).to_be_bytes());
+        mdat.extend_from_slice(&[0u8; 100]);
+        let file = [atom(b"ftyp", b"M4A \0\0\0\0"), mdat, moov].concat();
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("clip.m4a");
+        std::fs::write(&path, &file).unwrap();
+        assert_eq!(mp4_lead(&path, 0), 8_000);
+        assert_eq!(mp4_lead(&path, 1), 4_000);
+        assert_eq!(mp4_lead(&path, 2), 0);
+        assert_eq!(mp4_lead(&path, 3), 0);
+        // Leads count from the earliest track.
+        let without_track_2 = file.len() - atom(b"trak", &atom(b"tkhd", &[0u8; 84])).len();
+        let mut trimmed = file[..without_track_2].to_vec();
+        let moov_at = trimmed.windows(4).rposition(|w| w == b"moov").unwrap() - 4;
+        let moov_len = (trimmed.len() - moov_at) as u32;
+        trimmed[moov_at..moov_at + 4].copy_from_slice(&moov_len.to_be_bytes());
+        std::fs::write(&path, &trimmed).unwrap();
+        assert_eq!(mp4_lead(&path, 0), 4_000);
+        assert_eq!(mp4_lead(&path, 1), 0);
+        // Other files are not parsed; cut-short ones give no lead.
+        let wav = dir.path().join("clip.wav");
+        std::fs::write(&wav, &file).unwrap();
+        assert_eq!(mp4_lead(&wav, 0), 0);
+        std::fs::write(&path, &file[..file.len() - 10]).unwrap();
+        assert_eq!(mp4_lead(&path, 0), 0);
+    }
+
+    #[test]
     fn downmix_averages_and_scrubs() {
         let mut mono = Vec::new();
         downmix(
@@ -1489,6 +2036,127 @@ mod tests {
             assert!(matches!(err, DecodeError::Unsupported(_)), "{err}");
             let err = decode_with(&silent_video, &opts).err().unwrap();
             assert!(matches!(err, DecodeError::Unsupported(_)), "{err}");
+        }
+    }
+
+    /// Peak level of `samples[from_ms..to_ms]`.
+    fn peak_between(samples: &[f32], from_ms: usize, to_ms: usize) -> f32 {
+        peak(&samples[from_ms * 16..to_ms * 16])
+    }
+
+    #[test]
+    fn delayed_audio_and_timestamp_gaps_keep_their_place() {
+        let Some(ffmpeg) = ffmpeg_or_skip("delayed_audio_and_timestamp_gaps_keep_their_place")
+        else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        // Video from 0 s, a 2 s tone from 1.5 s: an edit list in mp4.
+        let delayed: &[&str] = &[
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=4:size=64x48:rate=10",
+            "-itsoffset",
+            "1.5",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=44100:duration=2",
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "aac",
+        ];
+        for name in ["delayed.mp4", "delayed.mov"] {
+            let Some(path) = make(&ffmpeg, dir.path(), name, delayed) else {
+                return;
+            };
+            let decoded = decode_with(&path, &no_ffmpeg()).unwrap();
+            assert_eq!(decoded.outcome.decoder, DecoderKind::Symphonia, "{name}");
+            assert_len_within(
+                decoded.samples.len(),
+                56_000 + AAC_SLACK / 2,
+                AAC_SLACK,
+                name,
+            );
+            assert!(peak_between(&decoded.samples, 0, 1_400) < 1e-3, "{name}");
+            assert!(
+                peak_between(&decoded.samples, 1_600, 3_400) > 0.05,
+                "{name}"
+            );
+            let probe = probe(&path, &no_ffmpeg()).unwrap();
+            assert_len_within(probe.duration_ms.unwrap() as usize, 3_500, 50, name);
+        }
+
+        // 2 s of tone, a 3 s hole in the timestamps, 2 s of tone: a long
+        // sample duration in mp4, a granule jump in Ogg.
+        let source: &[&str] = &[
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=44100:duration=4",
+            "-af",
+            "asetpts='PTS+gte(T,2)*3/TB'",
+        ];
+        let cases: [(&str, &str, usize); 2] = [
+            ("gap.m4a", "aac", AAC_SLACK),
+            ("gap.ogg", "libvorbis", 30 * 16),
+        ];
+        for (name, codec, slack) in cases {
+            let args = [source, &["-c:a", codec]].concat();
+            let Some(path) = make(&ffmpeg, dir.path(), name, &args) else {
+                continue;
+            };
+            let decoded = decode_with(&path, &no_ffmpeg()).unwrap();
+            assert_eq!(decoded.outcome.decoder, DecoderKind::Symphonia, "{name}");
+            assert_len_within(decoded.samples.len(), 112_000 + slack / 2, slack, name);
+            assert!(peak_between(&decoded.samples, 100, 1_900) > 0.05, "{name}");
+            assert!(
+                peak_between(&decoded.samples, 2_100, 4_900) < 1e-3,
+                "{name}"
+            );
+            assert!(
+                peak_between(&decoded.samples, 5_100, 6_900) > 0.05,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn m4a_without_its_index_is_unsupported() {
+        let Some(ffmpeg) = ffmpeg_or_skip("m4a_without_its_index_is_unsupported") else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let args = [
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=44100:duration=3",
+            "-c:a",
+            "aac",
+        ];
+        let Some(path) = make(&ffmpeg, dir.path(), "call.m4a", &args) else {
+            return;
+        };
+        // An interrupted recording: the index (moov) at the end is missing,
+        // whole or in part.
+        let bytes = std::fs::read(&path).unwrap();
+        let moov = bytes.windows(4).rposition(|w| w == b"moov").unwrap() - 4;
+        for (name, cut) in [("no_moov.m4a", moov), ("cut.m4a", moov / 2)] {
+            let cut_path = dir.path().join(name);
+            std::fs::write(&cut_path, &bytes[..cut]).unwrap();
+            for opts in [no_ffmpeg(), DecodeOptions::default()] {
+                let err = probe(&cut_path, &opts).unwrap_err();
+                assert!(matches!(err, DecodeError::Unsupported(_)), "{name}: {err}");
+                let err = decode_with(&cut_path, &opts).err().unwrap();
+                assert!(matches!(err, DecodeError::Unsupported(_)), "{name}: {err}");
+            }
         }
     }
 

@@ -267,6 +267,13 @@ fn parse_duration_ms(stderr: &str) -> Option<u64> {
     Some(((hours * 60 + minutes) * 60 + seconds) * 1000 + millis)
 }
 
+/// Fills a delayed start (audio that begins after the video) and timestamp
+/// gaps (lost packets) with silence, since raw PCM output has no timestamps
+/// to keep them. Like symphonia's route in decode.rs, it leaves offsets up
+/// to 100 ms alone (min_comp), which keeps the length of clean files whose
+/// codec delay shows in the timestamps (WMA, Opus in WebM).
+const TIMELINE_FILTER: &str = "aresample=async=1:min_comp=0.1:first_pts=0";
+
 /// Streams 16 kHz mono f32 into `sink`. Returns samples produced.
 pub fn decode_with_ffmpeg(
     ffmpeg: &Path,
@@ -294,6 +301,8 @@ pub fn decode_with_ffmpeg(
         "-vn",
         "-sn",
         "-dn",
+        "-af",
+        TIMELINE_FILTER,
         "-ac",
         "1",
         "-ar",
@@ -635,6 +644,87 @@ Error opening input files: Invalid data found when processing input
         assert!((got.len() as i64 - 40_000).abs() <= 1, "{}", got.len());
         let peak = got.iter().fold(0.0f32, |m, s| m.max(s.abs()));
         assert!(peak > 0.05, "peak {peak}");
+    }
+
+    /// Peak level of `samples[from_ms..to_ms]`.
+    fn peak_between(samples: &[f32], from_ms: usize, to_ms: usize) -> f32 {
+        samples[from_ms * 16..to_ms * 16]
+            .iter()
+            .fold(0.0f32, |m, s| m.max(s.abs()))
+    }
+
+    #[test]
+    fn delayed_starts_and_gaps_become_silence() {
+        let Some(ffmpeg) = ffmpeg_or_skip("delayed_starts_and_gaps_become_silence") else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let tone = "sine=frequency=440:sample_rate=48000:duration=2";
+        // Video from 0 s, a 2 s tone from 1.5 s.
+        let delayed = dir.path().join("delayed.mkv");
+        // 2 s of tone, a 3 s hole in the timestamps, 2 s of tone.
+        let gapped = dir.path().join("gapped.mka");
+        let gap_tone = "sine=frequency=440:sample_rate=48000:duration=4";
+        let made = make_fixture(
+            &ffmpeg,
+            &[
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=duration=4:size=64x48:rate=10",
+                "-itsoffset",
+                "1.5",
+                "-f",
+                "lavfi",
+                "-i",
+                tone,
+                "-map",
+                "0:v",
+                "-map",
+                "1:a",
+                "-c:v",
+                "mpeg4",
+                "-c:a",
+                "flac",
+                delayed.to_str().unwrap(),
+            ],
+        ) && make_fixture(
+            &ffmpeg,
+            &[
+                "-f",
+                "lavfi",
+                "-i",
+                gap_tone,
+                "-af",
+                "asetpts='PTS+gte(T,2)*3/TB'",
+                "-c:a",
+                "flac",
+                gapped.to_str().unwrap(),
+            ],
+        );
+        if !made {
+            return;
+        }
+
+        let decode = |path: &Path| {
+            let mut got = Vec::new();
+            decode_with_ffmpeg(&ffmpeg, path, &AtomicBool::new(false), &mut |block| {
+                got.extend_from_slice(block);
+                Ok(())
+            })
+            .unwrap();
+            got
+        };
+        let got = decode(&delayed);
+        assert!((got.len() as i64 - 56_000).abs() <= 160, "{}", got.len());
+        assert!(peak_between(&got, 0, 1_400) < 1e-3);
+        assert!(peak_between(&got, 1_600, 3_400) > 0.05);
+
+        let got = decode(&gapped);
+        assert!((got.len() as i64 - 112_000).abs() <= 160, "{}", got.len());
+        assert!(peak_between(&got, 100, 1_900) > 0.05);
+        assert!(peak_between(&got, 2_100, 4_900) < 1e-3);
+        assert!(peak_between(&got, 5_100, 6_900) > 0.05);
     }
 
     #[test]
