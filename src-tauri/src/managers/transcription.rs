@@ -5,8 +5,9 @@ use crate::audio_toolkit::{
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
 use crate::engine_supervisor::{
     DeviceInfo, DeviceSelector, EngineError, EngineSupervisor, LoadSpec, LoadedInfo,
-    StreamProgress, Unloading,
+    StreamProgress, Unloading, WorkToken,
 };
+use crate::file_transcription::types::{TimingGrain, TranscriptSegment};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::{EngineType, ModelManager};
 use crate::settings::{
@@ -18,7 +19,7 @@ use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Condvar, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
@@ -1524,6 +1525,151 @@ struct RunOutcome {
     /// INVALID_ARG, so the whisper extension must be gated on the arch, not
     /// on the feature (see #1601).
     model_is_whisper: bool,
+}
+
+// ---------------------------------------------------------------------------
+// File transcription engine API (design §2.5.1). WP0 lands these as stubs so
+// the other work packages can build against them; WP2 implements them (and
+// removes the `allow`s once the items are used).
+// ---------------------------------------------------------------------------
+
+#[allow(dead_code)] // WP0 stub
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChunkLimits {
+    /// Default longest chunk for this model (28 000; 24 000 GigaAM; ≤ hard cap).
+    pub max_chunk_ms: u32,
+    /// Cut search window before max_chunk_ms (min(10 000, max_chunk_ms / 2)).
+    pub search_window_ms: u32,
+    /// Longest audio the model accepts or handles without truncation, if limited.
+    pub hard_max_ms: Option<u32>,
+}
+
+#[allow(dead_code)] // WP0 stub
+pub struct ChunkTranscript {
+    /// Post-processed text of the whole chunk (same processing as a dictation). "" if nothing was said.
+    pub text: String,
+    /// Post-processed timed segments, absolute ms, sorted, inside
+    /// [offset_ms, offset_ms + real_len_ms]. Empty iff `text` is empty.
+    pub segments: Vec<TranscriptSegment>,
+    pub grain: TimingGrain,
+    /// ISO code of the resolved output language, if known.
+    pub language: Option<String>,
+}
+
+#[allow(dead_code)] // WP0 stub
+#[derive(Debug)]
+pub enum ChunkError {
+    /// Dictation is active; nothing was sent. Wait and call again.
+    Yield,
+    /// The job's own WorkToken was cancelled.
+    Cancelled,
+    /// A different model became current during the job.
+    ModelChanged {
+        job_model: String,
+        current_model: String,
+    },
+    /// Load or engine failure (foreign cancels and reloads were already retried).
+    Failed(anyhow::Error),
+}
+
+#[allow(unused_variables)] // WP0 stub
+impl std::fmt::Display for ChunkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // WP2: English.
+        todo!("WP2")
+    }
+}
+
+impl std::error::Error for ChunkError {}
+
+/// Holds the model for a file job: while any lease exists the model is not
+/// unloaded by "Immediately", the idle watcher, or dictation's FinishGuard.
+#[allow(dead_code)] // WP0 stub
+pub struct FileJobLease {
+    tm: TranscriptionManager,
+    model_id: String,
+    device_index: Option<usize>,
+    settings: AppSettings, // snapshot at job start
+    token: WorkToken,
+    evidence: Mutex<Option<OutputLanguageEvidence>>,
+    limits: ChunkLimits,
+}
+
+#[allow(dead_code, unused_variables)] // WP0 stub
+impl FileJobLease {
+    pub fn model_id(&self) -> &str {
+        todo!("WP2")
+    }
+
+    pub fn token(&self) -> &WorkToken {
+        todo!("WP2")
+    }
+
+    pub fn limits(&self) -> ChunkLimits {
+        todo!("WP2")
+    }
+
+    /// Blocking. Never holds the run gate while waiting or loading.
+    pub fn transcribe_chunk(
+        &self,
+        samples: &[f32],
+        offset_ms: u64,
+        real_len_ms: u64,
+    ) -> Result<ChunkTranscript, ChunkError> {
+        todo!("WP2")
+    }
+}
+
+impl Drop for FileJobLease {
+    fn drop(&mut self) {
+        // WP2: active_file_jobs -= 1; if it reached 0 and !dictation_active():
+        // maybe_unload_immediately("file transcription").
+    }
+}
+
+/// Marks a dictation as in progress from TranscribeAction::stop until its pipeline finishes.
+#[allow(dead_code)] // WP0 stub
+pub struct DictationHold(Arc<AtomicUsize>);
+
+impl Drop for DictationHold {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+#[allow(dead_code, unused_variables)] // WP0 stub
+impl TranscriptionManager {
+    /// Blocking. Increments active_file_jobs first. Ensures `model_id` is the
+    /// loaded model (loading it under try_start_loading()/LoadingGuard, with
+    /// load_model_with_device(model_id, device_index), replacing a different
+    /// loaded model), snapshots settings, computes limits.
+    pub fn begin_file_job(
+        &self,
+        model_id: &str,
+        device_index: Option<usize>,
+        token: WorkToken,
+    ) -> anyhow::Result<FileJobLease> {
+        todo!("WP2")
+    }
+
+    /// Recording, live stream (router open / stream active / stream worker),
+    /// or a DictationHold outstanding.
+    pub fn dictation_active(&self) -> bool {
+        todo!("WP2")
+    }
+
+    pub fn hold_for_dictation(&self) -> DictationHold {
+        todo!("WP2")
+    }
+
+    /// token.cancel() plus kill only that token's in-flight transcribe-cpp call.
+    pub fn cancel_file_work(&self, token: &WorkToken) {
+        todo!("WP2")
+    }
+
+    pub fn active_file_jobs(&self) -> usize {
+        todo!("WP2")
+    }
 }
 
 fn emit_stream_text(app_handle: &AppHandle, committed: &str, tentative: &str) {

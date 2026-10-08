@@ -25,12 +25,14 @@
 
 mod protocol;
 mod supervisor;
+mod work_token;
 mod worker;
 
 pub use protocol::{DeviceInfo, DeviceSelector, LoadedInfo};
 pub use supervisor::{
     EngineError, EngineSupervisor, Finalized, LoadSpec, StreamHandle, StreamProgress, Unloading,
 };
+pub use work_token::WorkToken;
 
 /// Hidden first argument that turns the executable into a worker.
 pub const WORKER_FLAG: &str = "--transcribe-worker";
