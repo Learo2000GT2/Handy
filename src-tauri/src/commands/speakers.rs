@@ -1,10 +1,8 @@
 //! Commands for speaker labels: the speaker model download and renaming
 //! speakers in a transcript.
-//!
-//! Contract stub: renaming lands with the speaker labels work.
-#![allow(dead_code, unused_variables, unused_imports)]
 
 use crate::file_transcription::speaker_model::SpeakerModelManager;
+use crate::file_transcription::speakers;
 use crate::file_transcription::types::{FileTranscript, SpeakerModelStatus, TranscriptSource};
 use crate::file_transcription::FileTranscriptionManager;
 use crate::managers::history::HistoryManager;
@@ -52,5 +50,38 @@ pub async fn rename_transcript_speaker(
     speaker_id: u32,
     name: Option<String>,
 ) -> Result<FileTranscript, String> {
-    Err("not implemented".to_string())
+    let name = speakers::validate_speaker_name(name.as_deref())?;
+    let history = Arc::clone(&history);
+    match source {
+        TranscriptSource::Job { job_id } => {
+            let transcript = manager.edit_job_transcript(job_id, |t| {
+                speakers::rename_speaker(t, speaker_id, name.as_deref())
+            })?;
+            if let Some(history_id) = transcript.history_id {
+                let stored = transcript.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    history.update_file_speakers(history_id, &stored)
+                })
+                .await
+                .map_err(|e| format!("Failed to update history: {}", e))?
+                .map_err(|e| e.to_string())?;
+            }
+            Ok(transcript)
+        }
+        TranscriptSource::History { history_id } => {
+            tauri::async_runtime::spawn_blocking(move || {
+                let mut transcript = history
+                    .get_file_transcript(history_id)
+                    .map_err(|e| e.to_string())?
+                    .ok_or_else(|| "Not a file transcription".to_string())?;
+                speakers::rename_speaker(&mut transcript, speaker_id, name.as_deref())?;
+                history
+                    .update_file_speakers(history_id, &transcript)
+                    .map_err(|e| e.to_string())?;
+                Ok(transcript)
+            })
+            .await
+            .map_err(|e| format!("Failed to update history: {}", e))?
+        }
+    }
 }

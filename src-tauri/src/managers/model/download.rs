@@ -156,6 +156,44 @@ impl ModelManager {
         .await
     }
 
+    /// Resumable, size- and sha256-verified download of `url` into
+    /// `partial_path` for files outside the model registry (no
+    /// `model-download-*` events). Ok(true): completed, `partial_path` holds
+    /// the verified bytes; Ok(false): cancelled, the partial is kept for
+    /// resume. Same robustness as the model downloads (stall timeout,
+    /// resume, 416 handling, size cap, hash check).
+    pub(crate) async fn download_verified_file(
+        url: &str,
+        partial_path: &Path,
+        expected_size: u64,
+        expected_sha256: &str,
+        cancel: &CancellationToken,
+        on_progress: &(dyn Fn(u64, u64) + Send + Sync),
+        on_verifying: &(dyn Fn() + Send + Sync),
+    ) -> Result<bool> {
+        let name = partial_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| url.to_string());
+        let outcome = Self::download_http_resumable_with_events(
+            &name,
+            url,
+            partial_path,
+            Some(expected_size),
+            Some(expected_sha256),
+            cancel,
+            &|event| match event {
+                HttpDownloadEvent::Progress(progress) => {
+                    on_progress(progress.downloaded, progress.total)
+                }
+                HttpDownloadEvent::VerificationStarted => on_verifying(),
+                HttpDownloadEvent::VerificationCompleted => {}
+            },
+        )
+        .await?;
+        Ok(matches!(outcome, HttpDownloadOutcome::Completed))
+    }
+
     /// The one resumable HTTP downloader, shared by the mirror fallback and
     /// URL-sourced models: fetch `url` into `partial_path`, resuming what's
     /// already there, and leave verified bytes in `partial_path` on success —

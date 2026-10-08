@@ -19,7 +19,9 @@ use super::protocol::{
     encode_message, read_message, DeviceInfo, DeviceSelector, LoadedInfo, Request, Response,
 };
 use super::worker::LOG_LINE_PREFIX;
-use super::{WorkToken, CPU_ONLY_FLAG, LOG_LEVEL_ENV, WORKER_FLAG};
+use super::{
+    WorkToken, WorkerOptions, CPU_ONLY_FLAG, LOG_LEVEL_ENV, LOW_PRIORITY_FLAG, WORKER_FLAG,
+};
 use log::{debug, error, info, warn, Level};
 use std::collections::VecDeque;
 use std::fmt;
@@ -215,6 +217,8 @@ struct Shared {
     /// Whether this host may use a GPU at all. When not, every worker is
     /// CPU-only, device probes included.
     gpu_allowed: bool,
+    /// How workers are started.
+    options: WorkerOptions,
     /// A worker with GPU backends crashed or hung (in backend init, device
     /// listing, model load or inference). Models load in CPU-only workers,
     /// and devices are not listed again, until [`EngineSupervisor::retry_gpu`].
@@ -263,7 +267,8 @@ impl Shared {
     /// Start a worker and say hello, publishing its device list if it lists
     /// one.
     fn hello(&self, cpu_only: bool, list_devices: bool) -> Result<Worker, Failure> {
-        let mut worker = Worker::spawn(cpu_only).map_err(Failure::Spawn)?;
+        let mut worker =
+            Worker::spawn(cpu_only, self.options.low_priority).map_err(Failure::Spawn)?;
         match worker.call(&Request::Hello { list_devices }, None, HELLO_TIMEOUT)? {
             Response::Hello { devices } => {
                 if let Some(devices) = devices {
@@ -339,11 +344,17 @@ impl EngineSupervisor {
     /// Without `gpu_allowed`, every worker is CPU-only, so no GPU driver is
     /// ever loaded.
     pub fn new(gpu_allowed: bool) -> Self {
+        Self::new_with(gpu_allowed, WorkerOptions::default())
+    }
+
+    /// [`new`](Self::new), starting workers as `options` says.
+    pub fn new_with(gpu_allowed: bool, options: WorkerOptions) -> Self {
         #[cfg(all(unix, not(test)))]
         record_launched_exe();
         let (commands, queue) = mpsc::channel();
         let shared = Arc::new(Shared {
             gpu_allowed,
+            options,
             ..Shared::default()
         });
         let owner = Owner {
@@ -1163,8 +1174,8 @@ struct Worker {
 
 impl Worker {
     /// Start a worker process. A `cpu_only` worker never registers a GPU
-    /// backend.
-    fn spawn(cpu_only: bool) -> io::Result<Self> {
+    /// backend; a `low_priority` one runs below normal priority.
+    fn spawn(cpu_only: bool, low_priority: bool) -> io::Result<Self> {
         // Under `cargo test` the current exe is the test harness; tests point
         // this at the built app instead.
         #[cfg(test)]
@@ -1174,29 +1185,7 @@ impl Worker {
         );
         #[cfg(not(test))]
         let exe = worker_exe()?;
-        let mut command = ProcessCommand::new(exe);
-        #[cfg(target_os = "linux")]
-        if let Some(arg0) = std::env::args_os().next() {
-            // Keep `ps` showing Handy's own path rather than /proc/self/exe.
-            use std::os::unix::process::CommandExt;
-            command.arg0(arg0);
-        }
-        command.arg(WORKER_FLAG);
-        if cpu_only {
-            command.arg(CPU_ONLY_FLAG);
-        }
-        command
-            .env(LOG_LEVEL_ENV, log::max_level().as_str())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-            command.creation_flags(CREATE_NO_WINDOW);
-        }
-        let mut child = command.spawn()?;
+        let mut child = Self::command(exe, cpu_only, low_priority).spawn()?;
         let pid = child.id();
         let stdin = child.stdin.take().expect("stdin is piped");
         let stdout = child.stdout.take().expect("stdout is piped");
@@ -1254,6 +1243,44 @@ impl Worker {
             pid
         );
         Ok(worker)
+    }
+
+    /// The command line that starts a worker from `exe`.
+    fn command(exe: PathBuf, cpu_only: bool, low_priority: bool) -> ProcessCommand {
+        let mut command = ProcessCommand::new(exe);
+        #[cfg(target_os = "linux")]
+        if let Some(arg0) = std::env::args_os().next() {
+            // Keep `ps` showing Handy's own path rather than /proc/self/exe.
+            use std::os::unix::process::CommandExt;
+            command.arg0(arg0);
+        }
+        command.arg(WORKER_FLAG);
+        if cpu_only {
+            command.arg(CPU_ONLY_FLAG);
+        }
+        // Windows sets the priority class at creation instead, below.
+        #[cfg(unix)]
+        if low_priority {
+            command.arg(LOW_PRIORITY_FLAG);
+        }
+        command
+            .env(LOG_LEVEL_ENV, log::max_level().as_str())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+            let priority = if low_priority {
+                BELOW_NORMAL_PRIORITY_CLASS
+            } else {
+                0
+            };
+            command.creation_flags(CREATE_NO_WINDOW | priority);
+        }
+        command
     }
 
     fn load(&mut self, spec: &LoadSpec) -> Result<LoadedInfo, Failure> {
@@ -1537,6 +1564,26 @@ mod unit_tests {
 
         assert_eq!(ms_to_samples(1500), 24_000);
         assert_eq!(ms_to_samples(-5), 0);
+    }
+
+    #[test]
+    fn low_priority_flag_reaches_the_worker_command() {
+        let args = |cpu_only: bool, low_priority: bool| -> Vec<String> {
+            Worker::command(PathBuf::from("handy"), cpu_only, low_priority)
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect()
+        };
+        assert_eq!(args(false, false), [WORKER_FLAG]);
+        assert_eq!(args(true, false), [WORKER_FLAG, CPU_ONLY_FLAG]);
+        #[cfg(unix)]
+        assert_eq!(
+            args(true, true),
+            [WORKER_FLAG, CPU_ONLY_FLAG, LOW_PRIORITY_FLAG]
+        );
+        // Windows lowers the priority class instead of passing a flag.
+        #[cfg(windows)]
+        assert_eq!(args(true, true), [WORKER_FLAG, CPU_ONLY_FLAG]);
     }
 
     #[test]
@@ -1965,7 +2012,7 @@ mod tests {
     #[ignore]
     fn cpu_only_worker_lists_no_gpu() {
         set_fault(None, false);
-        let mut worker = Worker::spawn(true).unwrap();
+        let mut worker = Worker::spawn(true, false).unwrap();
         let Ok(Response::Hello {
             devices: Some(devices),
         }) = worker.call(&Request::Hello { list_devices: true }, None, HELLO_TIMEOUT)
@@ -2179,7 +2226,7 @@ mod tests {
     #[ignore]
     fn hung_worker_exits_when_stdin_closes() {
         set_fault(Some("hang@run"), false);
-        let mut worker = Worker::spawn(false).unwrap();
+        let mut worker = Worker::spawn(false, false).unwrap();
         worker
             .call(
                 &Request::Hello {

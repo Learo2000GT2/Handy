@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local, Utc};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use rusqlite::{params, Connection, OptionalExtension};
 use rusqlite_migration::{Migrations, M};
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,8 @@ use tauri::AppHandle;
 use tauri_specta::Event;
 
 use crate::file_transcription::types::{
-    FileHistoryInfo, FileTranscript, TimingGrain, TranscriptSegment, TranscriptStatus,
+    FileHistoryInfo, FileTranscript, TimingGrain, TranscriptSegment, TranscriptSpeakers,
+    TranscriptStatus,
 };
 
 /// Database migrations for transcription history.
@@ -68,7 +69,37 @@ DELETE FROM file_transcription
  WHERE history_id NOT IN (SELECT id FROM transcription_history);";
 
 pub(crate) fn ensure_file_transcription_schema(conn: &Connection) -> rusqlite::Result<()> {
-    conn.execute_batch(FILE_TRANSCRIPTION_SCHEMA)
+    conn.execute_batch(FILE_TRANSCRIPTION_SCHEMA)?;
+    // TranscriptSpeakers as JSON; NULL = no speaker labels.
+    ensure_column(conn, "file_transcription", "speakers_json", "TEXT")
+}
+
+/// Adds `column` unless `PRAGMA table_info(table)` lists it. Never touches
+/// `user_version`. `table`, `column` and `decl` are constants, never input.
+fn ensure_column(conn: &Connection, table: &str, column: &str, decl: &str) -> rusqlite::Result<()> {
+    let exists = conn
+        .prepare(&format!("PRAGMA table_info({table})"))?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .iter()
+        .any(|name| name == column);
+    if !exists {
+        conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"))?;
+    }
+    Ok(())
+}
+
+/// Stored speaker labels; NULL or unreadable JSON (logged) reads as none,
+/// so the transcript stays readable.
+fn speakers_from_sql(history_id: i64, json: Option<&str>) -> Option<TranscriptSpeakers> {
+    serde_json::from_str(json?)
+        .inspect_err(|e| {
+            warn!(
+                "Ignoring the invalid speaker labels of history entry {}: {}",
+                history_id, e
+            )
+        })
+        .ok()
 }
 
 /// Longest a History page waits to learn whether its entries' source files
@@ -83,7 +114,7 @@ const ENTRY_COLUMNS: &str = "h.id AS id, h.file_name AS file_name, h.timestamp A
     h.post_process_requested AS post_process_requested, f.history_id AS f_history_id, \
     f.source_path AS f_source_path, f.source_name AS f_source_name, \
     f.duration_ms AS f_duration_ms, f.model_id AS f_model_id, f.model_name AS f_model_name, \
-    f.status AS f_status";
+    f.status AS f_status, f.speakers_json AS f_speakers_json";
 const ENTRY_FROM: &str =
     "FROM transcription_history h LEFT JOIN file_transcription f ON f.history_id = h.id";
 
@@ -297,7 +328,7 @@ impl HistoryManager {
 
     fn map_history_entry(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> {
         let file = match row.get::<_, Option<i64>>("f_history_id")? {
-            Some(_) => Some(FileHistoryInfo {
+            Some(history_id) => Some(FileHistoryInfo {
                 source_path: row.get("f_source_path")?,
                 source_name: row.get("f_source_name")?,
                 duration_ms: row.get("f_duration_ms")?,
@@ -307,7 +338,11 @@ impl HistoryManager {
                 // Unknown here; `check_sources` looks without blocking the
                 // async runtime on a slow file system.
                 source_exists: true,
-                speaker_count: 0,
+                speaker_count: speakers_from_sql(
+                    history_id,
+                    row.get::<_, Option<String>>("f_speakers_json")?.as_deref(),
+                )
+                .map_or(0, |speakers| speakers.speakers.len() as u32),
             }),
             None => None,
         };
@@ -790,6 +825,11 @@ impl HistoryManager {
     ) -> Result<HistoryEntry> {
         let paragraphs_json = serde_json::to_string(&transcript.paragraphs)?;
         let segments_json = serde_json::to_string(&transcript.segments)?;
+        let speakers_json = transcript
+            .speakers
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
         let model_id = Some(transcript.model_id.as_str()).filter(|id| !id.is_empty());
 
         let tx = conn.transaction()?;
@@ -832,8 +872,9 @@ impl HistoryManager {
                 timing,
                 paragraphs_json,
                 segments_json,
-                created_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                created_at,
+                speakers_json
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 id,
                 &transcript.source_path,
@@ -850,6 +891,7 @@ impl HistoryManager {
                 paragraphs_json,
                 segments_json,
                 transcript.created_at,
+                speakers_json,
             ],
         )?;
         tx.commit()?;
@@ -888,7 +930,8 @@ impl HistoryManager {
                     f.timing AS timing,
                     f.paragraphs_json AS paragraphs_json,
                     f.segments_json AS segments_json,
-                    f.created_at AS created_at
+                    f.created_at AS created_at,
+                    f.speakers_json AS speakers_json
                  FROM file_transcription f
                  JOIN transcription_history h ON h.id = f.history_id
                  WHERE f.history_id = ?1",
@@ -911,7 +954,10 @@ impl HistoryManager {
                         segments: Vec::new(),
                         created_at: row.get("created_at")?,
                         history_id: Some(history_id),
-                        speakers: None,
+                        speakers: speakers_from_sql(
+                            history_id,
+                            row.get::<_, Option<String>>("speakers_json")?.as_deref(),
+                        ),
                     };
                     let paragraphs_json: String = row.get("paragraphs_json")?;
                     let segments_json: String = row.get("segments_json")?;
@@ -934,6 +980,61 @@ impl HistoryManager {
         transcript.segments = serde_json::from_str::<Vec<TranscriptSegment>>(&segments_json)
             .map_err(|e| anyhow!("Stored segments of entry {} are invalid: {}", history_id, e))?;
         Ok(Some(transcript))
+    }
+
+    /// Rewrites speakers_json and transcription_text (labels changed) of a
+    /// file entry in one transaction; emits HistoryUpdatePayload::Updated.
+    /// Err if not a file entry.
+    pub fn update_file_speakers(
+        &self,
+        history_id: i64,
+        transcript: &FileTranscript,
+    ) -> Result<HistoryEntry> {
+        let mut conn = self.get_connection()?;
+        let entry = Self::update_file_speakers_with_conn(&mut conn, history_id, transcript)?;
+        debug!("Updated the speaker labels of history entry {}", history_id);
+        if let Err(e) = (HistoryUpdatePayload::Updated {
+            entry: entry.clone(),
+        })
+        .emit(&self.app_handle)
+        {
+            error!("Failed to emit history-updated event: {}", e);
+        }
+        Ok(entry)
+    }
+
+    fn update_file_speakers_with_conn(
+        conn: &mut Connection,
+        history_id: i64,
+        transcript: &FileTranscript,
+    ) -> Result<HistoryEntry> {
+        let speakers_json = transcript
+            .speakers
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
+        let tx = conn.transaction()?;
+        let updated = tx.execute(
+            "UPDATE file_transcription SET speakers_json = ?1 WHERE history_id = ?2",
+            params![speakers_json, history_id],
+        )?;
+        if updated == 0 {
+            return Err(anyhow!(
+                "History entry {} is not a file transcription",
+                history_id
+            ));
+        }
+        tx.execute(
+            "UPDATE transcription_history SET transcription_text = ?1 WHERE id = ?2",
+            params![&transcript.text, history_id],
+        )?;
+        tx.commit()?;
+
+        Ok(conn.query_row(
+            &format!("SELECT {ENTRY_COLUMNS} {ENTRY_FROM} WHERE h.id = ?1"),
+            params![history_id],
+            Self::map_history_entry,
+        )?)
     }
 
     fn format_timestamp_title(&self, timestamp: i64) -> String {
@@ -988,6 +1089,8 @@ async fn check_sources(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::file_transcription::speakers::{rename_speaker, render_text};
+    use crate::file_transcription::types::TranscriptSpeaker;
     use rusqlite::{params, Connection};
 
     fn setup_conn() -> Connection {
@@ -1301,6 +1404,205 @@ mod tests {
             ..transcript
         };
         assert_eq!(stored, expected);
+    }
+
+    /// `file_transcript` with two speakers, the second one named.
+    fn labelled_transcript(source_path: &str) -> FileTranscript {
+        let labelled = |start_ms, end_ms, text: &str, speaker| TranscriptSegment {
+            speaker: Some(speaker),
+            ..segment(start_ms, end_ms, text)
+        };
+        let speakers = TranscriptSpeakers {
+            speakers: vec![
+                TranscriptSpeaker { id: 1, name: None },
+                TranscriptSpeaker {
+                    id: 2,
+                    name: Some("Doug".to_string()),
+                },
+            ],
+            approximate: false,
+            unassigned_segments: 0,
+            model: "sortformer-4spk-v2.1-q8_0".to_string(),
+        };
+        let paragraphs = vec![
+            labelled(0, 2_400, "Hello there.", 1),
+            labelled(28_300, 30_000, "Second part.", 2),
+        ];
+        FileTranscript {
+            text: render_text(&paragraphs, Some(&speakers)),
+            paragraphs,
+            segments: vec![
+                labelled(500, 1_800, "Hello", 1),
+                labelled(1_800, 2_400, "there.", 1),
+                labelled(28_300, 30_000, "Second part.", 2),
+            ],
+            speakers: Some(speakers),
+            ..file_transcript(source_path)
+        }
+    }
+
+    fn columns(conn: &Connection) -> Vec<String> {
+        conn.prepare("PRAGMA table_info(file_transcription)")
+            .expect("prepare")
+            .query_map([], |row| row.get(1))
+            .expect("query")
+            .collect::<rusqlite::Result<_>>()
+            .expect("collect")
+    }
+
+    #[test]
+    fn speakers_column_is_added_once_and_user_version_is_unchanged() {
+        let mut conn = Connection::open_in_memory().expect("open in-memory db");
+        Migrations::new(MIGRATIONS.to_vec())
+            .to_latest(&mut conn)
+            .expect("run migrations");
+        // The table as a build before speaker labels made it.
+        conn.execute_batch(FILE_TRANSCRIPTION_SCHEMA)
+            .expect("old schema");
+        assert!(!columns(&conn).contains(&"speakers_json".to_string()));
+
+        for _ in 0..3 {
+            ensure_file_transcription_schema(&conn).expect("ensure schema");
+        }
+
+        let speakers_columns = columns(&conn)
+            .iter()
+            .filter(|name| *name == "speakers_json")
+            .count();
+        assert_eq!(speakers_columns, 1);
+        let version: i32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("read user_version");
+        assert_eq!(version as usize, MIGRATIONS.len());
+    }
+
+    #[test]
+    fn legacy_row_without_speakers_loads() {
+        let mut conn = Connection::open_in_memory().expect("open in-memory db");
+        Migrations::new(MIGRATIONS.to_vec())
+            .to_latest(&mut conn)
+            .expect("run migrations");
+        conn.execute_batch(FILE_TRANSCRIPTION_SCHEMA)
+            .expect("old schema");
+        // A row written by a build before speaker labels.
+        conn.execute(
+            "INSERT INTO transcription_history (file_name, timestamp, saved, title, \
+             transcription_text) VALUES ('', 100, 1, 'old.m4a', 'Old text.')",
+            [],
+        )
+        .expect("insert history row");
+        let id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO file_transcription (history_id, source_path, source_name, \
+             paragraphs_json, segments_json, created_at) VALUES (?1, '/old.m4a', 'old.m4a', \
+             '[{\"start_ms\":0,\"end_ms\":900,\"text\":\"Old text.\"}]', '[]', 1)",
+            params![id],
+        )
+        .expect("insert file row");
+
+        ensure_file_transcription_schema(&conn).expect("add the column");
+
+        let stored = HistoryManager::get_file_transcript_with_conn(&conn, id)
+            .expect("read transcript")
+            .expect("file transcript exists");
+        assert_eq!(stored.speakers, None);
+        assert_eq!(stored.text, "Old text.");
+        assert_eq!(stored.paragraphs, vec![segment(0, 900, "Old text.")]);
+        let entry = HistoryManager::get_latest_entry_with_conn(&conn)
+            .expect("read entry")
+            .expect("entry exists");
+        assert_eq!(entry.file.expect("file info").speaker_count, 0);
+    }
+
+    #[test]
+    fn file_transcript_with_speakers_round_trips() {
+        let mut conn = setup_conn();
+        let transcript = labelled_transcript("/missing/interview.m4a");
+        let entry = insert_file(&mut conn, &transcript, 100);
+        assert_eq!(
+            entry.transcription_text,
+            "Speaker 1: Hello there.\n\nDoug: Second part."
+        );
+
+        let stored = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("read transcript")
+            .expect("file transcript exists");
+        assert_eq!(
+            stored,
+            FileTranscript {
+                history_id: Some(entry.id),
+                ..transcript
+            }
+        );
+    }
+
+    #[test]
+    fn entry_reports_speaker_count() {
+        let mut conn = setup_conn();
+        let labelled = insert_file(&mut conn, &labelled_transcript("/missing/a.m4a"), 100);
+        let plain = insert_file(&mut conn, &file_transcript("/missing/b.m4a"), 200);
+        assert_eq!(labelled.file.expect("file info").speaker_count, 2);
+        assert_eq!(plain.file.expect("file info").speaker_count, 0);
+    }
+
+    #[test]
+    fn update_file_speakers_rewrites_text_and_names() {
+        let mut conn = setup_conn();
+        let entry = insert_file(&mut conn, &labelled_transcript("/missing/a.m4a"), 100);
+        let mut transcript = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("read transcript")
+            .expect("file transcript exists");
+        rename_speaker(&mut transcript, 1, Some("Ann")).expect("rename");
+
+        let updated =
+            HistoryManager::update_file_speakers_with_conn(&mut conn, entry.id, &transcript)
+                .expect("update");
+        assert_eq!(
+            updated.transcription_text,
+            "Ann: Hello there.\n\nDoug: Second part."
+        );
+        assert_eq!(updated.file.expect("file info").speaker_count, 2);
+        let stored = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("read transcript")
+            .expect("file transcript exists");
+        assert_eq!(stored, transcript);
+
+        // Not a file entry.
+        insert_entry(&conn, 300, "dictation", None);
+        let dictation = conn.last_insert_rowid();
+        assert!(
+            HistoryManager::update_file_speakers_with_conn(&mut conn, dictation, &transcript)
+                .is_err()
+        );
+        let text: String = conn
+            .query_row(
+                "SELECT transcription_text FROM transcription_history WHERE id = ?1",
+                params![dictation],
+                |row| row.get(0),
+            )
+            .expect("read text");
+        assert_eq!(text, "dictation");
+    }
+
+    #[test]
+    fn invalid_speakers_json_reads_as_none() {
+        let mut conn = setup_conn();
+        let entry = insert_file(&mut conn, &labelled_transcript("/missing/a.m4a"), 100);
+        conn.execute(
+            "UPDATE file_transcription SET speakers_json = '{not json' WHERE history_id = ?1",
+            params![entry.id],
+        )
+        .expect("corrupt the labels");
+
+        let stored = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("the transcript stays readable")
+            .expect("file transcript exists");
+        assert_eq!(stored.speakers, None);
+        assert_eq!(stored.text, "Speaker 1: Hello there.\n\nDoug: Second part.");
+        let entry = HistoryManager::get_latest_entry_with_conn(&conn)
+            .expect("read entry")
+            .expect("entry exists");
+        assert_eq!(entry.file.expect("file info").speaker_count, 0);
     }
 
     #[test]

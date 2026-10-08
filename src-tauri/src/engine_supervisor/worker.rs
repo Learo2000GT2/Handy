@@ -8,7 +8,7 @@
 use super::protocol::{
     read_message, write_message, DeviceInfo, DeviceSelector, LoadedInfo, Request, Response,
 };
-use super::{CPU_ONLY_FLAG, LOG_LEVEL_ENV};
+use super::{CPU_ONLY_FLAG, LOG_LEVEL_ENV, LOW_PRIORITY_FLAG};
 use log::{debug, error, warn, LevelFilter, Log, Metadata, Record};
 use std::fs::File;
 use std::io::{self, BufReader, Write};
@@ -33,6 +33,12 @@ pub fn run() -> i32 {
     // The worker owns the per-run engine scratch, so it needs the same glibc
     // tuning as the app (#1792). Before anything allocates.
     crate::memory::init_allocator();
+    // Before any thread starts, so every thread (the engine's included)
+    // inherits it.
+    #[cfg(unix)]
+    let lowered = std::env::args_os()
+        .any(|arg| arg == LOW_PRIORITY_FLAG)
+        .then(lower_priority);
     #[cfg(unix)]
     ignore_app_signals();
     #[cfg(target_os = "linux")]
@@ -48,6 +54,12 @@ pub fn run() -> i32 {
         }
     };
     init_logger();
+    #[cfg(unix)]
+    match lowered {
+        Some(Ok(nice)) => debug!("Worker running at low priority (nice {})", nice),
+        Some(Err(e)) => warn!("Could not lower the worker's priority: {}", e),
+        None => {}
+    }
 
     let (requests_tx, requests) = mpsc::channel();
     if let Err(e) = thread::Builder::new()
@@ -421,6 +433,35 @@ fn ignore_app_signals() {
     unsafe {
         libc::signal(libc::SIGUSR1, libc::SIG_IGN);
         libc::signal(libc::SIGUSR2, libc::SIG_IGN);
+    }
+}
+
+/// Raise the niceness by 10 (lower the priority). Returns the new niceness.
+#[cfg(unix)]
+fn lower_priority() -> io::Result<i32> {
+    // `nice` may legitimately return -1, so errno tells success from failure.
+    clear_errno();
+    // SAFETY: plain syscall wrapper with no pointer arguments.
+    let nice = unsafe { libc::nice(10) };
+    let error = io::Error::last_os_error();
+    if nice == -1 && error.raw_os_error().is_some_and(|code| code != 0) {
+        return Err(error);
+    }
+    Ok(nice)
+}
+
+#[cfg(unix)]
+fn clear_errno() {
+    // SAFETY: errno is thread-local; the location is valid for this thread.
+    unsafe {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            *libc::__errno_location() = 0;
+        }
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
+        {
+            *libc::__error() = 0;
+        }
     }
 }
 

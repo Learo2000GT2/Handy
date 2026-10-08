@@ -5,6 +5,7 @@
 //! Every renderer emits UTF-8 without a BOM and `\n` line endings; a
 //! non-empty output ends with exactly one `\n`.
 
+use crate::file_transcription::speakers::speaker_label;
 use crate::file_transcription::types::{
     is_no_space_language, FileTranscript, TranscriptFormat, TranscriptSegment, TranscriptStatus,
 };
@@ -74,6 +75,16 @@ pub fn render_markdown(t: &FileTranscript) -> String {
             markdown_text(language, " ")
         ));
     }
+    if let Some(speakers) = &t.speakers {
+        let names: Vec<String> = speakers
+            .speakers
+            .iter()
+            .map(|speaker| markdown_text(&speaker_label(speakers, speaker.id), " "))
+            .collect();
+        if !names.is_empty() {
+            out.push_str(&format!("- **Speakers:** {}\n", names.join(", ")));
+        }
+    }
     if let Some(created) = DateTime::from_timestamp(t.created_at, 0) {
         out.push_str(&format!(
             "- **Transcribed:** {}\n",
@@ -103,12 +114,18 @@ pub fn render_markdown(t: &FileTranscript) -> String {
     }
     for paragraph in &t.paragraphs {
         let body = markdown_text(&paragraph.text, "\n");
-        if !body.is_empty() {
-            out.push_str(&format!(
-                "\n**[{}]** {}\n",
-                format_clock(paragraph.start_ms),
+        if body.is_empty() {
+            continue;
+        }
+        let clock = format_clock(paragraph.start_ms);
+        match (paragraph.speaker, &t.speakers) {
+            (Some(id), Some(speakers)) => out.push_str(&format!(
+                "\n**[{}] {}:** {}\n",
+                clock,
+                markdown_text(&speaker_label(speakers, id), " "),
                 body
-            ));
+            )),
+            _ => out.push_str(&format!("\n**[{}]** {}\n", clock, body)),
         }
     }
     out
@@ -117,7 +134,7 @@ pub fn render_markdown(t: &FileTranscript) -> String {
 /// SubRip subtitles: numbered cues separated by a blank line, no escaping.
 /// Empty when there is nothing to show.
 pub fn render_srt(t: &FileTranscript) -> String {
-    build_cues(timed_text(t), t.language.as_deref())
+    subtitle_cues(t)
         .iter()
         .enumerate()
         .map(|(i, cue)| {
@@ -135,16 +152,22 @@ pub fn render_srt(t: &FileTranscript) -> String {
 
 /// WebVTT subtitles: the `WEBVTT` header, then unnumbered cues separated by a
 /// blank line. `&`, `<` and `>` are escaped, which also defuses a `-->` in
-/// the text.
+/// the text. With speaker labels, each labelled cue starts with a voice span
+/// (`<v Doug>`); it needs no closing tag as it covers the whole cue.
 pub fn render_vtt(t: &FileTranscript) -> String {
-    let cues = build_cues(timed_text(t), t.language.as_deref());
+    let cues = subtitle_cues(t);
     if cues.is_empty() {
         return "WEBVTT\n".to_string();
     }
     let body = cues
         .iter()
         .map(|cue| {
-            let lines: Vec<String> = cue.lines.iter().map(|line| escape_vtt(line)).collect();
+            let mut lines: Vec<String> = cue.lines.iter().map(|line| escape_vtt(line)).collect();
+            if let (Some(id), Some(speakers), Some(first)) =
+                (cue.speaker, &t.speakers, lines.first_mut())
+            {
+                *first = format!("<v {}>{}", vtt_voice(&speaker_label(speakers, id)), first);
+            }
             format!(
                 "{} --> {}\n{}\n",
                 format_vtt_timestamp(cue.start_ms),
@@ -171,6 +194,8 @@ pub struct Cue {
     pub start_ms: u64,
     pub end_ms: u64,
     pub lines: Vec<String>,
+    /// The display speaker id of the segment the cue comes from.
+    pub speaker: Option<u32>,
 }
 
 /// Turns timed segments into subtitle cues of at most two lines (42 chars
@@ -179,13 +204,48 @@ pub struct Cue {
 /// the result is ordered and free of overlaps: every cue ends after it
 /// starts and no later than the next cue starts.
 pub fn build_cues(segments: &[TranscriptSegment], language: Option<&str>) -> Vec<Cue> {
+    cues_with_prefix(segments, language, |_| None)
+}
+
+/// build_cues for labelled segments: the first cue of each speaker turn (a
+/// segment whose speaker differs from the previous labelled segment's) has
+/// "Label: " prepended to its text *before* line wrapping, so it counts toward the
+/// 42/16-char limits and the time split. Every cue keeps its segment's speaker.
+pub fn build_labeled_cues(
+    segments: &[TranscriptSegment],
+    language: Option<&str>,
+    label: &dyn Fn(u32) -> String,
+) -> Vec<Cue> {
+    let mut previous: Option<u32> = None;
+    cues_with_prefix(segments, language, |segment| {
+        let speaker = segment.speaker?;
+        if previous.replace(speaker) == Some(speaker) {
+            return None;
+        }
+        Some(format!("{}: ", label(speaker)))
+    })
+}
+
+/// The subtitle cues of a transcript: labelled when it has speaker labels.
+fn subtitle_cues(t: &FileTranscript) -> Vec<Cue> {
+    match &t.speakers {
+        Some(speakers) => build_labeled_cues(timed_text(t), t.language.as_deref(), &|id| {
+            speaker_label(speakers, id)
+        }),
+        None => build_cues(timed_text(t), t.language.as_deref()),
+    }
+}
+
+/// `prefix` is asked once per non-blank segment, in order, for text to put
+/// before it.
+fn cues_with_prefix(
+    segments: &[TranscriptSegment],
+    language: Option<&str>,
+    mut prefix: impl FnMut(&TranscriptSegment) -> Option<String>,
+) -> Vec<Cue> {
     let mut cues: Vec<Cue> = Vec::new();
     for segment in segments {
-        let text = segment
-            .text
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
+        let text = collapse_whitespace(&segment.text);
         if text.is_empty() {
             continue;
         }
@@ -202,15 +262,24 @@ pub fn build_cues(segments: &[TranscriptSegment], language: Option<&str>) -> Vec
         } else {
             MAX_LINE_CHARS
         };
+        let text = match prefix(segment) {
+            Some(prefix) => collapse_whitespace(&format!("{prefix}{text}")),
+            None => text,
+        };
         let units = split_units(&text, no_space, limit);
 
         let mut segment_cues = Vec::new();
         layout_cues(&units, start, end, limit, &mut segment_cues);
-        for cue in segment_cues {
+        for mut cue in segment_cues {
+            cue.speaker = segment.speaker;
             push_in_order(&mut cues, cue);
         }
     }
     cues
+}
+
+fn collapse_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// "HH:MM:SS", rounded down; hours grow past two digits ("100:00:00").
@@ -395,6 +464,11 @@ fn escape_vtt(text: &str) -> String {
         .replace('>', "&gt;")
 }
 
+/// A speaker label as a WebVTT voice name: on one line, escaped.
+fn vtt_voice(label: &str) -> String {
+    escape_vtt(label.replace(['\r', '\n'], " ").trim())
+}
+
 /// Escapes text for Markdown. Each line is trimmed and escaped, blank lines
 /// are dropped (so a paragraph stays one block) and the lines are joined
 /// with `separator`.
@@ -534,7 +608,7 @@ fn clusters(text: &str) -> Vec<&str> {
 /// joiners, variation selectors and emoji skin tones. (The zero-width
 /// joiner, Myanmar virama and Khmer coeng also bind the character after
 /// them; `clusters` handles that.)
-fn is_combining(c: char) -> bool {
+pub(crate) fn is_combining(c: char) -> bool {
     matches!(
         u32::from(c),
         0x0300..=0x036F
@@ -665,6 +739,7 @@ fn layout_cues(units: &[Unit], start: u64, end: u64, limit: usize, out: &mut Vec
             .iter()
             .map(|line| line_text(&units[line.clone()]))
             .collect(),
+        speaker: None,
     });
 }
 
@@ -721,7 +796,8 @@ fn push_in_order(cues: &mut Vec<Cue>, mut cue: Cue) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file_transcription::types::TimingGrain;
+    use crate::file_transcription::speakers::render_text;
+    use crate::file_transcription::types::{TimingGrain, TranscriptSpeaker, TranscriptSpeakers};
 
     fn seg(start_ms: u64, end_ms: u64, text: &str) -> TranscriptSegment {
         TranscriptSegment::new(start_ms, end_ms, text)
@@ -732,6 +808,7 @@ mod tests {
             start_ms,
             end_ms,
             lines: lines.iter().map(|l| l.to_string()).collect(),
+            speaker: None,
         }
     }
 
@@ -995,6 +1072,196 @@ chunking matters.
         assert_eq!(json, expected);
         let parsed: FileTranscript = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, sample());
+    }
+
+    fn labelled_seg(start_ms: u64, end_ms: u64, text: &str, speaker: u32) -> TranscriptSegment {
+        TranscriptSegment {
+            speaker: Some(speaker),
+            ..seg(start_ms, end_ms, text)
+        }
+    }
+
+    /// Two speakers, the first one named.
+    fn labelled_sample() -> FileTranscript {
+        let speakers = TranscriptSpeakers {
+            speakers: vec![
+                TranscriptSpeaker {
+                    id: 1,
+                    name: Some("Doug".to_string()),
+                },
+                TranscriptSpeaker { id: 2, name: None },
+            ],
+            approximate: false,
+            unassigned_segments: 0,
+            model: "sortformer-4spk-v2.1-q8_0".to_string(),
+        };
+        let paragraphs = vec![
+            labelled_seg(
+                0,
+                7_950,
+                "Thanks for coming in today. How long are you usually standing?",
+                1,
+            ),
+            labelled_seg(8_400, 10_100, "Almost the whole shift.", 2),
+        ];
+        FileTranscript {
+            status: TranscriptStatus::Completed,
+            status_detail: None,
+            duration_ms: 10_100,
+            text: render_text(&paragraphs, Some(&speakers)),
+            paragraphs,
+            segments: vec![
+                labelled_seg(0, 3_200, "Thanks for coming in today.", 1),
+                labelled_seg(3_200, 7_950, "How long are you usually standing?", 1),
+                labelled_seg(8_400, 10_100, "Almost the whole shift.", 2),
+            ],
+            speakers: Some(speakers),
+            ..sample()
+        }
+    }
+
+    #[test]
+    fn txt_md_srt_vtt_json_with_speakers_golden() {
+        let t = labelled_sample();
+        assert_eq!(
+            render(&t, TranscriptFormat::Txt),
+            "Doug: Thanks for coming in today. How long are you usually standing?\n\n\
+             Speaker 2: Almost the whole shift.\n"
+        );
+
+        let markdown = "# interview.m4a
+
+- **Duration:** 00:00:10
+- **Model:** Whisper Small
+- **Language:** en
+- **Speakers:** Doug, Speaker 2
+- **Transcribed:** 2023-11-14 22:13 UTC
+
+---
+
+**[00:00:00] Doug:** Thanks for coming in today. How long are you usually standing?
+
+**[00:00:08] Speaker 2:** Almost the whole shift.
+";
+        assert_eq!(render(&t, TranscriptFormat::Md), markdown);
+
+        let srt = "1
+00:00:00,000 --> 00:00:03,200
+Doug: Thanks for coming in today.
+
+2
+00:00:03,200 --> 00:00:07,950
+How long are you usually standing?
+
+3
+00:00:08,400 --> 00:00:10,100
+Speaker 2: Almost the whole shift.
+";
+        assert_eq!(render(&t, TranscriptFormat::Srt), srt);
+
+        let vtt = "WEBVTT
+
+00:00:00.000 --> 00:00:03.200
+<v Doug>Doug: Thanks for coming in today.
+
+00:00:03.200 --> 00:00:07.950
+<v Doug>How long are you usually standing?
+
+00:00:08.400 --> 00:00:10.100
+<v Speaker 2>Speaker 2: Almost the whole shift.
+";
+        assert_eq!(render(&t, TranscriptFormat::Vtt), vtt);
+
+        let json = render(&t, TranscriptFormat::Json);
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["segments"][0]["speaker"], 1);
+        assert_eq!(value["paragraphs"][1]["speaker"], 2);
+        assert_eq!(value["speakers"]["speakers"][0]["name"], "Doug");
+        assert_eq!(
+            value["speakers"]["speakers"][1]["name"],
+            serde_json::Value::Null
+        );
+        // The new key comes last, after every key of today's format.
+        assert!(json.rfind("\"speakers\": {").unwrap() > json.rfind("\"history_id\"").unwrap());
+        let parsed: FileTranscript = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, t);
+    }
+
+    #[test]
+    fn vtt_voice_names_are_escaped() {
+        let mut t = labelled_sample();
+        if let Some(speakers) = t.speakers.as_mut() {
+            speakers.speakers[0].name = Some("A<b>&c".to_string());
+            speakers.speakers[1].name = Some(" Two\nLines ".to_string());
+        }
+        let vtt = render(&t, TranscriptFormat::Vtt);
+        assert!(
+            vtt.contains("\n<v A&lt;b&gt;&amp;c>A&lt;b&gt;&amp;c: Thanks for coming in today.\n"),
+            "{vtt}"
+        );
+        assert!(
+            vtt.contains("\n<v Two Lines>Two Lines: Almost the whole shift.\n"),
+            "{vtt}"
+        );
+        // Markdown escapes the name like any text.
+        assert!(render(&t, TranscriptFormat::Md).contains("**[00:00:00] A\\<b\\>&c:**"));
+    }
+
+    #[test]
+    fn srt_label_counts_toward_line_wrap() {
+        let text = "The quick brown fox jumps over a lazy dog"; // 41 chars: one line alone
+        let segments = vec![
+            labelled_seg(0, 4_000, text, 1),
+            labelled_seg(4_000, 8_000, text, 1),
+        ];
+        assert_eq!(build_cues(&segments[..1], Some("en"))[0].lines, [text]);
+        let cues = build_labeled_cues(&segments, Some("en"), &|id| format!("Speaker {id}"));
+        assert_eq!(
+            cues,
+            vec![
+                Cue {
+                    speaker: Some(1),
+                    ..cue(
+                        0,
+                        4_000,
+                        &["Speaker 1: The quick brown fox jumps over", "a lazy dog"]
+                    )
+                },
+                // Same speaker: no label.
+                Cue {
+                    speaker: Some(1),
+                    ..cue(4_000, 8_000, &[text])
+                },
+            ]
+        );
+        assert_well_formed(&cues);
+    }
+
+    #[test]
+    fn unlabeled_paragraphs_in_labeled_transcript_render_plain() {
+        let mut t = labelled_sample();
+        t.paragraphs[1].speaker = None;
+        t.segments[2].speaker = None;
+        t.text = render_text(&t.paragraphs, t.speakers.as_ref());
+        assert_eq!(
+            render(&t, TranscriptFormat::Txt),
+            "Doug: Thanks for coming in today. How long are you usually standing?\n\n\
+             Almost the whole shift.\n"
+        );
+        assert!(render(&t, TranscriptFormat::Md)
+            .ends_with("\n**[00:00:08]** Almost the whole shift.\n"));
+        assert!(render(&t, TranscriptFormat::Srt)
+            .ends_with("00:00:08,400 --> 00:00:10,100\nAlmost the whole shift.\n"));
+        assert!(render(&t, TranscriptFormat::Vtt)
+            .ends_with("00:00:08.400 --> 00:00:10.100\nAlmost the whole shift.\n"));
+    }
+
+    #[test]
+    fn json_without_speakers_has_no_new_keys() {
+        let json = render(&sample(), TranscriptFormat::Json);
+        assert!(!json.contains("speaker"), "{json}");
+        let cues = build_cues(&sample().segments, Some("en"));
+        assert!(cues.iter().all(|cue| cue.speaker.is_none()));
     }
 
     #[test]

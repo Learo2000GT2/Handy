@@ -19,6 +19,9 @@
 //! all: a driver that crashes or hangs while initializing can't take the CPU
 //! fallback down with it.
 //!
+//! A supervisor may also run its workers at low priority
+//! ([`WorkerOptions`]), for background work beside dictation.
+//!
 //! - `protocol`: the framed request/response protocol between the two.
 //! - `supervisor`: the parent side ([`EngineSupervisor`]).
 //! - `worker`: the child process.
@@ -38,7 +41,18 @@ pub use work_token::WorkToken;
 pub const WORKER_FLAG: &str = "--transcribe-worker";
 /// Worker argument: register only the CPU backends.
 const CPU_ONLY_FLAG: &str = "--cpu-only";
+/// Worker argument: lower the worker's scheduling priority (Unix; Windows
+/// gets a below-normal priority class at creation instead).
+const LOW_PRIORITY_FLAG: &str = "--low-priority";
 const LOG_LEVEL_ENV: &str = "HANDY_TRANSCRIBE_WORKER_LOG";
+
+/// How an [`EngineSupervisor`] starts its workers.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct WorkerOptions {
+    /// Run workers below normal priority, so background work (diarizing a
+    /// file) yields the CPU to dictation and the rest of the system.
+    pub low_priority: bool,
+}
 
 /// Whether this process was launched as a transcription worker. Checked in
 /// `main` before CLI parsing, Tauri, or single-instance handling.
