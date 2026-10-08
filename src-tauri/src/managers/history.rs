@@ -6,9 +6,13 @@ use rusqlite_migration::{Migrations, M};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use tauri::AppHandle;
 use tauri_specta::Event;
+
+use crate::file_transcription::types::{
+    FileHistoryInfo, FileTranscript, TimingGrain, TranscriptSegment, TranscriptStatus,
+};
 
 /// Database migrations for transcription history.
 /// Each migration is applied in order. The library tracks which migrations
@@ -32,6 +36,90 @@ static MIGRATIONS: &[M] = &[
     M::up("ALTER TABLE transcription_history ADD COLUMN post_process_prompt TEXT;"),
     M::up("ALTER TABLE transcription_history ADD COLUMN post_process_requested BOOLEAN NOT NULL DEFAULT 0;"),
 ];
+
+/// Side table for entries made by file transcription, keyed by
+/// `transcription_history.id`. It is created idempotently after the
+/// migrations instead of being one of them, so `user_version` stays where
+/// upstream Handy expects it and either app can keep opening the database.
+/// The trailing DELETE drops rows whose history entry was removed by a build
+/// that does not know this table. Later columns must be added with a
+/// `PRAGMA table_info` check and `ALTER TABLE`, never through `MIGRATIONS`.
+pub(crate) const FILE_TRANSCRIPTION_SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS file_transcription (
+    history_id INTEGER PRIMARY KEY NOT NULL,      -- = transcription_history.id
+    source_path TEXT NOT NULL,                    -- user's original; NEVER deleted by Handy
+    source_name TEXT NOT NULL,
+    source_size_bytes INTEGER,
+    source_modified_at INTEGER,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    model_id TEXT,
+    model_name TEXT,
+    language TEXT,
+    status TEXT NOT NULL DEFAULT 'completed',     -- completed | partial
+    status_detail TEXT,
+    timing TEXT NOT NULL DEFAULT 'chunk',         -- chunk | segment
+    paragraphs_json TEXT NOT NULL DEFAULT '[]',   -- [TranscriptSegment]
+    segments_json TEXT NOT NULL DEFAULT '[]',     -- [TranscriptSegment]
+    created_at INTEGER NOT NULL
+);
+DELETE FROM file_transcription
+ WHERE history_id NOT IN (SELECT id FROM transcription_history);";
+
+pub(crate) fn ensure_file_transcription_schema(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(FILE_TRANSCRIPTION_SCHEMA)
+}
+
+/// Columns read by `map_history_entry`; every entry SELECT uses this list
+/// with `ENTRY_FROM`, so a new column cannot be missed by one query.
+const ENTRY_COLUMNS: &str = "h.id AS id, h.file_name AS file_name, h.timestamp AS timestamp, \
+    h.saved AS saved, h.title AS title, h.transcription_text AS transcription_text, \
+    h.post_processed_text AS post_processed_text, h.post_process_prompt AS post_process_prompt, \
+    h.post_process_requested AS post_process_requested, f.history_id AS f_history_id, \
+    f.source_path AS f_source_path, f.source_name AS f_source_name, \
+    f.duration_ms AS f_duration_ms, f.model_id AS f_model_id, f.model_name AS f_model_name, \
+    f.status AS f_status";
+const ENTRY_FROM: &str =
+    "FROM transcription_history h LEFT JOIN file_transcription f ON f.history_id = h.id";
+
+/// The path of a recording inside `dir`, or `None` unless `file_name` is a
+/// single plain file name. File transcription entries store `""`, and a path
+/// that is absolute or climbs out of `dir` would make `join` point at a file
+/// Handy does not own, so neither may ever reach `fs::remove_file`.
+fn safe_recording_path(dir: &Path, file_name: &str) -> Option<PathBuf> {
+    let mut components = Path::new(file_name).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(name)), None) => Some(dir.join(name)),
+        _ => None,
+    }
+}
+
+fn status_to_sql(status: TranscriptStatus) -> &'static str {
+    match status {
+        TranscriptStatus::Completed => "completed",
+        TranscriptStatus::Partial => "partial",
+    }
+}
+
+fn status_from_sql(status: Option<&str>) -> TranscriptStatus {
+    match status {
+        Some("partial") => TranscriptStatus::Partial,
+        _ => TranscriptStatus::Completed,
+    }
+}
+
+fn timing_to_sql(timing: TimingGrain) -> &'static str {
+    match timing {
+        TimingGrain::Chunk => "chunk",
+        TimingGrain::Segment => "segment",
+    }
+}
+
+fn timing_from_sql(timing: &str) -> TimingGrain {
+    match timing {
+        "segment" => TimingGrain::Segment,
+        _ => TimingGrain::Chunk,
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
 pub struct PaginatedHistory {
@@ -63,6 +151,8 @@ pub struct HistoryEntry {
     pub post_processed_text: Option<String>,
     pub post_process_prompt: Option<String>,
     pub post_process_requested: bool,
+    /// Set for entries made by file transcription.
+    pub file: Option<FileHistoryInfo>,
 }
 
 pub struct HistoryManager {
@@ -119,6 +209,9 @@ impl HistoryManager {
 
         // Apply any pending migrations
         migrations.to_latest(&mut conn)?;
+
+        // Not a migration: see FILE_TRANSCRIPTION_SCHEMA.
+        ensure_file_transcription_schema(&conn)?;
 
         // Get version after migration
         let version_after: i32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -197,6 +290,23 @@ impl HistoryManager {
     }
 
     fn map_history_entry(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> {
+        let file = match row.get::<_, Option<i64>>("f_history_id")? {
+            Some(_) => {
+                let source_path: String = row.get("f_source_path")?;
+                let source_exists = Path::new(&source_path).exists();
+                Some(FileHistoryInfo {
+                    source_name: row.get("f_source_name")?,
+                    duration_ms: row.get("f_duration_ms")?,
+                    model_id: row.get("f_model_id")?,
+                    model_name: row.get("f_model_name")?,
+                    status: status_from_sql(row.get::<_, Option<String>>("f_status")?.as_deref()),
+                    source_exists,
+                    source_path,
+                })
+            }
+            None => None,
+        };
+
         Ok(HistoryEntry {
             id: row.get("id")?,
             file_name: row.get("file_name")?,
@@ -207,6 +317,7 @@ impl HistoryManager {
             post_processed_text: row.get("post_processed_text")?,
             post_process_prompt: row.get("post_process_prompt")?,
             post_process_requested: row.get("post_process_requested")?,
+            file,
         })
     }
 
@@ -261,6 +372,7 @@ impl HistoryManager {
             post_processed_text,
             post_process_prompt,
             post_process_requested,
+            file: None,
         };
 
         debug!("Saved history entry with id {}", entry.id);
@@ -306,13 +418,11 @@ impl HistoryManager {
             return Err(anyhow!("History entry {} not found", id));
         }
 
-        let entry = conn
-            .query_row(
-                "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
-                 FROM transcription_history WHERE id = ?1",
-                params![id],
-                Self::map_history_entry,
-            )?;
+        let entry = conn.query_row(
+            &format!("SELECT {ENTRY_COLUMNS} {ENTRY_FROM} WHERE h.id = ?1"),
+            params![id],
+            Self::map_history_entry,
+        )?;
 
         debug!("Updated transcription for history entry {}", id);
 
@@ -357,13 +467,13 @@ impl HistoryManager {
 
         for (id, file_name) in entries {
             // Delete database entry
-            conn.execute(
-                "DELETE FROM transcription_history WHERE id = ?1",
-                params![id],
-            )?;
+            Self::delete_entry_rows(&conn, *id)?;
 
-            // Delete WAV file
-            let file_path = self.recordings_dir.join(file_name);
+            // Delete WAV file. File transcription entries have no recording,
+            // and their source file is never touched.
+            let Some(file_path) = safe_recording_path(&self.recordings_dir, file_name) else {
+                continue;
+            };
             if file_path.exists() {
                 if let Err(e) = fs::remove_file(&file_path) {
                     error!("Failed to delete WAV file {}: {}", file_name, e);
@@ -377,9 +487,36 @@ impl HistoryManager {
         Ok(deleted_count)
     }
 
+    /// Delete one entry's rows. The side table has no foreign key (each
+    /// connection runs without `PRAGMA foreign_keys`), so its row goes by hand.
+    fn delete_entry_rows(conn: &Connection, id: i64) -> rusqlite::Result<()> {
+        conn.execute(
+            "DELETE FROM transcription_history WHERE id = ?1",
+            params![id],
+        )?;
+        conn.execute(
+            "DELETE FROM file_transcription WHERE history_id = ?1",
+            params![id],
+        )?;
+        Ok(())
+    }
+
     fn cleanup_by_count(&self, limit: usize) -> Result<()> {
         let conn = self.get_connection()?;
+        let entries_to_delete = Self::cleanup_candidates_by_count(&conn, limit)?;
+        let deleted_count = self.delete_entries_and_files(&entries_to_delete)?;
 
+        if deleted_count > 0 {
+            debug!("Cleaned up {} old history entries by count", deleted_count);
+        }
+
+        Ok(())
+    }
+
+    /// Unsaved entries beyond the newest `limit`, as `(id, file_name)`.
+    /// Starred entries (including every file transcription unless the user
+    /// unstarred it) are never candidates.
+    fn cleanup_candidates_by_count(conn: &Connection, limit: usize) -> Result<Vec<(i64, String)>> {
         // Get all entries that are not saved, ordered by timestamp desc
         let mut stmt = conn.prepare(
             "SELECT id, file_name FROM transcription_history WHERE saved = 0 ORDER BY timestamp DESC"
@@ -394,16 +531,7 @@ impl HistoryManager {
             entries.push(row?);
         }
 
-        if entries.len() > limit {
-            let entries_to_delete = &entries[limit..];
-            let deleted_count = self.delete_entries_and_files(entries_to_delete)?;
-
-            if deleted_count > 0 {
-                debug!("Cleaned up {} old history entries by count", deleted_count);
-            }
-        }
-
-        Ok(())
+        Ok(entries.into_iter().skip(limit).collect())
     }
 
     fn cleanup_by_time(
@@ -458,13 +586,12 @@ impl HistoryManager {
         let mut entries: Vec<HistoryEntry> = match (cursor, limit) {
             (Some(cursor_id), Some(lim)) => {
                 let fetch_count = (lim + 1) as i64;
-                let mut stmt = conn.prepare(
-                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
-                     FROM transcription_history
-                     WHERE id < ?1
-                     ORDER BY id DESC
-                     LIMIT ?2",
-                )?;
+                let mut stmt = conn.prepare(&format!(
+                    "SELECT {ENTRY_COLUMNS} {ENTRY_FROM}
+                     WHERE h.id < ?1
+                     ORDER BY h.id DESC
+                     LIMIT ?2"
+                ))?;
                 let result = stmt
                     .query_map(params![cursor_id, fetch_count], Self::map_history_entry)?
                     .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -472,23 +599,21 @@ impl HistoryManager {
             }
             (None, Some(lim)) => {
                 let fetch_count = (lim + 1) as i64;
-                let mut stmt = conn.prepare(
-                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
-                     FROM transcription_history
-                     ORDER BY id DESC
-                     LIMIT ?1",
-                )?;
+                let mut stmt = conn.prepare(&format!(
+                    "SELECT {ENTRY_COLUMNS} {ENTRY_FROM}
+                     ORDER BY h.id DESC
+                     LIMIT ?1"
+                ))?;
                 let result = stmt
                     .query_map(params![fetch_count], Self::map_history_entry)?
                     .collect::<std::result::Result<Vec<_>, _>>()?;
                 result
             }
             (_, None) => {
-                let mut stmt = conn.prepare(
-                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
-                     FROM transcription_history
-                     ORDER BY id DESC",
-                )?;
+                let mut stmt = conn.prepare(&format!(
+                    "SELECT {ENTRY_COLUMNS} {ENTRY_FROM}
+                     ORDER BY h.id DESC"
+                ))?;
                 let result = stmt
                     .query_map([], Self::map_history_entry)?
                     .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -506,49 +631,31 @@ impl HistoryManager {
 
     #[cfg(test)]
     fn get_latest_entry_with_conn(conn: &Connection) -> Result<Option<HistoryEntry>> {
-        let mut stmt = conn.prepare(
-            "SELECT
-                id,
-                file_name,
-                timestamp,
-                saved,
-                title,
-                transcription_text,
-                post_processed_text,
-                post_process_prompt,
-                post_process_requested
-             FROM transcription_history
-             ORDER BY timestamp DESC
-             LIMIT 1",
-        )?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {ENTRY_COLUMNS} {ENTRY_FROM}
+             ORDER BY h.timestamp DESC
+             LIMIT 1"
+        ))?;
 
         let entry = stmt.query_row([], Self::map_history_entry).optional()?;
         Ok(entry)
     }
 
-    /// Get the latest entry with non-empty transcription text.
+    /// Get the latest dictation entry with non-empty transcription text.
+    /// File transcriptions are left out: this feeds the tray's "Copy Last
+    /// Transcript", which should not copy an hour-long transcript.
     pub fn get_latest_completed_entry(&self) -> Result<Option<HistoryEntry>> {
         let conn = self.get_connection()?;
         Self::get_latest_completed_entry_with_conn(&conn)
     }
 
     fn get_latest_completed_entry_with_conn(conn: &Connection) -> Result<Option<HistoryEntry>> {
-        let mut stmt = conn.prepare(
-            "SELECT
-                id,
-                file_name,
-                timestamp,
-                saved,
-                title,
-                transcription_text,
-                post_processed_text,
-                post_process_prompt,
-                post_process_requested
-             FROM transcription_history
-             WHERE transcription_text != ''
-             ORDER BY timestamp DESC
-             LIMIT 1",
-        )?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {ENTRY_COLUMNS} {ENTRY_FROM}
+             WHERE h.transcription_text != '' AND f.history_id IS NULL
+             ORDER BY h.timestamp DESC
+             LIMIT 1"
+        ))?;
 
         let entry = stmt.query_row([], Self::map_history_entry).optional()?;
         Ok(entry)
@@ -581,26 +688,18 @@ impl HistoryManager {
         Ok(())
     }
 
-    pub fn get_audio_file_path(&self, file_name: &str) -> PathBuf {
-        self.recordings_dir.join(file_name)
+    /// The entry's recording, or `None` when it has none (file
+    /// transcriptions) or the stored name is not a plain file name.
+    pub fn get_audio_file_path(&self, file_name: &str) -> Option<PathBuf> {
+        safe_recording_path(&self.recordings_dir, file_name)
     }
 
     pub async fn get_entry_by_id(&self, id: i64) -> Result<Option<HistoryEntry>> {
         let conn = self.get_connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT
-                id,
-                file_name,
-                timestamp,
-                saved,
-                title,
-                transcription_text,
-                post_processed_text,
-                post_process_prompt,
-                post_process_requested
-             FROM transcription_history
-             WHERE id = ?1",
-        )?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {ENTRY_COLUMNS} {ENTRY_FROM}
+             WHERE h.id = ?1"
+        ))?;
 
         let entry = stmt.query_row([id], Self::map_history_entry).optional()?;
 
@@ -612,21 +711,20 @@ impl HistoryManager {
 
         // Get the entry to find the file name
         if let Some(entry) = self.get_entry_by_id(id).await? {
-            // Delete the audio file first
-            let file_path = self.get_audio_file_path(&entry.file_name);
-            if file_path.exists() {
-                if let Err(e) = fs::remove_file(&file_path) {
-                    error!("Failed to delete audio file {}: {}", entry.file_name, e);
-                    // Continue with database deletion even if file deletion fails
+            // Delete the audio file first. A file transcription has no
+            // recording, and its source file is never deleted.
+            if let Some(file_path) = self.get_audio_file_path(&entry.file_name) {
+                if file_path.exists() {
+                    if let Err(e) = fs::remove_file(&file_path) {
+                        error!("Failed to delete audio file {}: {}", entry.file_name, e);
+                        // Continue with database deletion even if file deletion fails
+                    }
                 }
             }
         }
 
         // Delete from database
-        conn.execute(
-            "DELETE FROM transcription_history WHERE id = ?1",
-            params![id],
-        )?;
+        Self::delete_entry_rows(&conn, id)?;
 
         debug!("Deleted history entry with id: {}", id);
 
@@ -636,6 +734,199 @@ impl HistoryManager {
         }
 
         Ok(())
+    }
+
+    /// Save a finished (or partial) file transcription. The entry is starred
+    /// so retention never drops it, has no recording (`file_name` is empty),
+    /// and is titled with the source file's name.
+    pub fn save_file_entry(
+        &self,
+        transcript: &FileTranscript,
+        source_size_bytes: Option<u64>,
+        source_modified_at: Option<i64>,
+    ) -> Result<HistoryEntry> {
+        let mut conn = self.get_connection()?;
+        let entry = Self::insert_file_entry_with_conn(
+            &mut conn,
+            transcript,
+            source_size_bytes,
+            source_modified_at,
+            Utc::now().timestamp(),
+        )?;
+
+        debug!(
+            "Saved file transcription of {} as history entry {}",
+            transcript.source_name, entry.id
+        );
+
+        // The entry is already stored; a failed cleanup must not hide that.
+        if let Err(e) = self.cleanup_old_entries() {
+            error!("Failed to clean up old history entries: {}", e);
+        }
+
+        if let Err(e) = (HistoryUpdatePayload::Added {
+            entry: entry.clone(),
+        })
+        .emit(&self.app_handle)
+        {
+            error!("Failed to emit history-updated event: {}", e);
+        }
+
+        Ok(entry)
+    }
+
+    fn insert_file_entry_with_conn(
+        conn: &mut Connection,
+        transcript: &FileTranscript,
+        source_size_bytes: Option<u64>,
+        source_modified_at: Option<i64>,
+        now_secs: i64,
+    ) -> Result<HistoryEntry> {
+        let paragraphs_json = serde_json::to_string(&transcript.paragraphs)?;
+        let segments_json = serde_json::to_string(&transcript.segments)?;
+        let model_id = Some(transcript.model_id.as_str()).filter(|id| !id.is_empty());
+
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT INTO transcription_history (
+                file_name,
+                timestamp,
+                saved,
+                title,
+                transcription_text,
+                post_processed_text,
+                post_process_prompt,
+                post_process_requested
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                "",
+                now_secs,
+                true,
+                &transcript.source_name,
+                &transcript.text,
+                Option::<String>::None,
+                Option::<String>::None,
+                false,
+            ],
+        )?;
+        let id = tx.last_insert_rowid();
+        tx.execute(
+            "INSERT INTO file_transcription (
+                history_id,
+                source_path,
+                source_name,
+                source_size_bytes,
+                source_modified_at,
+                duration_ms,
+                model_id,
+                model_name,
+                language,
+                status,
+                status_detail,
+                timing,
+                paragraphs_json,
+                segments_json,
+                created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            params![
+                id,
+                &transcript.source_path,
+                &transcript.source_name,
+                source_size_bytes,
+                source_modified_at,
+                transcript.duration_ms,
+                model_id,
+                &transcript.model_name,
+                &transcript.language,
+                status_to_sql(transcript.status),
+                &transcript.status_detail,
+                timing_to_sql(transcript.timing),
+                paragraphs_json,
+                segments_json,
+                transcript.created_at,
+            ],
+        )?;
+        tx.commit()?;
+
+        let entry = conn.query_row(
+            &format!("SELECT {ENTRY_COLUMNS} {ENTRY_FROM} WHERE h.id = ?1"),
+            params![id],
+            Self::map_history_entry,
+        )?;
+        Ok(entry)
+    }
+
+    /// The full transcript of a file transcription entry; `None` when the
+    /// entry does not exist or is a dictation.
+    pub fn get_file_transcript(&self, history_id: i64) -> Result<Option<FileTranscript>> {
+        let conn = self.get_connection()?;
+        Self::get_file_transcript_with_conn(&conn, history_id)
+    }
+
+    fn get_file_transcript_with_conn(
+        conn: &Connection,
+        history_id: i64,
+    ) -> Result<Option<FileTranscript>> {
+        let row = conn
+            .query_row(
+                "SELECT
+                    h.transcription_text AS text,
+                    f.source_path AS source_path,
+                    f.source_name AS source_name,
+                    f.duration_ms AS duration_ms,
+                    f.model_id AS model_id,
+                    f.model_name AS model_name,
+                    f.language AS language,
+                    f.status AS status,
+                    f.status_detail AS status_detail,
+                    f.timing AS timing,
+                    f.paragraphs_json AS paragraphs_json,
+                    f.segments_json AS segments_json,
+                    f.created_at AS created_at
+                 FROM file_transcription f
+                 JOIN transcription_history h ON h.id = f.history_id
+                 WHERE f.history_id = ?1",
+                params![history_id],
+                |row| {
+                    let transcript = FileTranscript {
+                        source_path: row.get("source_path")?,
+                        source_name: row.get("source_name")?,
+                        duration_ms: row.get("duration_ms")?,
+                        model_id: row
+                            .get::<_, Option<String>>("model_id")?
+                            .unwrap_or_default(),
+                        model_name: row.get("model_name")?,
+                        language: row.get("language")?,
+                        status: status_from_sql(row.get::<_, Option<String>>("status")?.as_deref()),
+                        status_detail: row.get("status_detail")?,
+                        timing: timing_from_sql(&row.get::<_, String>("timing")?),
+                        text: row.get("text")?,
+                        paragraphs: Vec::new(),
+                        segments: Vec::new(),
+                        created_at: row.get("created_at")?,
+                        history_id: Some(history_id),
+                    };
+                    let paragraphs_json: String = row.get("paragraphs_json")?;
+                    let segments_json: String = row.get("segments_json")?;
+                    Ok((transcript, paragraphs_json, segments_json))
+                },
+            )
+            .optional()?;
+
+        let Some((mut transcript, paragraphs_json, segments_json)) = row else {
+            return Ok(None);
+        };
+        transcript.paragraphs = serde_json::from_str::<Vec<TranscriptSegment>>(&paragraphs_json)
+            .map_err(|e| {
+                anyhow!(
+                    "Stored paragraphs of entry {} are invalid: {}",
+                    history_id,
+                    e
+                )
+            })?;
+        transcript.segments = serde_json::from_str::<Vec<TranscriptSegment>>(&segments_json)
+            .map_err(|e| anyhow!("Stored segments of entry {} are invalid: {}", history_id, e))?;
+        Ok(Some(transcript))
     }
 
     fn format_timestamp_title(&self, timestamp: i64) -> String {
@@ -655,21 +946,11 @@ mod tests {
     use rusqlite::{params, Connection};
 
     fn setup_conn() -> Connection {
-        let conn = Connection::open_in_memory().expect("open in-memory db");
-        conn.execute_batch(
-            "CREATE TABLE transcription_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_name TEXT NOT NULL,
-                timestamp INTEGER NOT NULL,
-                saved BOOLEAN NOT NULL DEFAULT 0,
-                title TEXT NOT NULL,
-                transcription_text TEXT NOT NULL,
-                post_processed_text TEXT,
-                post_process_prompt TEXT,
-                post_process_requested BOOLEAN NOT NULL DEFAULT 0
-            );",
-        )
-        .expect("create transcription_history table");
+        let mut conn = Connection::open_in_memory().expect("open in-memory db");
+        Migrations::new(MIGRATIONS.to_vec())
+            .to_latest(&mut conn)
+            .expect("run migrations");
+        ensure_file_transcription_schema(&conn).expect("create file transcription table");
         conn
     }
 
@@ -733,5 +1014,270 @@ mod tests {
 
         assert_eq!(entry.timestamp, 100);
         assert_eq!(entry.transcription_text, "completed");
+    }
+
+    fn segment(start_ms: u64, end_ms: u64, text: &str) -> TranscriptSegment {
+        TranscriptSegment {
+            start_ms,
+            end_ms,
+            text: text.to_string(),
+        }
+    }
+
+    fn file_transcript(source_path: &str) -> FileTranscript {
+        FileTranscript {
+            source_path: source_path.to_string(),
+            source_name: "interview.m4a".to_string(),
+            duration_ms: 61_000,
+            model_id: "parakeet".to_string(),
+            model_name: Some("Parakeet V3".to_string()),
+            language: Some("en".to_string()),
+            status: TranscriptStatus::Partial,
+            status_detail: Some("Decoding stopped early at 00:01:01: bad packet".to_string()),
+            timing: TimingGrain::Segment,
+            text: "Hello there.\n\nSecond part.".to_string(),
+            paragraphs: vec![
+                segment(0, 28_000, "Hello there."),
+                segment(28_000, 61_000, "Second part."),
+            ],
+            segments: vec![
+                segment(500, 1_800, "Hello"),
+                segment(1_800, 2_400, "there."),
+                segment(28_300, 30_000, "Second part."),
+            ],
+            created_at: 1_700_000_000,
+            history_id: None,
+        }
+    }
+
+    fn insert_file(conn: &mut Connection, transcript: &FileTranscript, now: i64) -> HistoryEntry {
+        HistoryManager::insert_file_entry_with_conn(
+            conn,
+            transcript,
+            Some(1_234),
+            Some(1_600_000_000),
+            now,
+        )
+        .expect("insert file entry")
+    }
+
+    fn file_rows(conn: &Connection) -> i64 {
+        conn.query_row("SELECT COUNT(*) FROM file_transcription", [], |row| {
+            row.get(0)
+        })
+        .expect("count file rows")
+    }
+
+    #[test]
+    fn file_transcription_schema_is_idempotent() {
+        let mut conn = setup_conn();
+        insert_file(&mut conn, &file_transcript("/missing/interview.m4a"), 100);
+
+        ensure_file_transcription_schema(&conn).expect("second run");
+        ensure_file_transcription_schema(&conn).expect("third run");
+
+        assert_eq!(file_rows(&conn), 1);
+        let version: i32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("read user_version");
+        assert_eq!(version as usize, MIGRATIONS.len());
+    }
+
+    #[test]
+    fn schema_drops_orphaned_file_rows() {
+        let mut conn = setup_conn();
+        let kept = insert_file(&mut conn, &file_transcript("/missing/a.m4a"), 100);
+        let orphaned = insert_file(&mut conn, &file_transcript("/missing/b.m4a"), 200);
+        // What a build without the side table does on delete.
+        conn.execute(
+            "DELETE FROM transcription_history WHERE id = ?1",
+            params![orphaned.id],
+        )
+        .expect("delete history row");
+
+        ensure_file_transcription_schema(&conn).expect("rerun schema");
+
+        let remaining: Vec<i64> = conn
+            .prepare("SELECT history_id FROM file_transcription")
+            .expect("prepare")
+            .query_map([], |row| row.get(0))
+            .expect("query")
+            .collect::<rusqlite::Result<_>>()
+            .expect("collect");
+        assert_eq!(remaining, vec![kept.id]);
+    }
+
+    #[test]
+    fn inserted_file_entry_maps_file_info() {
+        let mut conn = setup_conn();
+        let dir = tempfile::tempdir().expect("tempdir");
+        let source = dir.path().join("interview.m4a");
+        fs::write(&source, b"audio").expect("write source");
+        let transcript = file_transcript(&source.to_string_lossy());
+
+        let entry = insert_file(&mut conn, &transcript, 1_700_000_100);
+
+        assert_eq!(entry.file_name, "");
+        assert!(entry.saved);
+        assert_eq!(entry.timestamp, 1_700_000_100);
+        assert_eq!(entry.title, "interview.m4a");
+        assert_eq!(entry.transcription_text, transcript.text);
+        assert_eq!(entry.post_processed_text, None);
+        assert!(!entry.post_process_requested);
+        let file = entry.file.expect("file info");
+        assert_eq!(file.source_path, transcript.source_path);
+        assert_eq!(file.source_name, "interview.m4a");
+        assert_eq!(file.duration_ms, 61_000);
+        assert_eq!(file.model_id.as_deref(), Some("parakeet"));
+        assert_eq!(file.model_name.as_deref(), Some("Parakeet V3"));
+        assert_eq!(file.status, TranscriptStatus::Partial);
+        assert!(file.source_exists);
+
+        fs::remove_file(&source).expect("remove source");
+        let reread = HistoryManager::get_latest_entry_with_conn(&conn)
+            .expect("fetch")
+            .expect("entry exists");
+        assert!(!reread.file.expect("file info").source_exists);
+    }
+
+    #[test]
+    fn dictation_entries_have_no_file_info() {
+        let conn = setup_conn();
+        insert_entry(&conn, 100, "dictated", None);
+
+        let entry = HistoryManager::get_latest_entry_with_conn(&conn)
+            .expect("fetch")
+            .expect("entry exists");
+
+        assert!(entry.file.is_none());
+        assert_eq!(entry.file_name, "handy-100.wav");
+    }
+
+    #[test]
+    fn latest_completed_entry_skips_file_transcriptions() {
+        let mut conn = setup_conn();
+        insert_entry(&conn, 100, "dictated", None);
+        insert_file(&mut conn, &file_transcript("/missing/a.m4a"), 200);
+
+        let entry = HistoryManager::get_latest_completed_entry_with_conn(&conn)
+            .expect("fetch latest completed entry")
+            .expect("dictation entry exists");
+
+        assert_eq!(entry.timestamp, 100);
+        assert_eq!(entry.transcription_text, "dictated");
+    }
+
+    #[test]
+    fn file_transcript_round_trips() {
+        let mut conn = setup_conn();
+        let transcript = file_transcript("/missing/interview.m4a");
+        let entry = insert_file(&mut conn, &transcript, 100);
+
+        let stored = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("read transcript")
+            .expect("file transcript exists");
+
+        let expected = FileTranscript {
+            history_id: Some(entry.id),
+            ..transcript
+        };
+        assert_eq!(stored, expected);
+    }
+
+    #[test]
+    fn file_transcript_without_model_id_stores_null() {
+        let mut conn = setup_conn();
+        let transcript = FileTranscript {
+            model_id: String::new(),
+            model_name: None,
+            language: None,
+            status: TranscriptStatus::Completed,
+            status_detail: None,
+            timing: TimingGrain::Chunk,
+            ..file_transcript("/missing/a.m4a")
+        };
+        let entry = insert_file(&mut conn, &transcript, 100);
+
+        assert_eq!(entry.file.expect("file info").model_id, None);
+        let stored = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("read transcript")
+            .expect("file transcript exists");
+        assert_eq!(stored.model_id, "");
+        assert_eq!(stored.status, TranscriptStatus::Completed);
+        assert_eq!(stored.timing, TimingGrain::Chunk);
+    }
+
+    #[test]
+    fn file_transcript_is_none_for_dictations_and_unknown_ids() {
+        let conn = setup_conn();
+        insert_entry(&conn, 100, "dictated", None);
+        let id = conn.last_insert_rowid();
+
+        assert!(HistoryManager::get_file_transcript_with_conn(&conn, id)
+            .expect("read dictation")
+            .is_none());
+        assert!(
+            HistoryManager::get_file_transcript_with_conn(&conn, id + 100)
+                .expect("read unknown")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn deleting_rows_removes_the_file_row() {
+        let mut conn = setup_conn();
+        let entry = insert_file(&mut conn, &file_transcript("/missing/a.m4a"), 100);
+
+        HistoryManager::delete_entry_rows(&conn, entry.id).expect("delete rows");
+
+        assert_eq!(file_rows(&conn), 0);
+        assert!(HistoryManager::get_latest_entry_with_conn(&conn)
+            .expect("fetch")
+            .is_none());
+    }
+
+    #[test]
+    fn count_cleanup_never_selects_saved_file_entries() {
+        let mut conn = setup_conn();
+        let file_entry = insert_file(&mut conn, &file_transcript("/missing/a.m4a"), 50);
+        for timestamp in 100..106 {
+            insert_entry(&conn, timestamp, "dictated", None);
+        }
+
+        let candidates =
+            HistoryManager::cleanup_candidates_by_count(&conn, 5).expect("cleanup candidates");
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].1, "handy-100.wav");
+        assert!(candidates.iter().all(|(id, _)| *id != file_entry.id));
+
+        let all_unsaved =
+            HistoryManager::cleanup_candidates_by_count(&conn, 0).expect("all unsaved");
+        assert_eq!(all_unsaved.len(), 6);
+        assert!(all_unsaved.iter().all(|(id, _)| *id != file_entry.id));
+    }
+
+    #[test]
+    fn safe_recording_path_accepts_only_plain_file_names() {
+        let dir = Path::new("/data/recordings");
+
+        assert_eq!(
+            safe_recording_path(dir, "handy-1.wav"),
+            Some(dir.join("handy-1.wav"))
+        );
+        for unsafe_name in ["", ".", "..", "../x", "a/b", "./handy-1.wav", "/etc/passwd"] {
+            assert_eq!(
+                safe_recording_path(dir, unsafe_name),
+                None,
+                "{unsafe_name:?}"
+            );
+        }
+        #[cfg(windows)]
+        for unsafe_name in [r"C:\x", r"C:x", r"\\server\share\x", r"a\b"] {
+            assert_eq!(
+                safe_recording_path(dir, unsafe_name),
+                None,
+                "{unsafe_name:?}"
+            );
+        }
     }
 }

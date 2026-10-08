@@ -36,6 +36,7 @@ use tauri_specta::{collect_commands, collect_events, Builder};
 pub use utils::env_flag_enabled;
 
 use env_filter::Builder as EnvFilterBuilder;
+use file_transcription::FileTranscriptionManager;
 use managers::audio::AudioRecordingManager;
 use managers::history::HistoryManager;
 use managers::model::ModelManager;
@@ -208,6 +209,11 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     );
     let history_manager =
         Arc::new(HistoryManager::new(app_handle).expect("Failed to initialize history manager"));
+    let file_transcription_manager = FileTranscriptionManager::new(
+        app_handle,
+        transcription_manager.clone(),
+        history_manager.clone(),
+    );
 
     // Apply accelerator preferences before any model loads
     managers::transcription::apply_accelerator_settings(app_handle);
@@ -217,6 +223,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(model_manager.clone());
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
+    app_handle.manage(file_transcription_manager);
     app_handle.manage(tray::TrayState::new());
 
     // Note: Shortcuts are NOT initialized here.
@@ -570,12 +577,21 @@ pub fn run(cli_args: CliArgs) {
             commands::history::retry_history_entry_transcription,
             commands::history::update_history_limit,
             commands::history::update_recording_retention_period,
+            commands::file_transcription::get_supported_audio_formats,
+            commands::file_transcription::enqueue_file_transcriptions,
+            commands::file_transcription::cancel_file_transcription,
+            commands::file_transcription::cancel_all_file_transcriptions,
+            commands::file_transcription::list_file_transcription_jobs,
+            commands::file_transcription::dismiss_file_transcription_job,
+            commands::file_transcription::get_file_transcript,
+            commands::file_transcription::export_file_transcript,
             helpers::clamshell::is_laptop,
         ])
         .events(collect_events![
             managers::history::HistoryUpdatePayload,
             managers::transcription::StreamTextEvent,
             managers::transcription::StreamPhaseEvent,
+            file_transcription::types::FileTranscriptionEvent,
         ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds
