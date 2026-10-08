@@ -13,8 +13,11 @@ import {
 import { Button } from "../../ui/Button";
 
 interface FileDropZoneProps {
-  /** No usable model: files can't be added. */
-  disabled: boolean;
+  /**
+   * Why files can't be added (no usable model for the chosen engine), shown
+   * when a file is dropped; null when they can.
+   */
+  disabledReason: string | null;
 }
 
 /**
@@ -22,8 +25,11 @@ interface FileDropZoneProps {
  * Tauri's native handler (HTML5 drop events carry no paths), which covers the
  * whole window while this page is shown.
  */
-export const FileDropZone: React.FC<FileDropZoneProps> = ({ disabled }) => {
+export const FileDropZone: React.FC<FileDropZoneProps> = ({
+  disabledReason,
+}) => {
   const { t } = useTranslation();
+  const disabled = disabledReason !== null;
   const formats = useFileTranscriptionStore((state) => state.formats);
   const enqueue = useFileTranscriptionStore((state) => state.enqueue);
   const [dragActive, setDragActive] = useState(false);
@@ -31,8 +37,8 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ disabled }) => {
 
   // The drag-drop listener is registered once; it reads the latest values
   // from here.
-  const latest = useRef({ disabled, formats, enqueue, t });
-  latest.current = { disabled, formats, enqueue, t };
+  const latest = useRef({ disabledReason, formats, enqueue, t });
+  latest.current = { disabledReason, formats, enqueue, t };
 
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
@@ -40,13 +46,13 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ disabled }) => {
       const current = latest.current;
 
       if (payload.type === "enter") {
-        setDragActive(!current.disabled);
+        setDragActive(current.disabledReason === null);
       } else if (payload.type === "leave") {
         setDragActive(false);
       } else if (payload.type === "drop") {
         setDragActive(false);
-        if (current.disabled) {
-          toast.error(current.t("settings.transcribeFiles.noModel"));
+        if (current.disabledReason !== null) {
+          toast.error(current.disabledReason);
           return;
         }
         // Until the format list has loaded, let the backend decide.

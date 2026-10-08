@@ -32,10 +32,11 @@ interface SettingsStore {
   initialize: () => Promise<void>;
   loadDefaultSettings: () => Promise<void>;
   loadUpdateChecksLocked: () => Promise<void>;
+  /** Resolves false when the change was refused and rolled back. */
   updateSetting: <K extends keyof Settings>(
     key: K,
     value: Settings[K],
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   resetSetting: (key: keyof Settings) => Promise<void>;
   refreshSettings: () => Promise<void>;
   refreshAudioDevices: () => Promise<void>;
@@ -213,10 +214,11 @@ const settingUpdaters: {
       value as LemonadeSettings,
     );
     if (result.status === "error") {
-      // The field rolls back via the throw below; the toast says why.
+      // The value rolls back via the throw below; the toast says why. The
+      // command refuses only an address it can't use (its detail is English).
       toast.error(
         i18n.t("settings.transcribeFiles.lemonade.saveError", {
-          error: result.error,
+          error: i18n.t("settings.transcribeFiles.lemonade.errors.invalidUrl"),
         }),
       );
       throw new Error(result.error);
@@ -359,11 +361,13 @@ export const useSettingsStore = create<SettingsStore>()(
         } else if (key !== "bindings" && key !== "selected_model") {
           console.warn(`No handler for setting: ${String(key)}`);
         }
+        return true;
       } catch (error) {
         console.error(`Failed to update setting ${String(key)}:`, error);
         if (settings) {
           set({ settings: { ...settings, [key]: originalValue } });
         }
+        return false;
       } finally {
         setUpdating(updateKey, false);
       }

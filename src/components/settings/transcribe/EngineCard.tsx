@@ -57,7 +57,8 @@ export const EngineCard: React.FC = () => {
   // Only the newest check may update the card.
   const checkIdRef = useRef(0);
 
-  // Follow saved values (another window, or a rejected save rolling back).
+  // Follow saved values (another window, or a rejected save rolling back;
+  // handleUrlBlur then puts the refused address back).
   useEffect(() => {
     setUrlDraft(lemonade.base_url);
     setUrlInvalid(false);
@@ -100,8 +101,13 @@ export const EngineCard: React.FC = () => {
     };
   }, [checkable, lemonade.base_url, lemonade.api_key, runCheck]);
 
-  /** Saves a change on top of the latest stored Lemonade settings. */
-  const saveLemonade = (change: Partial<LemonadeSettings>) => {
+  /**
+   * Saves a change on top of the latest stored Lemonade settings. Resolves
+   * false when the backend refused it.
+   */
+  const saveLemonade = async (
+    change: Partial<LemonadeSettings>,
+  ): Promise<boolean> => {
     const current =
       useSettingsStore.getState().settings?.lemonade ??
       DEFAULT_LEMONADE_SETTINGS;
@@ -111,25 +117,30 @@ export const EngineCard: React.FC = () => {
       next.api_key === current.api_key &&
       next.model === current.model
     ) {
-      return;
+      return true;
     }
-    void updateSetting("lemonade", next);
+    return updateSetting("lemonade", next);
   };
 
-  const handleUrlBlur = () => {
+  const handleUrlBlur = async () => {
     const value = urlDraft.trim();
     if (!isValidServerUrl(value)) {
       setUrlInvalid(true);
       return;
     }
     setUrlDraft(value);
-    saveLemonade({ base_url: value });
+    if (!(await saveLemonade({ base_url: value }))) {
+      // The rollback has put the saved address back in the field: keep what
+      // was typed so it can be corrected, and say what is wrong with it.
+      setUrlDraft(value);
+      setUrlInvalid(true);
+    }
   };
 
   const handleKeyBlur = () => {
     const value = keyDraft.trim();
     setKeyDraft(value);
-    saveLemonade({ api_key: value });
+    void saveLemonade({ api_key: value });
   };
 
   const handleTest = () => {
@@ -262,7 +273,7 @@ export const EngineCard: React.FC = () => {
             setUrlDraft(event.target.value);
             setUrlInvalid(false);
           }}
-          onBlur={handleUrlBlur}
+          onBlur={() => void handleUrlBlur()}
           onKeyDown={(event) => {
             if (event.key === "Enter") event.currentTarget.blur();
           }}
@@ -310,11 +321,11 @@ export const EngineCard: React.FC = () => {
           className="w-72 text-sm"
           value={lemonade.model || null}
           options={modelOptions}
-          onChange={(value) => saveLemonade({ model: value ?? "" })}
+          onChange={(value) => void saveLemonade({ model: value ?? "" })}
           isCreatable
           onCreateOption={(value) => {
             const model = value.trim();
-            if (model !== "") saveLemonade({ model });
+            if (model !== "") void saveLemonade({ model });
           }}
           formatCreateLabel={(input) =>
             t("settings.transcribeFiles.lemonade.model.use", {

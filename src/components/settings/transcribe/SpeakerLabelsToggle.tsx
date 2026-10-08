@@ -1,9 +1,14 @@
 import React, { useEffect, useRef } from "react";
 import { Trans, useTranslation } from "react-i18next";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Download } from "lucide-react";
 import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
-import { downloadPercent } from "@/lib/utils/transcript";
+import {
+  downloadPercent,
+  refocusTarget,
+  runIfConfirmed,
+} from "@/lib/utils/transcript";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { ToggleSwitch } from "../../ui/ToggleSwitch";
@@ -59,10 +64,12 @@ export const SpeakerLabelsToggle: React.FC = () => {
     void refreshSpeakerModel();
   }, [refreshSpeakerModel]);
 
+  const toggleRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   // Whether focus is in the model row. Its buttons are replaced as the model
   // state changes (Download, then Cancel, then Remove), and a removed button
-  // takes focus with it, so focus then moves to the new row's button.
+  // takes focus with it, so focus then moves to the new row's button, or to
+  // the toggle when the row is gone (Remove with Label Speakers off).
   const focusInRowRef = useRef(false);
   const rowKind =
     download !== null
@@ -74,20 +81,32 @@ export const SpeakerLabelsToggle: React.FC = () => {
           : "none";
   useEffect(() => {
     const active = document.activeElement;
-    if (
-      !focusInRowRef.current ||
-      (active !== null && active !== document.body)
-    ) {
-      return;
-    }
-    const button = rowRef.current?.querySelector<HTMLButtonElement>("button");
-    if (button) button.focus();
-    else focusInRowRef.current = false;
+    const target = refocusTarget(
+      focusInRowRef.current,
+      active === null || active === document.body,
+      rowRef.current?.querySelector<HTMLElement>("button"),
+      toggleRef.current?.querySelector<HTMLElement>("input"),
+    );
+    target?.focus();
+    // Unmounting the row doesn't blur it, so it can't still hold focus.
+    if (rowRef.current === null) focusInRowRef.current = false;
   }, [rowKind]);
 
   const size = Math.round(
     (model?.size_bytes || SPEAKER_MODEL_SIZE_BYTES) / 1_000_000,
   );
+
+  // Asks first, like deleting a dictation model: it takes a new download to
+  // label speakers again.
+  const removeModel = () =>
+    runIfConfirmed(
+      () =>
+        ask(t("settings.transcribeFiles.speakers.removeConfirm", { size }), {
+          title: t("settings.transcribeFiles.speakers.remove"),
+          kind: "warning",
+        }),
+      deleteSpeakerModel,
+    );
 
   let modelRow: React.ReactNode = null;
   if (rowKind === "downloading" && download !== null) {
@@ -129,7 +148,7 @@ export const SpeakerLabelsToggle: React.FC = () => {
           type="button"
           variant="danger-ghost"
           size="sm"
-          onClick={() => void deleteSpeakerModel()}
+          onClick={() => void removeModel()}
         >
           {t("settings.transcribeFiles.speakers.remove")}
         </Button>
@@ -163,7 +182,7 @@ export const SpeakerLabelsToggle: React.FC = () => {
             <Trans
               i18nKey="settings.transcribeFiles.speakers.license"
               components={{
-                link: (
+                page: (
                   <button
                     type="button"
                     onClick={() => void openModelPage()}
@@ -180,16 +199,18 @@ export const SpeakerLabelsToggle: React.FC = () => {
 
   return (
     <>
-      <ToggleSwitch
-        checked={labelSpeakers}
-        onChange={setLabelSpeakers}
-        label={t("settings.transcribeFiles.speakers.label")}
-        description={t("settings.transcribeFiles.speakers.description", {
-          size,
-        })}
-        descriptionMode="tooltip"
-        grouped={true}
-      />
+      <div ref={toggleRef}>
+        <ToggleSwitch
+          checked={labelSpeakers}
+          onChange={setLabelSpeakers}
+          label={t("settings.transcribeFiles.speakers.label")}
+          description={t("settings.transcribeFiles.speakers.description", {
+            size,
+          })}
+          descriptionMode="tooltip"
+          grouped={true}
+        />
+      </div>
       {modelRow !== null && (
         <div
           ref={rowRef}

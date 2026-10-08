@@ -5,7 +5,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useModelStore } from "@/stores/modelStore";
 import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
 import { getTranslatedModelName } from "@/lib/utils/modelTranslation";
-import { isFinishedStatus } from "@/lib/utils/transcript";
+import { isFinishedStatus, notReadyKey } from "@/lib/utils/transcript";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { SettingsGroup } from "../../ui/SettingsGroup";
@@ -54,14 +54,17 @@ export const TranscribeFilesSettings: React.FC = () => {
   const modelReady = modelInfo?.is_downloaded ?? false;
   const lemonade = settings?.file_transcription_engine === "lemonade";
   const lemonadeModel = settings?.lemonade?.model ?? "";
-  const ready = lemonade ? lemonadeModel !== "" : modelReady;
-  const notReadyMessage = lemonade
-    ? !settingsLoading && lemonadeModel === ""
-      ? t("settings.transcribeFiles.noLemonadeModel")
-      : null
-    : !modelsLoading && !modelReady
-      ? t("settings.transcribeFiles.noModel")
-      : null;
+  const notReady = notReadyKey(
+    lemonade ? "lemonade" : "handy",
+    lemonadeModel,
+    modelReady,
+  );
+  const notReadyText =
+    notReady === null ? null : t(`settings.transcribeFiles.${notReady}`);
+  // The page alert waits for what it depends on, so it doesn't flash.
+  const notReadyMessage = (lemonade ? settingsLoading : modelsLoading)
+    ? null
+    : notReadyText;
 
   const queue = order
     .map((id) => jobs[id])
@@ -107,7 +110,7 @@ export const TranscribeFilesSettings: React.FC = () => {
         <Alert variant="warning">{notReadyMessage}</Alert>
       )}
 
-      <FileDropZone disabled={!ready} />
+      <FileDropZone disabledReason={notReadyText} />
 
       <SettingsGroup>
         <ToggleSwitch

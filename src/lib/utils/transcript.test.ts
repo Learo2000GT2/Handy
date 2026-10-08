@@ -1,4 +1,9 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import i18next from "i18next";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Trans } from "react-i18next";
 import type {
   FileJobErrorCode,
   FileJobSnapshot,
@@ -26,9 +31,12 @@ import {
   lemonadeErrorKey,
   menuKeyAction,
   mergeLiveSegments,
+  notReadyKey,
   pickerExtensions,
   placeMenu,
   previewText,
+  refocusTarget,
+  runIfConfirmed,
   serverUrlHost,
   speakerName,
   speakerSkipKey,
@@ -280,6 +288,34 @@ assert.equal(serverUrlHost("http:localhost"), null);
 assert.equal(serverUrlHost(""), null);
 assert.equal(isValidServerUrl("http://127.0.0.1:8000/api/v1"), true);
 assert.equal(isValidServerUrl("http//localhost"), false);
+// Everything `normalize_base_url` (lemonade.rs) refuses is refused here, so
+// a typo shows the inline hint instead of a failed save: a query or fragment
+// (even an empty one), and an API suffix that leaves no host.
+for (const address of [
+  "http://localhost:13305/?a=1",
+  "http://localhost:13305?",
+  "http://localhost:13305#",
+  "http://localhost:13305/#/",
+  "http://localhost:13305/#x",
+  "http://localhost:13305/api/v1?x=1",
+  "http://host/?q=1",
+  "http:///api/v1",
+  "http:///v1",
+  "https://v1",
+  "http://api/v1",
+]) {
+  assert.equal(isValidServerUrl(address), false, address);
+}
+for (const address of [
+  "http://localhost:13305/",
+  "http://localhost:8000/api/v1/",
+  "https://box.lan/lemonade/v1",
+  "HTTP://127.0.0.1:13305/API/V1",
+  "http://h/v1/v1",
+]) {
+  assert.equal(isValidServerUrl(address), true, address);
+}
+assert.equal(serverUrlHost("https://Box.lan/lemonade/v1"), "box.lan");
 
 // isLoopbackUrl: localhost, 127.0.0.0/8 and ::1 only; invalid reads false.
 for (const address of [
@@ -399,6 +435,70 @@ assert.equal(downloadPercent(139_310_335, 139_310_336), 99);
 assert.equal(downloadPercent(139_310_336, 139_310_336), 100);
 assert.equal(downloadPercent(200, 100), 100);
 assert.equal(downloadPercent(50, 0), 0);
+
+// The speaker model's license note: the model page link holds its text in
+// every language. A void HTML tag name such as <link> leaves the button
+// empty and the text outside it.
+const localesDir = new URL("../../i18n/locales/", import.meta.url);
+const languages = readdirSync(localesDir);
+assert.ok(languages.length >= 26);
+const localeI18n = i18next.createInstance();
+await localeI18n.init({
+  resources: Object.fromEntries(
+    languages.map((lng) => [
+      lng,
+      {
+        translation: JSON.parse(
+          readFileSync(new URL(`${lng}/translation.json`, localesDir), "utf8"),
+        ),
+      },
+    ]),
+  ),
+  interpolation: { escapeValue: false },
+});
+for (const lng of languages) {
+  const html = renderToStaticMarkup(
+    createElement(Trans, {
+      i18n: localeI18n,
+      t: localeI18n.getFixedT(lng),
+      i18nKey: "settings.transcribeFiles.speakers.license",
+      components: { page: createElement("button", { type: "button" }) },
+    }),
+  );
+  const link = /<button type="button">([^<]*)<\/button>/.exec(html);
+  assert.ok(link !== null && link[1].trim() !== "", `${lng}: ${html}`);
+  assert.ok(html.includes("NVIDIA Open Model License"), `${lng}: ${html}`);
+}
+
+// runIfConfirmed: removing the speaker model waits for the user's yes.
+{
+  let removed = 0;
+  const remove = async () => {
+    removed += 1;
+  };
+  assert.equal(await runIfConfirmed(async () => false, remove), false);
+  assert.equal(removed, 0);
+  assert.equal(await runIfConfirmed(async () => true, remove), true);
+  assert.equal(removed, 1);
+}
+
+// refocusTarget: focus lost with a replaced control goes to the row's new
+// control, or to the fallback (the toggle) when the row is gone.
+assert.equal(refocusTarget(true, true, "download", "toggle"), "download");
+assert.equal(refocusTarget(true, true, null, "toggle"), "toggle");
+assert.equal(refocusTarget(true, true, undefined, "toggle"), "toggle");
+assert.equal(refocusTarget(true, true, undefined, undefined), null);
+assert.equal(refocusTarget(true, false, null, "toggle"), null);
+assert.equal(refocusTarget(false, true, "download", "toggle"), null);
+
+// notReadyKey: each engine names what it is missing; the other engine's
+// model doesn't matter.
+assert.equal(notReadyKey("lemonade", "", true), "noLemonadeModel");
+assert.equal(notReadyKey("lemonade", "", false), "noLemonadeModel");
+assert.equal(notReadyKey("lemonade", "Whisper-Base", false), null);
+assert.equal(notReadyKey("handy", "", false), "noModel");
+assert.equal(notReadyKey("handy", "", true), null);
+assert.equal(notReadyKey("handy", "Whisper-Base", false), "noModel");
 
 // speakerName: the given name (trimmed), else the default for that id.
 const transcriptSpeakers: TranscriptSpeakers = {

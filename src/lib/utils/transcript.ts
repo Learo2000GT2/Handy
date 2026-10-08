@@ -9,6 +9,7 @@ import type {
   FileJobErrorCode,
   FileJobSnapshot,
   FileJobStatus,
+  FileTranscriptionEngine,
   LemonadeErrorKind,
   LemonadeSettings,
   SpeakerSkipReason,
@@ -168,6 +169,22 @@ export type JobErrorKey = (typeof ERROR_KEYS)[FileJobErrorCode];
 export const errorKey = (code: FileJobErrorCode): JobErrorKey =>
   ERROR_KEYS[code];
 
+/**
+ * Why files can't be transcribed with `engine` yet, as a key under
+ * `settings.transcribeFiles`, or null when they can: Handy needs its selected
+ * model downloaded, Lemonade needs a model chosen in the engine card.
+ */
+export const notReadyKey = (
+  engine: FileTranscriptionEngine,
+  lemonadeModel: string,
+  handyModelReady: boolean,
+): "noModel" | "noLemonadeModel" | null => {
+  if (engine === "lemonade") {
+    return lemonadeModel === "" ? "noLemonadeModel" : null;
+  }
+  return handyModelReady ? null : "noModel";
+};
+
 /** Lemonade settings before the user changes them (as in `settings.rs`). */
 export const DEFAULT_LEMONADE_SETTINGS: LemonadeSettings = {
   base_url: "http://localhost:13305",
@@ -176,15 +193,22 @@ export const DEFAULT_LEMONADE_SETTINGS: LemonadeSettings = {
 };
 
 /**
- * Lower-case host of a Lemonade Server address, or null when the address is
- * not an http(s) URL with a host. The scheme must be written out, as the
- * backend requires.
+ * Lower-case host of a Lemonade Server address, or null when the backend
+ * would refuse it. Follows `normalize_base_url` in
+ * file_transcription/lemonade.rs: trailing "/" and then a trailing "/api/v1"
+ * or "/v1" are dropped, and the rest must be an http(s) URL with a host and
+ * no query or fragment. The scheme must also be written out ("http://").
  */
 export const serverUrlHost = (address: string): string | null => {
-  const trimmed = address.trim();
-  if (!/^https?:\/\//i.test(trimmed)) return null;
+  const root = address
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/(?:api\/)?v1$/i, "")
+    .replace(/\/+$/, "");
+  // Any "?" or "#" starts a query or fragment, even an empty one.
+  if (!/^https?:\/\//i.test(root) || /[?#]/.test(root)) return null;
   try {
-    const url = new URL(trimmed);
+    const url = new URL(root);
     return url.hostname === "" ? null : url.hostname.toLowerCase();
   } catch {
     return null;
@@ -290,6 +314,33 @@ export const downloadPercent = (downloaded: number, total: number): number =>
   total > 0 && downloaded > 0
     ? Math.min(100, Math.floor((downloaded / total) * 100))
     : 0;
+
+/**
+ * Runs `action` only after `confirm` (a dialog asking the user) resolves
+ * true. Returns whether it ran.
+ */
+export const runIfConfirmed = async (
+  confirm: () => Promise<boolean>,
+  action: () => Promise<void>,
+): Promise<boolean> => {
+  if (!(await confirm())) return false;
+  await action();
+  return true;
+};
+
+/**
+ * Where keyboard focus goes after a row's controls were replaced, for
+ * example the speaker model row's Download, Cancel and Remove buttons. Only
+ * when focus was in the row and left with the removed control: the row's new
+ * control, or `fallback` when the whole row is gone. Null leaves focus alone.
+ */
+export const refocusTarget = <T>(
+  focusWasInRow: boolean,
+  focusLost: boolean,
+  rowControl: T | null | undefined,
+  fallback: T | null | undefined,
+): T | null =>
+  focusWasInRow && focusLost ? (rowControl ?? fallback ?? null) : null;
 
 /**
  * Display name of speaker `id`: the name the user gave, or `defaultName(id)`
