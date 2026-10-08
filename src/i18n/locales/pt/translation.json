@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Geral",
+    "transcribe": "Transcrever",
     "models": "Modelos",
     "advanced": "Avançado",
     "postProcessing": "Pós-Processamento",
@@ -463,6 +464,96 @@
         "createFirst": "Clique em 'Criar Novo Prompt' acima para criar seu primeiro prompt de pós-processamento."
       }
     },
+    "transcribeFiles": {
+      "title": "Transcrever Arquivos",
+      "description": "Transforme gravações existentes em texto neste computador. Seus arquivos nunca saem do seu dispositivo.",
+      "settingsNote": "Usa o modelo selecionado e suas configurações de idioma, tradução, palavras personalizadas e palavras de preenchimento.",
+      "model": "Modelo: {{model}}",
+      "noModel": "Selecione um modelo baixado na página Modelos para transcrever arquivos.",
+      "dropzone": {
+        "title": "Solte arquivos de áudio ou vídeo aqui",
+        "hint": "Entrevistas, reuniões, aulas e notas de voz de qualquer duração",
+        "active": "Solte para adicionar",
+        "choose": "Escolher Arquivos…",
+        "skipped": "Arquivos ignorados por não serem de áudio ou vídeo: {{number}}"
+      },
+      "picker": {
+        "title": "Escolher Gravações",
+        "filterName": "Arquivos de áudio e vídeo"
+      },
+      "formats": {
+        "native": "Abre {{formats}}",
+        "ffmpegAvailable": "Outros formatos, como Opus, WebM, WMA e DSS, são abertos com o ffmpeg.",
+        "ffmpegMissing": "Instale o ffmpeg para abrir também Opus, WebM, WMA, DSS e outros formatos."
+      },
+      "saveToHistory": {
+        "label": "Salvar no Histórico",
+        "description": "As transcrições concluídas são salvas e marcadas com estrela para que a limpeza automática as mantenha."
+      },
+      "queue": {
+        "title": "Arquivos",
+        "cancelAll": "Cancelar Tudo",
+        "clearFinished": "Limpar Concluídos"
+      },
+      "status": {
+        "queued": "Aguardando início",
+        "preparing": "Preparando…",
+        "waiting": "Pausado enquanto você dita",
+        "transcribing": "Transcrevendo…",
+        "completed": "Concluído",
+        "partial": "Concluído, com lacunas",
+        "cancelled": "Cancelado",
+        "failed": "Falhou"
+      },
+      "progress": "{{processed}} de {{total}}",
+      "progressNoTotal": "{{processed}} transcritos",
+      "noSpeech": "Nenhuma fala encontrada neste arquivo.",
+      "actions": {
+        "cancel": "Cancelar",
+        "remove": "Remover da Lista",
+        "view": "Ver Transcrição",
+        "copy": "Copiar Transcrição",
+        "showFile": "Mostrar Arquivo"
+      },
+      "copied": "Transcrição copiada para a área de transferência.",
+      "copyError": "Falha ao copiar a transcrição.",
+      "savedToHistory": "Salvo no Histórico",
+      "errors": {
+        "notFound": "Não é possível encontrar ou abrir o arquivo.",
+        "unsupportedFormat": "Este tipo de arquivo não é compatível.",
+        "needsFfmpeg": "Este formato requer o ffmpeg. Instale o ffmpeg e tente novamente.",
+        "noModel": "Nenhum modelo de transcrição selecionado.",
+        "modelChanged": "O modelo foi alterado enquanto este arquivo estava sendo transcrito.",
+        "decodeFailed": "Não foi possível ler o áudio deste arquivo.",
+        "engineFailed": "A transcrição falhou.",
+        "internal": "Algo deu errado.",
+        "enqueue": "Não foi possível adicionar arquivos: {{error}}",
+        "cancel": "Não foi possível cancelar: {{error}}",
+        "remove": "Não foi possível remover da lista: {{error}}",
+        "loadTranscript": "Não foi possível carregar a transcrição: {{error}}"
+      },
+      "transcript": {
+        "title": "Transcrição: {{file}}",
+        "live": "Atualizando durante a transcrição",
+        "partial": "Esta transcrição está incompleta: {{reason}}",
+        "partialNoReason": "Esta transcrição está incompleta.",
+        "approximateTimes": "Os tempos são aproximados porque este modelo não fornece marcações de tempo.",
+        "empty": "Nenhuma fala encontrada."
+      },
+      "export": {
+        "button": "Exportar…",
+        "dialogTitle": "Exportar Transcrição",
+        "formats": {
+          "txt": "Texto simples (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Legendas SubRip (.srt)",
+          "vtt": "Legendas WebVTT (.vtt)"
+        },
+        "success": "Transcrição exportada.",
+        "showInFolder": "Mostrar na Pasta",
+        "error": "Falha ao exportar: {{error}}"
+      }
+    },
     "history": {
       "title": "Histórico",
       "openFolder": "Abrir Pasta de Gravações",
@@ -477,7 +568,13 @@
       "retranscribe": "Re-transcrever",
       "retranscribeError": "Falha ao re-transcrever. Por favor, tente novamente.",
       "transcribing": "Transcrevendo...",
-      "transcriptionFailed": "A transcrição falhou. Você pode re-transcrever usando o ícone de tentar novamente."
+      "transcriptionFailed": "A transcrição falhou. Você pode re-transcrever usando o ícone de tentar novamente.",
+      "openTranscript": "Abrir Transcrição",
+      "showOriginal": "Mostrar Arquivo Original",
+      "originalMissing": "O arquivo original foi movido ou excluído.",
+      "fileDuration": "Duração {{duration}}",
+      "incomplete": "Incompleta",
+      "retranscribeFileUnavailable": "Para transcrever este arquivo novamente, use a página Transcrever."
     },
     "debug": {
       "title": "Depuração",

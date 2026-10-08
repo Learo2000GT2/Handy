@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Genel",
+    "transcribe": "Transkripsiyon",
     "models": "Modeller",
     "advanced": "Gelişmiş",
     "postProcessing": "Son İşlem",
@@ -463,6 +464,96 @@
         "createFirst": "İlk son işlem promptunuzu oluşturmak için yukarıdaki “Yeni Prompt Oluştur” seçeneğine tıklayın."
       }
     },
+    "transcribeFiles": {
+      "title": "Dosyaları Transkribe Et",
+      "description": "Mevcut kayıtları bu bilgisayarda metne dönüştürün. Dosyalarınız cihazınızdan asla çıkmaz.",
+      "settingsNote": "Seçili modelinizi ve dil, çeviri, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
+      "model": "Model: {{model}}",
+      "noModel": "Dosyaları transkribe etmek için Modeller sayfasından indirilmiş bir model seçin.",
+      "dropzone": {
+        "title": "Ses veya video dosyalarını buraya bırakın",
+        "hint": "Her uzunlukta röportaj, toplantı, ders ve sesli not",
+        "active": "Eklemek için bırakın",
+        "choose": "Dosya Seç…",
+        "skipped": "Ses veya video olmadığı için atlanan dosyalar: {{number}}"
+      },
+      "picker": {
+        "title": "Kayıtları Seç",
+        "filterName": "Ses ve video dosyaları"
+      },
+      "formats": {
+        "native": "Açılabilen biçimler: {{formats}}",
+        "ffmpegAvailable": "Opus, WebM, WMA ve DSS gibi diğer biçimler ffmpeg ile açılır.",
+        "ffmpegMissing": "Opus, WebM, WMA, DSS ve diğer biçimleri de açmak için ffmpeg'i yükleyin."
+      },
+      "saveToHistory": {
+        "label": "Geçmişe Kaydet",
+        "description": "Tamamlanan transkriptler kaydedilir ve otomatik temizlemede korunmaları için yıldızlanır."
+      },
+      "queue": {
+        "title": "Dosyalar",
+        "cancelAll": "Tümünü İptal Et",
+        "clearFinished": "Bitenleri Temizle"
+      },
+      "status": {
+        "queued": "Başlamayı bekliyor",
+        "preparing": "Hazırlanıyor…",
+        "waiting": "Sesle yazma sırasında duraklatıldı",
+        "transcribing": "Transkribe ediliyor…",
+        "completed": "Tamamlandı",
+        "partial": "Tamamlandı, eksik bölümler var",
+        "cancelled": "İptal edildi",
+        "failed": "Başarısız"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "{{processed}} transkribe edildi",
+      "noSpeech": "Bu dosyada konuşma bulunamadı.",
+      "actions": {
+        "cancel": "İptal",
+        "remove": "Listeden Kaldır",
+        "view": "Transkripti Görüntüle",
+        "copy": "Transkripti Kopyala",
+        "showFile": "Dosyayı Göster"
+      },
+      "copied": "Transkript panoya kopyalandı.",
+      "copyError": "Transkript kopyalanamadı.",
+      "savedToHistory": "Geçmişe kaydedildi",
+      "errors": {
+        "notFound": "Dosya bulunamıyor veya açılamıyor.",
+        "unsupportedFormat": "Bu dosya türü desteklenmiyor.",
+        "needsFfmpeg": "Bu biçim için ffmpeg gerekir. ffmpeg'i yükleyip tekrar deneyin.",
+        "noModel": "Transkripsiyon modeli seçilmedi.",
+        "modelChanged": "Bu dosya transkribe edilirken model değişti.",
+        "decodeFailed": "Bu dosyadaki ses okunamadı.",
+        "engineFailed": "Transkripsiyon başarısız oldu.",
+        "internal": "Bir şeyler ters gitti.",
+        "enqueue": "Dosyalar eklenemedi: {{error}}",
+        "cancel": "İptal edilemedi: {{error}}",
+        "remove": "Listeden kaldırılamadı: {{error}}",
+        "loadTranscript": "Transkript yüklenemedi: {{error}}"
+      },
+      "transcript": {
+        "title": "Transkript: {{file}}",
+        "live": "Transkripsiyon sürdükçe güncelleniyor",
+        "partial": "Bu transkript eksik: {{reason}}",
+        "partialNoReason": "Bu transkript eksik.",
+        "approximateTimes": "Bu model zaman damgası bildirmediği için zamanlar yaklaşıktır.",
+        "empty": "Konuşma bulunamadı."
+      },
+      "export": {
+        "button": "Dışa Aktar…",
+        "dialogTitle": "Transkripti Dışa Aktar",
+        "formats": {
+          "txt": "Düz metin (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip altyazısı (.srt)",
+          "vtt": "WebVTT altyazısı (.vtt)"
+        },
+        "success": "Transkript dışa aktarıldı.",
+        "showInFolder": "Klasörde Göster",
+        "error": "Dışa aktarma başarısız: {{error}}"
+      }
+    },
     "history": {
       "title": "Geçmiş",
       "openFolder": "Kayıtlar Klasörünü Aç",
@@ -477,7 +568,13 @@
       "retranscribe": "Yeniden transkribe et",
       "retranscribeError": "Yeniden transkripsiyon başarısız oldu. Lütfen tekrar deneyin.",
       "transcribing": "Transkribe ediliyor...",
-      "transcriptionFailed": "Transkripsiyon başarısız oldu. Yeniden deneme simgesini kullanarak tekrar transkribe edebilirsiniz."
+      "transcriptionFailed": "Transkripsiyon başarısız oldu. Yeniden deneme simgesini kullanarak tekrar transkribe edebilirsiniz.",
+      "openTranscript": "Transkripti Aç",
+      "showOriginal": "Orijinal Dosyayı Göster",
+      "originalMissing": "Orijinal dosya taşınmış veya silinmiş.",
+      "fileDuration": "Süre {{duration}}",
+      "incomplete": "Eksik",
+      "retranscribeFileUnavailable": "Bu dosyayı yeniden transkribe etmek için Transkripsiyon sayfasını kullanın."
     },
     "debug": {
       "title": "Hata Ayıklama",

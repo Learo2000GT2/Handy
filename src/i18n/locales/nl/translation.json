@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Algemeen",
+    "transcribe": "Transcriberen",
     "models": "Modellen",
     "advanced": "Geavanceerd",
     "postProcessing": "Naverwerking",
@@ -463,6 +464,96 @@
         "createFirst": "Klik hierboven op 'Nieuwe prompt maken' om je eerste naverwerkingsprompt aan te maken."
       }
     },
+    "transcribeFiles": {
+      "title": "Bestanden transcriberen",
+      "description": "Zet bestaande opnames om in tekst op deze computer. Je bestanden verlaten je apparaat nooit.",
+      "settingsNote": "Gebruikt je geselecteerde model en je instellingen voor taal, vertaling, eigen woordenlijst en opvulwoorden.",
+      "model": "Model: {{model}}",
+      "noModel": "Selecteer een gedownload model op de pagina Modellen om bestanden te transcriberen.",
+      "dropzone": {
+        "title": "Sleep audio- of videobestanden hierheen",
+        "hint": "Interviews, vergaderingen, colleges en spraakmemo's van elke lengte",
+        "active": "Loslaten om toe te voegen",
+        "choose": "Bestanden kiezen…",
+        "skipped": "Overgeslagen bestanden die geen audio of video zijn: {{number}}"
+      },
+      "picker": {
+        "title": "Opnames kiezen",
+        "filterName": "Audio- en videobestanden"
+      },
+      "formats": {
+        "native": "Opent {{formats}}",
+        "ffmpegAvailable": "Andere formaten zoals Opus, WebM, WMA en DSS worden geopend met ffmpeg.",
+        "ffmpegMissing": "Installeer ffmpeg om ook Opus, WebM, WMA, DSS en andere formaten te openen."
+      },
+      "saveToHistory": {
+        "label": "Opslaan in geschiedenis",
+        "description": "Voltooide transcripties worden opgeslagen en met een ster gemarkeerd, zodat automatisch opschonen ze bewaart."
+      },
+      "queue": {
+        "title": "Bestanden",
+        "cancelAll": "Alles annuleren",
+        "clearFinished": "Voltooide wissen"
+      },
+      "status": {
+        "queued": "Wacht op start",
+        "preparing": "Voorbereiden…",
+        "waiting": "Gepauzeerd tijdens het dicteren",
+        "transcribing": "Transcriberen…",
+        "completed": "Klaar",
+        "partial": "Klaar, met hiaten",
+        "cancelled": "Geannuleerd",
+        "failed": "Mislukt"
+      },
+      "progress": "{{processed}} van {{total}}",
+      "progressNoTotal": "{{processed}} getranscribeerd",
+      "noSpeech": "Geen spraak gevonden in dit bestand.",
+      "actions": {
+        "cancel": "Annuleren",
+        "remove": "Verwijderen uit lijst",
+        "view": "Transcriptie bekijken",
+        "copy": "Transcriptie kopiëren",
+        "showFile": "Bestand tonen"
+      },
+      "copied": "Transcriptie naar klembord gekopieerd.",
+      "copyError": "Transcriptie kopiëren mislukt.",
+      "savedToHistory": "Opgeslagen in geschiedenis",
+      "errors": {
+        "notFound": "Het bestand kan niet worden gevonden of geopend.",
+        "unsupportedFormat": "Dit bestandstype wordt niet ondersteund.",
+        "needsFfmpeg": "Dit formaat vereist ffmpeg. Installeer ffmpeg en probeer het opnieuw.",
+        "noModel": "Er is geen transcriptiemodel geselecteerd.",
+        "modelChanged": "Het model is gewijzigd terwijl dit bestand werd getranscribeerd.",
+        "decodeFailed": "De audio in dit bestand kon niet worden gelezen.",
+        "engineFailed": "Transcriptie mislukt.",
+        "internal": "Er is iets misgegaan.",
+        "enqueue": "Bestanden toevoegen mislukt: {{error}}",
+        "cancel": "Annuleren mislukt: {{error}}",
+        "remove": "Verwijderen uit de lijst mislukt: {{error}}",
+        "loadTranscript": "Transcriptie laden mislukt: {{error}}"
+      },
+      "transcript": {
+        "title": "Transcriptie: {{file}}",
+        "live": "Wordt bijgewerkt tijdens het transcriberen",
+        "partial": "Deze transcriptie is onvolledig: {{reason}}",
+        "partialNoReason": "Deze transcriptie is onvolledig.",
+        "approximateTimes": "Tijden zijn bij benadering omdat dit model geen tijdstempels geeft.",
+        "empty": "Geen spraak gevonden."
+      },
+      "export": {
+        "button": "Exporteren…",
+        "dialogTitle": "Transcriptie exporteren",
+        "formats": {
+          "txt": "Platte tekst (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip-ondertitels (.srt)",
+          "vtt": "WebVTT-ondertitels (.vtt)"
+        },
+        "success": "Transcriptie geëxporteerd.",
+        "showInFolder": "Tonen in map",
+        "error": "Exporteren mislukt: {{error}}"
+      }
+    },
     "history": {
       "title": "Geschiedenis",
       "openFolder": "Opnamemap openen",
@@ -477,7 +568,13 @@
       "retranscribe": "Opnieuw transcriberen",
       "retranscribeError": "Opnieuw transcriberen mislukt. Probeer het opnieuw.",
       "transcribing": "Transcriberen...",
-      "transcriptionFailed": "Transcriptie mislukt. Je kunt het opnieuw proberen via het herlaad-pictogram."
+      "transcriptionFailed": "Transcriptie mislukt. Je kunt het opnieuw proberen via het herlaad-pictogram.",
+      "openTranscript": "Transcriptie openen",
+      "showOriginal": "Origineel bestand tonen",
+      "originalMissing": "Het originele bestand is verplaatst of verwijderd.",
+      "fileDuration": "Lengte {{duration}}",
+      "incomplete": "Onvolledig",
+      "retranscribeFileUnavailable": "Gebruik de pagina Transcriberen om dit bestand opnieuw te transcriberen."
     },
     "debug": {
       "title": "Probleemoplossing",

@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "כללי",
+    "transcribe": "תמלול",
     "models": "מודלים",
     "advanced": "מתקדם",
     "postProcessing": "עיבוד משלים",
@@ -463,6 +464,96 @@
         "createFirst": "לחץ על 'צור פרומפט חדש' למעלה כדי ליצור את פרומפט העיבוד הראשון שלך."
       }
     },
+    "transcribeFiles": {
+      "title": "תמלול קבצים",
+      "description": "המר הקלטות קיימות לטקסט במחשב הזה. הקבצים שלך אף פעם לא יוצאים מהמכשיר.",
+      "settingsNote": "משתמש במודל שבחרת ובהגדרות השפה, התרגום, המילים המותאמות אישית ומילות המילוי שלך.",
+      "model": "מודל: {{model}}",
+      "noModel": "בחר מודל שהורד בעמוד 'מודלים' כדי לתמלל קבצים.",
+      "dropzone": {
+        "title": "גרור לכאן קובצי אודיו או וידאו",
+        "hint": "ראיונות, פגישות, הרצאות ותזכירים קוליים בכל אורך",
+        "active": "שחרר כדי להוסיף",
+        "choose": "בחר קבצים…",
+        "skipped": "דולגו קבצים שאינם אודיו או וידאו: {{number}}"
+      },
+      "picker": {
+        "title": "בחר הקלטות",
+        "filterName": "קובצי אודיו ווידאו"
+      },
+      "formats": {
+        "native": "פותח קובצי {{formats}}",
+        "ffmpegAvailable": "פורמטים אחרים, כמו Opus, WebM, WMA ו-DSS, נפתחים באמצעות ffmpeg.",
+        "ffmpegMissing": "התקן את ffmpeg כדי לפתוח גם Opus, WebM, WMA, DSS ופורמטים נוספים."
+      },
+      "saveToHistory": {
+        "label": "שמור בהיסטוריה",
+        "description": "תמלולים שהסתיימו נשמרים ומסומנים בכוכב, כך שהניקוי האוטומטי לא ימחק אותם."
+      },
+      "queue": {
+        "title": "קבצים",
+        "cancelAll": "בטל הכל",
+        "clearFinished": "נקה את שהסתיימו"
+      },
+      "status": {
+        "queued": "ממתין להתחלה",
+        "preparing": "בהכנה…",
+        "waiting": "מושהה בזמן שאתה מכתיב",
+        "transcribing": "מתמלל…",
+        "completed": "הושלם",
+        "partial": "הושלם, עם פערים",
+        "cancelled": "בוטל",
+        "failed": "נכשל"
+      },
+      "progress": "{{processed}} מתוך {{total}}",
+      "progressNoTotal": "תומללו {{processed}}",
+      "noSpeech": "לא נמצא דיבור בקובץ הזה.",
+      "actions": {
+        "cancel": "ביטול",
+        "remove": "הסר מהרשימה",
+        "view": "הצג תמלול",
+        "copy": "העתק תמלול",
+        "showFile": "הצג קובץ"
+      },
+      "copied": "התמלול הועתק ללוח.",
+      "copyError": "העתקת התמלול נכשלה.",
+      "savedToHistory": "נשמר בהיסטוריה",
+      "errors": {
+        "notFound": "לא ניתן למצוא או לפתוח את הקובץ.",
+        "unsupportedFormat": "סוג הקובץ הזה אינו נתמך.",
+        "needsFfmpeg": "הפורמט הזה דורש ffmpeg. התקן את ffmpeg ונסה שוב.",
+        "noModel": "לא נבחר מודל תמלול.",
+        "modelChanged": "המודל השתנה בזמן שהקובץ הזה תומלל.",
+        "decodeFailed": "לא ניתן לקרוא את האודיו בקובץ הזה.",
+        "engineFailed": "התמלול נכשל.",
+        "internal": "משהו השתבש.",
+        "enqueue": "לא ניתן להוסיף קבצים: {{error}}",
+        "cancel": "לא ניתן לבטל: {{error}}",
+        "remove": "לא ניתן להסיר מהרשימה: {{error}}",
+        "loadTranscript": "לא ניתן לטעון את התמלול: {{error}}"
+      },
+      "transcript": {
+        "title": "תמלול: {{file}}",
+        "live": "מתעדכן תוך כדי התמלול",
+        "partial": "התמלול הזה אינו שלם: {{reason}}",
+        "partialNoReason": "התמלול הזה אינו שלם.",
+        "approximateTimes": "הזמנים משוערים, כי המודל הזה לא מספק חותמות זמן.",
+        "empty": "לא נמצא דיבור."
+      },
+      "export": {
+        "button": "ייצוא…",
+        "dialogTitle": "ייצוא תמלול",
+        "formats": {
+          "txt": "טקסט פשוט (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "כתוביות SubRip (.srt)",
+          "vtt": "כתוביות WebVTT (.vtt)"
+        },
+        "success": "התמלול יוצא.",
+        "showInFolder": "הצג בתיקייה",
+        "error": "הייצוא נכשל: {{error}}"
+      }
+    },
     "history": {
       "title": "היסטוריה",
       "openFolder": "פתח את תיקיית ההקלטות",
@@ -477,7 +568,13 @@
       "retranscribe": "תמלל מחדש",
       "retranscribeError": "תמלול מחדש נכשל. נסה שוב.",
       "transcribing": "מתמלל...",
-      "transcriptionFailed": "התמלול נכשל. אפשר לתמלל מחדש באמצעות אייקון הניסיון החוזר."
+      "transcriptionFailed": "התמלול נכשל. אפשר לתמלל מחדש באמצעות אייקון הניסיון החוזר.",
+      "openTranscript": "פתח תמלול",
+      "showOriginal": "הצג את הקובץ המקורי",
+      "originalMissing": "הקובץ המקורי הועבר או נמחק.",
+      "fileDuration": "אורך {{duration}}",
+      "incomplete": "לא שלם",
+      "retranscribeFileUnavailable": "כדי לתמלל את הקובץ הזה מחדש, השתמש בעמוד 'תמלול'."
     },
     "debug": {
       "title": "ניפוי שגיאות",

@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "일반",
+    "transcribe": "전사",
     "models": "모델",
     "advanced": "고급",
     "postProcessing": "후처리",
@@ -463,6 +464,96 @@
         "createFirst": "첫 번째 후처리 프롬프트를 만들려면 위의 '새 프롬프트 만들기'를 클릭하세요."
       }
     },
+    "transcribeFiles": {
+      "title": "파일 전사",
+      "description": "기존 녹음을 이 컴퓨터에서 텍스트로 변환합니다. 파일은 기기 밖으로 전송되지 않습니다.",
+      "settingsNote": "선택한 모델과 언어, 번역, 사용자 정의 단어, 군더더기 표현 설정을 사용합니다.",
+      "model": "모델: {{model}}",
+      "noModel": "파일을 전사하려면 모델 페이지에서 다운로드된 모델을 선택하세요.",
+      "dropzone": {
+        "title": "오디오 또는 비디오 파일을 여기에 놓으세요",
+        "hint": "인터뷰, 회의, 강의, 음성 메모 등 길이 제한 없음",
+        "active": "놓아서 추가",
+        "choose": "파일 선택…",
+        "skipped": "오디오 또는 비디오가 아니어서 건너뛴 파일: {{number}}"
+      },
+      "picker": {
+        "title": "녹음 선택",
+        "filterName": "오디오 및 비디오 파일"
+      },
+      "formats": {
+        "native": "지원 형식: {{formats}}",
+        "ffmpegAvailable": "Opus, WebM, WMA, DSS 등 기타 형식은 ffmpeg 사용 시 열 수 있습니다.",
+        "ffmpegMissing": "ffmpeg 설치 시 Opus, WebM, WMA, DSS 등 기타 형식도 열 수 있습니다."
+      },
+      "saveToHistory": {
+        "label": "히스토리에 저장",
+        "description": "완료된 전사 내용은 저장되고 별표가 표시되어 자동 정리 시 삭제되지 않습니다."
+      },
+      "queue": {
+        "title": "파일",
+        "cancelAll": "모두 취소",
+        "clearFinished": "완료된 항목 지우기"
+      },
+      "status": {
+        "queued": "시작 대기 중",
+        "preparing": "준비 중…",
+        "waiting": "음성 입력 중 일시 중지됨",
+        "transcribing": "전사 중…",
+        "completed": "완료",
+        "partial": "완료(일부 누락)",
+        "cancelled": "취소됨",
+        "failed": "실패"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "{{processed}} 전사됨",
+      "noSpeech": "이 파일에서 음성을 찾을 수 없습니다.",
+      "actions": {
+        "cancel": "취소",
+        "remove": "목록에서 제거",
+        "view": "전사 내용 보기",
+        "copy": "전사 내용 복사",
+        "showFile": "파일 표시"
+      },
+      "copied": "전사 내용을 클립보드에 복사했습니다.",
+      "copyError": "전사 내용을 복사하지 못했습니다.",
+      "savedToHistory": "히스토리에 저장됨",
+      "errors": {
+        "notFound": "파일을 찾거나 열 수 없습니다.",
+        "unsupportedFormat": "지원하지 않는 파일 형식입니다.",
+        "needsFfmpeg": "이 형식은 ffmpeg 설치가 필요합니다. 설치한 후 다시 시도하세요.",
+        "noModel": "선택된 음성 인식 모델이 없습니다.",
+        "modelChanged": "이 파일을 전사하는 동안 모델이 변경되었습니다.",
+        "decodeFailed": "이 파일의 오디오를 읽을 수 없습니다.",
+        "engineFailed": "전사에 실패했습니다.",
+        "internal": "문제가 발생했습니다.",
+        "enqueue": "파일을 추가하지 못했습니다: {{error}}",
+        "cancel": "취소하지 못했습니다: {{error}}",
+        "remove": "목록에서 제거하지 못했습니다: {{error}}",
+        "loadTranscript": "전사 내용을 불러오지 못했습니다: {{error}}"
+      },
+      "transcript": {
+        "title": "전사 내용: {{file}}",
+        "live": "전사 진행에 따라 업데이트 중",
+        "partial": "이 전사 내용은 불완전합니다: {{reason}}",
+        "partialNoReason": "이 전사 내용은 불완전합니다.",
+        "approximateTimes": "이 모델은 타임스탬프를 제공하지 않으므로 시간은 대략적인 값입니다.",
+        "empty": "음성을 찾을 수 없습니다."
+      },
+      "export": {
+        "button": "내보내기…",
+        "dialogTitle": "전사 내용 내보내기",
+        "formats": {
+          "txt": "일반 텍스트 (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip 자막 (.srt)",
+          "vtt": "WebVTT 자막 (.vtt)"
+        },
+        "success": "전사 내용을 내보냈습니다.",
+        "showInFolder": "폴더에서 보기",
+        "error": "내보내기 실패: {{error}}"
+      }
+    },
     "history": {
       "title": "히스토리",
       "openFolder": "녹음 폴더 열기",
@@ -477,7 +568,13 @@
       "retranscribe": "다시 전사",
       "retranscribeError": "다시 전사에 실패했습니다. 다시 시도해주세요.",
       "transcribing": "전사 중...",
-      "transcriptionFailed": "전사에 실패했습니다. 재시도 아이콘을 사용하여 다시 전사할 수 있습니다."
+      "transcriptionFailed": "전사에 실패했습니다. 재시도 아이콘을 사용하여 다시 전사할 수 있습니다.",
+      "openTranscript": "전사 내용 열기",
+      "showOriginal": "원본 파일 표시",
+      "originalMissing": "원본 파일이 이동되었거나 삭제되었습니다.",
+      "fileDuration": "길이 {{duration}}",
+      "incomplete": "불완전",
+      "retranscribeFileUnavailable": "이 파일을 다시 전사하려면 전사 페이지를 사용하세요."
     },
     "debug": {
       "title": "디버그",

@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "General",
+    "transcribe": "Transcripció",
     "models": "Models",
     "advanced": "Avançat",
     "postProcessing": "Postprocessament",
@@ -463,6 +464,96 @@
         "createFirst": "Feu clic a «Creeu una indicació nova» més amunt per crear la primera indicació de postprocessament."
       }
     },
+    "transcribeFiles": {
+      "title": "Transcripció de fitxers",
+      "description": "Convertiu enregistraments existents en text en aquest ordinador. Els fitxers no surten mai del dispositiu.",
+      "settingsNote": "Utilitza el model seleccionat i la configuració de llengua, traducció, paraules personalitzades i falques.",
+      "model": "Model: {{model}}",
+      "noModel": "Seleccioneu un model baixat a la pàgina Models per transcriure fitxers.",
+      "dropzone": {
+        "title": "Deixeu anar aquí fitxers d'àudio o de vídeo",
+        "hint": "Entrevistes, reunions, classes i notes de veu de qualsevol durada",
+        "active": "Deixeu anar per afegir",
+        "choose": "Tria els fitxers…",
+        "skipped": "S'han omès fitxers que no són d'àudio ni de vídeo: {{number}}"
+      },
+      "picker": {
+        "title": "Tria els enregistraments",
+        "filterName": "Fitxers d'àudio i de vídeo"
+      },
+      "formats": {
+        "native": "Obre {{formats}}",
+        "ffmpegAvailable": "Altres formats, com ara Opus, WebM, WMA i DSS, s'obren amb l'ffmpeg.",
+        "ffmpegMissing": "Instal·leu l'ffmpeg per obrir també Opus, WebM, WMA, DSS i altres formats."
+      },
+      "saveToHistory": {
+        "label": "Desa a l'historial",
+        "description": "Les transcripcions acabades es desen i es marquen amb una estrella perquè la neteja automàtica les conservi."
+      },
+      "queue": {
+        "title": "Fitxers",
+        "cancelAll": "Cancel·la-ho tot",
+        "clearFinished": "Esborra les acabades"
+      },
+      "status": {
+        "queued": "Pendent d'iniciar",
+        "preparing": "S'està preparant…",
+        "waiting": "En pausa mentre dicteu",
+        "transcribing": "S'està transcrivint…",
+        "completed": "Fet",
+        "partial": "Fet, amb buits",
+        "cancelled": "Cancel·lat",
+        "failed": "Ha fallat"
+      },
+      "progress": "{{processed}} de {{total}}",
+      "progressNoTotal": "{{processed}} transcrits",
+      "noSpeech": "No s'ha detectat parla en aquest fitxer.",
+      "actions": {
+        "cancel": "Cancel·la",
+        "remove": "Treu de la llista",
+        "view": "Mostra la transcripció",
+        "copy": "Copia la transcripció",
+        "showFile": "Mostra el fitxer"
+      },
+      "copied": "S'ha copiat la transcripció al porta-retalls.",
+      "copyError": "No s'ha pogut copiar la transcripció.",
+      "savedToHistory": "Desat a l'historial",
+      "errors": {
+        "notFound": "No es pot trobar o obrir el fitxer.",
+        "unsupportedFormat": "Aquest tipus de fitxer no és compatible.",
+        "needsFfmpeg": "Aquest format necessita l'ffmpeg. Instal·leu l'ffmpeg i torneu-ho a provar.",
+        "noModel": "No hi ha cap model de transcripció seleccionat.",
+        "modelChanged": "El model ha canviat mentre es transcrivia aquest fitxer.",
+        "decodeFailed": "No s'ha pogut llegir l'àudio d'aquest fitxer.",
+        "engineFailed": "La transcripció ha fallat.",
+        "internal": "Alguna cosa no ha anat bé.",
+        "enqueue": "No s'han pogut afegir els fitxers: {{error}}",
+        "cancel": "No s'ha pogut cancel·lar: {{error}}",
+        "remove": "No s'ha pogut treure de la llista: {{error}}",
+        "loadTranscript": "No s'ha pogut carregar la transcripció: {{error}}"
+      },
+      "transcript": {
+        "title": "Transcripció: {{file}}",
+        "live": "S'actualitza mentre es transcriu",
+        "partial": "Aquesta transcripció és incompleta: {{reason}}",
+        "partialNoReason": "Aquesta transcripció és incompleta.",
+        "approximateTimes": "Els temps són aproximats perquè aquest model no proporciona marques de temps.",
+        "empty": "No s'ha detectat parla."
+      },
+      "export": {
+        "button": "Exporta…",
+        "dialogTitle": "Exporta la transcripció",
+        "formats": {
+          "txt": "Text sense format (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Subtítols SubRip (.srt)",
+          "vtt": "Subtítols WebVTT (.vtt)"
+        },
+        "success": "S'ha exportat la transcripció.",
+        "showInFolder": "Mostra a la carpeta",
+        "error": "No s'ha pogut exportar: {{error}}"
+      }
+    },
     "history": {
       "title": "Historial",
       "openFolder": "Obriu la carpeta d'enregistraments",
@@ -477,7 +568,13 @@
       "retranscribe": "Torneu a transcriure",
       "retranscribeError": "No s'ha pogut tornar a transcriure. Torneu-ho a provar.",
       "transcribing": "S'està transcrivint...",
-      "transcriptionFailed": "La transcripció ha fallat. Podeu tornar a transcriure amb la icona de reintent."
+      "transcriptionFailed": "La transcripció ha fallat. Podeu tornar a transcriure amb la icona de reintent.",
+      "openTranscript": "Obre la transcripció",
+      "showOriginal": "Mostra el fitxer original",
+      "originalMissing": "El fitxer original s'ha mogut o suprimit.",
+      "fileDuration": "Durada {{duration}}",
+      "incomplete": "Incompleta",
+      "retranscribeFileUnavailable": "Per tornar a transcriure aquest fitxer, utilitzeu la pàgina Transcripció."
     },
     "debug": {
       "title": "Depuració",

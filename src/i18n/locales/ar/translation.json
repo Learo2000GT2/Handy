@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "عام",
+    "transcribe": "التفريغ الصوتي",
     "advanced": "متقدم",
     "postProcessing": "معالجة لاحقة",
     "history": "السجل",
@@ -440,6 +441,96 @@
         "createFirst": ".انقر على 'إنشاء مطالبة جديدة' أعلاه لإنشاء أول مطالبة معالجة لاحقة لك"
       }
     },
+    "transcribeFiles": {
+      "title": "تفريغ الملفات",
+      "description": "حوّل التسجيلات الموجودة إلى نص على هذا الكمبيوتر. لا تغادر ملفاتك جهازك أبدًا.",
+      "settingsNote": "يستخدم النموذج المحدد وإعداداتك للغة والترجمة والكلمات المخصصة وكلمات الحشو.",
+      "model": "النموذج: {{model}}",
+      "noModel": "اختر نموذجًا محمّلًا من صفحة النماذج لتفريغ الملفات.",
+      "dropzone": {
+        "title": "أفلت ملفات الصوت أو الفيديو هنا",
+        "hint": "مقابلات واجتماعات ومحاضرات ومذكرات صوتية بأي طول",
+        "active": "أفلت للإضافة",
+        "choose": "اختيار الملفات…",
+        "skipped": "تم تخطي ملفات ليست صوتًا أو فيديو: {{number}}"
+      },
+      "picker": {
+        "title": "اختيار التسجيلات",
+        "filterName": "ملفات الصوت والفيديو"
+      },
+      "formats": {
+        "native": "يفتح {{formats}}",
+        "ffmpegAvailable": "تُفتح الصيغ الأخرى مثل Opus وWebM وWMA وDSS باستخدام ffmpeg.",
+        "ffmpegMissing": "ثبّت ffmpeg لفتح Opus وWebM وWMA وDSS وصيغ أخرى أيضًا."
+      },
+      "saveToHistory": {
+        "label": "الحفظ في السجل",
+        "description": "تُحفظ التفريغات المكتملة وتُميَّز بنجمة حتى لا يحذفها التنظيف التلقائي."
+      },
+      "queue": {
+        "title": "الملفات",
+        "cancelAll": "إلغاء الكل",
+        "clearFinished": "مسح المكتملة"
+      },
+      "status": {
+        "queued": "في انتظار البدء",
+        "preparing": "جارٍ التحضير…",
+        "waiting": "متوقف مؤقتًا أثناء الإملاء",
+        "transcribing": "جارٍ النسخ…",
+        "completed": "مكتمل",
+        "partial": "مكتمل مع وجود فجوات",
+        "cancelled": "ملغى",
+        "failed": "فشل"
+      },
+      "progress": "{{processed}} من {{total}}",
+      "progressNoTotal": "تم تفريغ {{processed}}",
+      "noSpeech": "لم يُعثر على كلام في هذا الملف.",
+      "actions": {
+        "cancel": "إلغاء",
+        "remove": "إزالة من القائمة",
+        "view": "عرض التفريغ",
+        "copy": "نسخ التفريغ",
+        "showFile": "إظهار الملف"
+      },
+      "copied": "تم نسخ التفريغ إلى الحافظة.",
+      "copyError": "تعذر نسخ التفريغ.",
+      "savedToHistory": "تم الحفظ في السجل",
+      "errors": {
+        "notFound": "تعذر العثور على الملف أو فتحه.",
+        "unsupportedFormat": "نوع الملف هذا غير مدعوم.",
+        "needsFfmpeg": "تتطلب هذه الصيغة ffmpeg. ثبّت ffmpeg ثم حاول مرة أخرى.",
+        "noModel": "لم يتم تحديد نموذج للتفريغ الصوتي.",
+        "modelChanged": "تغيّر النموذج أثناء تفريغ هذا الملف.",
+        "decodeFailed": "تعذرت قراءة الصوت في هذا الملف.",
+        "engineFailed": "فشل التفريغ.",
+        "internal": "حدث خطأ ما.",
+        "enqueue": "تعذرت إضافة الملفات: {{error}}",
+        "cancel": "تعذر الإلغاء: {{error}}",
+        "remove": "تعذرت الإزالة من القائمة: {{error}}",
+        "loadTranscript": "تعذر تحميل التفريغ: {{error}}"
+      },
+      "transcript": {
+        "title": "التفريغ: {{file}}",
+        "live": "يتم التحديث أثناء التفريغ",
+        "partial": "هذا التفريغ غير مكتمل: {{reason}}",
+        "partialNoReason": "هذا التفريغ غير مكتمل.",
+        "approximateTimes": "الأوقات تقريبية لأن هذا النموذج لا يوفر طوابع زمنية.",
+        "empty": "لم يُعثر على كلام."
+      },
+      "export": {
+        "button": "تصدير…",
+        "dialogTitle": "تصدير التفريغ",
+        "formats": {
+          "txt": "نص عادي (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "ترجمات SubRip (.srt)",
+          "vtt": "ترجمات WebVTT (.vtt)"
+        },
+        "success": "تم تصدير التفريغ.",
+        "showInFolder": "إظهار في المجلد",
+        "error": "فشل التصدير: {{error}}"
+      }
+    },
     "history": {
       "title": "السجل",
       "openFolder": "فتح مجلد التسجيلات",
@@ -454,7 +545,13 @@
       "retranscribe": "إعادة النسخ",
       "retranscribeError": "فشلت إعادة النسخ. يرجى المحاولة مرة أخرى.",
       "transcribing": "جارٍ النسخ...",
-      "transcriptionFailed": "فشل النسخ. يمكنك إعادة النسخ باستخدام أيقونة إعادة المحاولة."
+      "transcriptionFailed": "فشل النسخ. يمكنك إعادة النسخ باستخدام أيقونة إعادة المحاولة.",
+      "openTranscript": "فتح التفريغ",
+      "showOriginal": "إظهار الملف الأصلي",
+      "originalMissing": "تم نقل الملف الأصلي أو حذفه.",
+      "fileDuration": "المدة {{duration}}",
+      "incomplete": "غير مكتمل",
+      "retranscribeFileUnavailable": "لإعادة تفريغ هذا الملف، استخدم صفحة التفريغ الصوتي."
     },
     "debug": {
       "title": "تصحيح الأخطاء",

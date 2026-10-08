@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Obecné",
+    "transcribe": "Přepis",
     "models": "Modely",
     "advanced": "Pokročilé",
     "postProcessing": "Následné zpracování",
@@ -463,6 +464,96 @@
         "createFirst": "Klikněte nahoře na 'Vytvořit nový prompt' a vytvořte svůj první prompt pro následné zpracování."
       }
     },
+    "transcribeFiles": {
+      "title": "Přepis souborů",
+      "description": "Převeďte existující nahrávky na text přímo v tomto počítači. Vaše soubory nikdy neopustí vaše zařízení.",
+      "settingsNote": "Používá vybraný model a vaše nastavení jazyka, překladu, vlastních slov a výplňových slov.",
+      "model": "Model: {{model}}",
+      "noModel": "Chcete-li přepisovat soubory, vyberte stažený model na stránce Modely.",
+      "dropzone": {
+        "title": "Přetáhněte sem zvukové nebo video soubory",
+        "hint": "Rozhovory, schůzky, přednášky a hlasové poznámky libovolné délky",
+        "active": "Pusťte pro přidání",
+        "choose": "Vybrat soubory…",
+        "skipped": "Přeskočené soubory, které nejsou zvuk ani video: {{number}}"
+      },
+      "picker": {
+        "title": "Vybrat nahrávky",
+        "filterName": "Zvukové a video soubory"
+      },
+      "formats": {
+        "native": "Otevírá formáty {{formats}}",
+        "ffmpegAvailable": "Další formáty, jako jsou Opus, WebM, WMA a DSS, se otevírají pomocí ffmpeg.",
+        "ffmpegMissing": "Nainstalujte ffmpeg, abyste mohli otevírat i Opus, WebM, WMA, DSS a další formáty."
+      },
+      "saveToHistory": {
+        "label": "Uložit do historie",
+        "description": "Dokončené přepisy se uloží a označí hvězdičkou, takže je automatické mazání ponechá."
+      },
+      "queue": {
+        "title": "Soubory",
+        "cancelAll": "Zrušit vše",
+        "clearFinished": "Vymazat dokončené"
+      },
+      "status": {
+        "queued": "Čeká na spuštění",
+        "preparing": "Připravuji…",
+        "waiting": "Pozastaveno během diktování",
+        "transcribing": "Přepisuji…",
+        "completed": "Hotovo",
+        "partial": "Hotovo, s mezerami",
+        "cancelled": "Zrušeno",
+        "failed": "Selhalo"
+      },
+      "progress": "{{processed}} z {{total}}",
+      "progressNoTotal": "Přepsáno {{processed}}",
+      "noSpeech": "V tomto souboru nebyla nalezena žádná řeč.",
+      "actions": {
+        "cancel": "Zrušit",
+        "remove": "Odebrat ze seznamu",
+        "view": "Zobrazit přepis",
+        "copy": "Kopírovat přepis",
+        "showFile": "Zobrazit soubor"
+      },
+      "copied": "Přepis byl zkopírován do schránky.",
+      "copyError": "Přepis se nepodařilo zkopírovat.",
+      "savedToHistory": "Uloženo do historie",
+      "errors": {
+        "notFound": "Soubor nelze najít ani otevřít.",
+        "unsupportedFormat": "Tento typ souboru není podporován.",
+        "needsFfmpeg": "Tento formát vyžaduje ffmpeg. Nainstalujte ffmpeg a zkuste to znovu.",
+        "noModel": "Není vybrán žádný model pro přepis.",
+        "modelChanged": "Model se změnil během přepisu tohoto souboru.",
+        "decodeFailed": "Zvuk v tomto souboru se nepodařilo přečíst.",
+        "engineFailed": "Přepis selhal.",
+        "internal": "Něco se pokazilo.",
+        "enqueue": "Soubory se nepodařilo přidat: {{error}}",
+        "cancel": "Nepodařilo se zrušit: {{error}}",
+        "remove": "Nepodařilo se odebrat ze seznamu: {{error}}",
+        "loadTranscript": "Přepis se nepodařilo načíst: {{error}}"
+      },
+      "transcript": {
+        "title": "Přepis: {{file}}",
+        "live": "Průběžně se aktualizuje během přepisu",
+        "partial": "Tento přepis je neúplný: {{reason}}",
+        "partialNoReason": "Tento přepis je neúplný.",
+        "approximateTimes": "Časy jsou přibližné, protože tento model neposkytuje časové značky.",
+        "empty": "Nebyla nalezena žádná řeč."
+      },
+      "export": {
+        "button": "Exportovat…",
+        "dialogTitle": "Exportovat přepis",
+        "formats": {
+          "txt": "Prostý text (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Titulky SubRip (.srt)",
+          "vtt": "Titulky WebVTT (.vtt)"
+        },
+        "success": "Přepis byl exportován.",
+        "showInFolder": "Zobrazit ve složce",
+        "error": "Export se nezdařil: {{error}}"
+      }
+    },
     "history": {
       "title": "Historie",
       "openFolder": "Otevřít složku nahrávek",
@@ -477,7 +568,13 @@
       "retranscribe": "Přepsat znovu",
       "retranscribeError": "Opětovný přepis se nezdařil. Zkuste to prosím znovu.",
       "transcribing": "Přepisuji...",
-      "transcriptionFailed": "Přepis selhal. Můžete zkusit přepis znovu pomocí ikony opakování."
+      "transcriptionFailed": "Přepis selhal. Můžete zkusit přepis znovu pomocí ikony opakování.",
+      "openTranscript": "Otevřít přepis",
+      "showOriginal": "Zobrazit původní soubor",
+      "originalMissing": "Původní soubor byl přesunut nebo smazán.",
+      "fileDuration": "Délka {{duration}}",
+      "incomplete": "Neúplný",
+      "retranscribeFileUnavailable": "Chcete-li tento soubor přepsat znovu, použijte stránku Přepis."
     },
     "debug": {
       "title": "Ladění",

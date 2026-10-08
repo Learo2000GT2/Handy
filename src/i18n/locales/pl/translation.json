@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Ogólne",
+    "transcribe": "Transkrypcja",
     "models": "Modele",
     "advanced": "Zaawansowane",
     "postProcessing": "Postproces",
@@ -463,6 +464,96 @@
         "createFirst": "Kliknij 'Utwórz nowy prompt' powyżej, aby utworzyć pierwszy prompt postprocessingu."
       }
     },
+    "transcribeFiles": {
+      "title": "Transkrypcja plików",
+      "description": "Zamieniaj istniejące nagrania na tekst na tym komputerze. Twoje pliki nigdy nie opuszczają urządzenia.",
+      "settingsNote": "Używa wybranego modelu oraz Twoich ustawień języka, tłumaczenia, własnych słów i wyrazów wypełniających.",
+      "model": "Model: {{model}}",
+      "noModel": "Wybierz pobrany model na stronie Modele, aby transkrybować pliki.",
+      "dropzone": {
+        "title": "Upuść tutaj pliki audio lub wideo",
+        "hint": "Wywiady, spotkania, wykłady i notatki głosowe dowolnej długości",
+        "active": "Puść, aby dodać",
+        "choose": "Wybierz pliki…",
+        "skipped": "Pominięte pliki, które nie są plikami audio ani wideo: {{number}}"
+      },
+      "picker": {
+        "title": "Wybierz nagrania",
+        "filterName": "Pliki audio i wideo"
+      },
+      "formats": {
+        "native": "Otwiera pliki {{formats}}",
+        "ffmpegAvailable": "Inne formaty, takie jak Opus, WebM, WMA i DSS, są otwierane za pomocą ffmpeg.",
+        "ffmpegMissing": "Zainstaluj ffmpeg, aby otwierać także pliki Opus, WebM, WMA, DSS i inne formaty."
+      },
+      "saveToHistory": {
+        "label": "Zapisuj w historii",
+        "description": "Gotowe transkrypcje są zapisywane i oznaczane gwiazdką, dzięki czemu automatyczne czyszczenie ich nie usuwa."
+      },
+      "queue": {
+        "title": "Pliki",
+        "cancelAll": "Anuluj wszystko",
+        "clearFinished": "Wyczyść zakończone"
+      },
+      "status": {
+        "queued": "Oczekuje na rozpoczęcie",
+        "preparing": "Przygotowywanie…",
+        "waiting": "Wstrzymano na czas dyktowania",
+        "transcribing": "Transkrybowanie…",
+        "completed": "Gotowe",
+        "partial": "Gotowe, z lukami",
+        "cancelled": "Anulowano",
+        "failed": "Niepowodzenie"
+      },
+      "progress": "{{processed}} z {{total}}",
+      "progressNoTotal": "Przetranskrybowano {{processed}}",
+      "noSpeech": "Nie wykryto mowy w tym pliku.",
+      "actions": {
+        "cancel": "Anuluj",
+        "remove": "Usuń z listy",
+        "view": "Pokaż transkrypcję",
+        "copy": "Kopiuj transkrypcję",
+        "showFile": "Pokaż plik"
+      },
+      "copied": "Skopiowano transkrypcję do schowka.",
+      "copyError": "Nie udało się skopiować transkrypcji.",
+      "savedToHistory": "Zapisano w historii",
+      "errors": {
+        "notFound": "Nie można znaleźć ani otworzyć pliku.",
+        "unsupportedFormat": "Ten typ pliku nie jest obsługiwany.",
+        "needsFfmpeg": "Ten format wymaga ffmpeg. Zainstaluj ffmpeg i spróbuj ponownie.",
+        "noModel": "Nie wybrano modelu transkrypcji.",
+        "modelChanged": "Model zmienił się podczas transkrypcji tego pliku.",
+        "decodeFailed": "Nie udało się odczytać dźwięku z tego pliku.",
+        "engineFailed": "Transkrypcja nie powiodła się.",
+        "internal": "Coś poszło nie tak.",
+        "enqueue": "Nie udało się dodać plików: {{error}}",
+        "cancel": "Nie udało się anulować: {{error}}",
+        "remove": "Nie udało się usunąć z listy: {{error}}",
+        "loadTranscript": "Nie udało się wczytać transkrypcji: {{error}}"
+      },
+      "transcript": {
+        "title": "Transkrypcja: {{file}}",
+        "live": "Aktualizowana w trakcie transkrypcji",
+        "partial": "Ta transkrypcja jest niekompletna: {{reason}}",
+        "partialNoReason": "Ta transkrypcja jest niekompletna.",
+        "approximateTimes": "Czasy są przybliżone, ponieważ ten model nie podaje znaczników czasu.",
+        "empty": "Nie wykryto mowy."
+      },
+      "export": {
+        "button": "Eksportuj…",
+        "dialogTitle": "Eksportuj transkrypcję",
+        "formats": {
+          "txt": "Zwykły tekst (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Napisy SubRip (.srt)",
+          "vtt": "Napisy WebVTT (.vtt)"
+        },
+        "success": "Wyeksportowano transkrypcję.",
+        "showInFolder": "Pokaż w folderze",
+        "error": "Eksport nie powiódł się: {{error}}"
+      }
+    },
     "history": {
       "title": "Historia",
       "openFolder": "Otwórz folder nagrań",
@@ -477,7 +568,13 @@
       "retranscribe": "Transkrybuj ponownie",
       "retranscribeError": "Nie udało się ponownie transkrybować. Spróbuj ponownie.",
       "transcribing": "Transkrybuję...",
-      "transcriptionFailed": "Transkrypcja nie powiodła się. Możesz transkrybować ponownie za pomocą ikony ponowienia."
+      "transcriptionFailed": "Transkrypcja nie powiodła się. Możesz transkrybować ponownie za pomocą ikony ponowienia.",
+      "openTranscript": "Otwórz transkrypcję",
+      "showOriginal": "Pokaż oryginalny plik",
+      "originalMissing": "Oryginalny plik został przeniesiony lub usunięty.",
+      "fileDuration": "Długość {{duration}}",
+      "incomplete": "Niekompletna",
+      "retranscribeFileUnavailable": "Aby ponownie transkrybować ten plik, użyj strony Transkrypcja."
     },
     "debug": {
       "title": "Debugowanie",

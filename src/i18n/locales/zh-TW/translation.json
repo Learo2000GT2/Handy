@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "一般",
+    "transcribe": "轉錄",
     "models": "模型",
     "advanced": "進階",
     "postProcessing": "後處理",
@@ -463,6 +464,96 @@
         "createFirst": "點選上方的「建立新提示詞」來建立您的第一個後處理提示詞"
       }
     },
+    "transcribeFiles": {
+      "title": "轉錄檔案",
+      "description": "在這台電腦上將現有錄音轉為文字。您的檔案絕不會離開您的裝置。",
+      "settingsNote": "使用您選擇的模型，以及您的語言、翻譯、自訂詞彙和語助詞設定。",
+      "model": "模型：{{model}}",
+      "noModel": "請在「模型」頁面選擇已下載的模型，以便轉錄檔案。",
+      "dropzone": {
+        "title": "將音訊或影片檔案拖放到這裡",
+        "hint": "訪談、會議、講座和語音備忘錄，長度不限",
+        "active": "放開以新增",
+        "choose": "選擇檔案…",
+        "skipped": "已略過的非音訊或影片檔案：{{number}}"
+      },
+      "picker": {
+        "title": "選擇錄音",
+        "filterName": "音訊和影片檔案"
+      },
+      "formats": {
+        "native": "支援開啟 {{formats}}",
+        "ffmpegAvailable": "Opus、WebM、WMA 和 DSS 等其他格式會透過 ffmpeg 開啟。",
+        "ffmpegMissing": "安裝 ffmpeg 後也能開啟 Opus、WebM、WMA、DSS 等其他格式。"
+      },
+      "saveToHistory": {
+        "label": "儲存到歷史紀錄",
+        "description": "完成的轉錄會被儲存並加上星號，讓自動清理保留它們。"
+      },
+      "queue": {
+        "title": "檔案",
+        "cancelAll": "全部取消",
+        "clearFinished": "清除已完成"
+      },
+      "status": {
+        "queued": "等待開始",
+        "preparing": "準備中…",
+        "waiting": "聽寫期間已暫停",
+        "transcribing": "正在轉錄…",
+        "completed": "完成",
+        "partial": "已完成，有缺漏",
+        "cancelled": "已取消",
+        "failed": "失敗"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "已轉錄 {{processed}}",
+      "noSpeech": "此檔案中未偵測到語音。",
+      "actions": {
+        "cancel": "取消",
+        "remove": "從清單中移除",
+        "view": "檢視轉錄",
+        "copy": "複製轉錄",
+        "showFile": "顯示檔案"
+      },
+      "copied": "轉錄已複製到剪貼簿。",
+      "copyError": "複製轉錄失敗。",
+      "savedToHistory": "已儲存到歷史紀錄",
+      "errors": {
+        "notFound": "找不到或無法開啟此檔案。",
+        "unsupportedFormat": "不支援此檔案類型。",
+        "needsFfmpeg": "此格式需要 ffmpeg。請安裝 ffmpeg 後再試一次。",
+        "noModel": "未選擇轉錄模型。",
+        "modelChanged": "轉錄此檔案期間模型已變更。",
+        "decodeFailed": "無法讀取此檔案中的音訊。",
+        "engineFailed": "轉錄失敗。",
+        "internal": "發生錯誤。",
+        "enqueue": "無法新增檔案：{{error}}",
+        "cancel": "無法取消：{{error}}",
+        "remove": "無法從清單中移除：{{error}}",
+        "loadTranscript": "無法載入轉錄：{{error}}"
+      },
+      "transcript": {
+        "title": "轉錄：{{file}}",
+        "live": "隨轉錄進度即時更新",
+        "partial": "此轉錄不完整：{{reason}}",
+        "partialNoReason": "此轉錄不完整。",
+        "approximateTimes": "由於此模型不提供時間戳記，時間為近似值。",
+        "empty": "未偵測到語音。"
+      },
+      "export": {
+        "button": "匯出…",
+        "dialogTitle": "匯出轉錄",
+        "formats": {
+          "txt": "純文字 (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip 字幕 (.srt)",
+          "vtt": "WebVTT 字幕 (.vtt)"
+        },
+        "success": "轉錄已匯出。",
+        "showInFolder": "在資料夾中顯示",
+        "error": "匯出失敗：{{error}}"
+      }
+    },
     "history": {
       "title": "歷史紀錄",
       "openFolder": "開啟錄音資料夾",
@@ -477,7 +568,13 @@
       "retranscribe": "重新轉錄",
       "retranscribeError": "重新轉錄失敗，請重試。",
       "transcribing": "轉錄中...",
-      "transcriptionFailed": "轉錄失敗。您可以使用重試圖示重新轉錄。"
+      "transcriptionFailed": "轉錄失敗。您可以使用重試圖示重新轉錄。",
+      "openTranscript": "開啟轉錄",
+      "showOriginal": "顯示原始檔案",
+      "originalMissing": "原始檔案已被移動或刪除。",
+      "fileDuration": "長度 {{duration}}",
+      "incomplete": "不完整",
+      "retranscribeFileUnavailable": "如要重新轉錄此檔案，請使用「轉錄」頁面。"
     },
     "debug": {
       "title": "偵錯",

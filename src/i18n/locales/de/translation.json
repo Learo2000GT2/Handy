@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Allgemein",
+    "transcribe": "Transkribieren",
     "models": "Modelle",
     "advanced": "Erweitert",
     "postProcessing": "Nachbearbeitung",
@@ -463,6 +464,96 @@
         "createFirst": "Klicke oben auf 'Neuen Prompt erstellen', um deinen ersten Nachbearbeitungs-Prompt zu erstellen."
       }
     },
+    "transcribeFiles": {
+      "title": "Dateien transkribieren",
+      "description": "Wandle vorhandene Aufnahmen direkt auf diesem Computer in Text um. Deine Dateien verlassen nie dein Gerät.",
+      "settingsNote": "Verwendet dein ausgewähltes Modell sowie deine Einstellungen für Sprache, Übersetzung, benutzerdefinierte Wörter und Füllwörter.",
+      "model": "Modell: {{model}}",
+      "noModel": "Wähle auf der Seite 'Modelle' ein heruntergeladenes Modell aus, um Dateien zu transkribieren.",
+      "dropzone": {
+        "title": "Audio- oder Videodateien hier ablegen",
+        "hint": "Interviews, Meetings, Vorlesungen und Sprachmemos beliebiger Länge",
+        "active": "Loslassen zum Hinzufügen",
+        "choose": "Dateien auswählen…",
+        "skipped": "Übersprungene Dateien (kein Audio oder Video): {{number}}"
+      },
+      "picker": {
+        "title": "Aufnahmen auswählen",
+        "filterName": "Audio- und Videodateien"
+      },
+      "formats": {
+        "native": "Öffnet {{formats}}",
+        "ffmpegAvailable": "Andere Formate wie Opus, WebM, WMA und DSS werden mit ffmpeg geöffnet.",
+        "ffmpegMissing": "Installiere ffmpeg, um auch Opus, WebM, WMA, DSS und weitere Formate zu öffnen."
+      },
+      "saveToHistory": {
+        "label": "Im Verlauf speichern",
+        "description": "Fertige Transkriptionen werden gespeichert und mit einem Stern markiert, damit die automatische Bereinigung sie nicht löscht."
+      },
+      "queue": {
+        "title": "Dateien",
+        "cancelAll": "Alle abbrechen",
+        "clearFinished": "Abgeschlossene entfernen"
+      },
+      "status": {
+        "queued": "Wartet auf Start",
+        "preparing": "Wird vorbereitet…",
+        "waiting": "Pausiert, während du diktierst",
+        "transcribing": "Wird transkribiert…",
+        "completed": "Fertig",
+        "partial": "Fertig, mit Lücken",
+        "cancelled": "Abgebrochen",
+        "failed": "Fehlgeschlagen"
+      },
+      "progress": "{{processed}} von {{total}}",
+      "progressNoTotal": "{{processed}} transkribiert",
+      "noSpeech": "In dieser Datei wurde keine Sprache erkannt.",
+      "actions": {
+        "cancel": "Abbrechen",
+        "remove": "Aus Liste entfernen",
+        "view": "Transkription anzeigen",
+        "copy": "Transkription kopieren",
+        "showFile": "Datei anzeigen"
+      },
+      "copied": "Transkription in die Zwischenablage kopiert.",
+      "copyError": "Transkription konnte nicht kopiert werden.",
+      "savedToHistory": "Im Verlauf gespeichert",
+      "errors": {
+        "notFound": "Die Datei wurde nicht gefunden oder kann nicht geöffnet werden.",
+        "unsupportedFormat": "Dieser Dateityp wird nicht unterstützt.",
+        "needsFfmpeg": "Für dieses Format wird ffmpeg benötigt. Installiere ffmpeg und versuche es dann erneut.",
+        "noModel": "Es ist kein Transkriptionsmodell ausgewählt.",
+        "modelChanged": "Das Modell wurde geändert, während diese Datei transkribiert wurde.",
+        "decodeFailed": "Das Audio in dieser Datei konnte nicht gelesen werden.",
+        "engineFailed": "Transkription fehlgeschlagen.",
+        "internal": "Etwas ist schiefgelaufen.",
+        "enqueue": "Dateien konnten nicht hinzugefügt werden: {{error}}",
+        "cancel": "Abbrechen fehlgeschlagen: {{error}}",
+        "remove": "Entfernen aus der Liste fehlgeschlagen: {{error}}",
+        "loadTranscript": "Transkription konnte nicht geladen werden: {{error}}"
+      },
+      "transcript": {
+        "title": "Transkription: {{file}}",
+        "live": "Wird während der Transkription aktualisiert",
+        "partial": "Diese Transkription ist unvollständig: {{reason}}",
+        "partialNoReason": "Diese Transkription ist unvollständig.",
+        "approximateTimes": "Die Zeitangaben sind ungefähr, da dieses Modell keine Zeitstempel liefert.",
+        "empty": "Keine Sprache erkannt."
+      },
+      "export": {
+        "button": "Exportieren…",
+        "dialogTitle": "Transkription exportieren",
+        "formats": {
+          "txt": "Nur Text (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip-Untertitel (.srt)",
+          "vtt": "WebVTT-Untertitel (.vtt)"
+        },
+        "success": "Transkription exportiert.",
+        "showInFolder": "Im Ordner anzeigen",
+        "error": "Export fehlgeschlagen: {{error}}"
+      }
+    },
     "history": {
       "title": "Verlauf",
       "openFolder": "Aufnahmeordner öffnen",
@@ -477,7 +568,13 @@
       "retranscribe": "Erneut transkribieren",
       "retranscribeError": "Erneute Transkription fehlgeschlagen. Bitte versuche es erneut.",
       "transcribing": "Transkribiere...",
-      "transcriptionFailed": "Transkription fehlgeschlagen. Du kannst über das Wiederholen-Symbol erneut transkribieren."
+      "transcriptionFailed": "Transkription fehlgeschlagen. Du kannst über das Wiederholen-Symbol erneut transkribieren.",
+      "openTranscript": "Transkription öffnen",
+      "showOriginal": "Originaldatei anzeigen",
+      "originalMissing": "Die Originaldatei wurde verschoben oder gelöscht.",
+      "fileDuration": "Länge {{duration}}",
+      "incomplete": "Unvollständig",
+      "retranscribeFileUnavailable": "Um diese Datei erneut zu transkribieren, verwende die Seite 'Transkribieren'."
     },
     "debug": {
       "title": "Debug",

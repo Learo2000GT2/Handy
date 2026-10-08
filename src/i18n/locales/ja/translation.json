@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "一般",
+    "transcribe": "文字起こし",
     "models": "モデル",
     "advanced": "詳細設定",
     "postProcessing": "後処理",
@@ -463,6 +464,96 @@
         "createFirst": "上の「新しいプロンプトを作成」をクリックして、最初の後処理プロンプトを作成してください。"
       }
     },
+    "transcribeFiles": {
+      "title": "ファイルの文字起こし",
+      "description": "既存の録音をこのコンピューター上でテキストに変換します。ファイルがデバイスの外に送信されることはありません。",
+      "settingsNote": "選択中のモデルと、言語・翻訳・カスタム単語・フィラー語の設定が使用されます。",
+      "model": "モデル: {{model}}",
+      "noModel": "ファイルを文字起こしするには、モデルページでダウンロード済みのモデルを選択してください。",
+      "dropzone": {
+        "title": "音声または動画ファイルをここにドロップ",
+        "hint": "インタビュー、会議、講義、ボイスメモなど、長さを問わず対応",
+        "active": "ドロップして追加",
+        "choose": "ファイルを選択…",
+        "skipped": "音声・動画以外のファイルをスキップしました: {{number}}"
+      },
+      "picker": {
+        "title": "録音を選択",
+        "filterName": "音声・動画ファイル"
+      },
+      "formats": {
+        "native": "対応形式: {{formats}}",
+        "ffmpegAvailable": "Opus、WebM、WMA、DSS などのその他の形式は ffmpeg で開きます。",
+        "ffmpegMissing": "ffmpeg をインストールすると、Opus、WebM、WMA、DSS などの形式も開けます。"
+      },
+      "saveToHistory": {
+        "label": "履歴に保存",
+        "description": "完了した文字起こしは保存されてスターが付き、自動削除の対象外になります。"
+      },
+      "queue": {
+        "title": "ファイル",
+        "cancelAll": "すべてキャンセル",
+        "clearFinished": "完了したものをクリア"
+      },
+      "status": {
+        "queued": "開始待ち",
+        "preparing": "準備中…",
+        "waiting": "音声入力中のため一時停止",
+        "transcribing": "文字起こし中…",
+        "completed": "完了",
+        "partial": "完了（一部欠落あり）",
+        "cancelled": "キャンセル済み",
+        "failed": "失敗"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "文字起こし済み: {{processed}}",
+      "noSpeech": "このファイルに音声が見つかりませんでした。",
+      "actions": {
+        "cancel": "キャンセル",
+        "remove": "リストから削除",
+        "view": "文字起こしを表示",
+        "copy": "文字起こしをコピー",
+        "showFile": "ファイルを表示"
+      },
+      "copied": "文字起こしをクリップボードにコピーしました。",
+      "copyError": "文字起こしをコピーできませんでした。",
+      "savedToHistory": "履歴に保存済み",
+      "errors": {
+        "notFound": "ファイルが見つからないか、開けません。",
+        "unsupportedFormat": "このファイル形式には対応していません。",
+        "needsFfmpeg": "この形式には ffmpeg が必要です。ffmpeg をインストールしてから、もう一度お試しください。",
+        "noModel": "文字起こしのモデルが選択されていません。",
+        "modelChanged": "このファイルの文字起こし中にモデルが変更されました。",
+        "decodeFailed": "このファイルの音声を読み取れませんでした。",
+        "engineFailed": "文字起こしに失敗しました。",
+        "internal": "問題が発生しました。",
+        "enqueue": "ファイルを追加できませんでした: {{error}}",
+        "cancel": "キャンセルできませんでした: {{error}}",
+        "remove": "リストから削除できませんでした: {{error}}",
+        "loadTranscript": "文字起こしを読み込めませんでした: {{error}}"
+      },
+      "transcript": {
+        "title": "文字起こし: {{file}}",
+        "live": "文字起こしの進行に合わせて更新中",
+        "partial": "この文字起こしは不完全です: {{reason}}",
+        "partialNoReason": "この文字起こしは不完全です。",
+        "approximateTimes": "このモデルはタイムスタンプを出力しないため、時間はおおよその値です。",
+        "empty": "音声が見つかりませんでした。"
+      },
+      "export": {
+        "button": "エクスポート…",
+        "dialogTitle": "文字起こしをエクスポート",
+        "formats": {
+          "txt": "プレーンテキスト (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip 字幕 (.srt)",
+          "vtt": "WebVTT 字幕 (.vtt)"
+        },
+        "success": "文字起こしをエクスポートしました。",
+        "showInFolder": "フォルダーで表示",
+        "error": "エクスポートに失敗しました: {{error}}"
+      }
+    },
     "history": {
       "title": "履歴",
       "openFolder": "録音フォルダを開く",
@@ -477,7 +568,13 @@
       "retranscribe": "再文字起こし",
       "retranscribeError": "再文字起こしに失敗しました。もう一度お試しください。",
       "transcribing": "文字起こし中…",
-      "transcriptionFailed": "文字起こしに失敗しました。リトライアイコンを使用して再文字起こしできます。"
+      "transcriptionFailed": "文字起こしに失敗しました。リトライアイコンを使用して再文字起こしできます。",
+      "openTranscript": "文字起こしを開く",
+      "showOriginal": "元のファイルを表示",
+      "originalMissing": "元のファイルは移動または削除されています。",
+      "fileDuration": "長さ {{duration}}",
+      "incomplete": "不完全",
+      "retranscribeFileUnavailable": "このファイルをもう一度文字起こしするには、「文字起こし」ページを使用してください。"
     },
     "debug": {
       "title": "デバッグ",

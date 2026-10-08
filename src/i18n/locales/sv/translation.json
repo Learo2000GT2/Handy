@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Allmänt",
+    "transcribe": "Transkribera",
     "models": "Modeller",
     "advanced": "Avancerat",
     "postProcessing": "Efterbearbetning",
@@ -463,6 +464,96 @@
         "createFirst": "Klicka på 'Skapa ny prompt' ovan för att skapa din första prompt för efterbearbetning."
       }
     },
+    "transcribeFiles": {
+      "title": "Transkribera filer",
+      "description": "Gör om befintliga inspelningar till text på den här datorn. Dina filer lämnar aldrig din enhet.",
+      "settingsNote": "Använder din valda modell och dina inställningar för språk, översättning, anpassade ord och utfyllnadsord.",
+      "model": "Modell: {{model}}",
+      "noModel": "Välj en nedladdad modell på sidan Modeller för att transkribera filer.",
+      "dropzone": {
+        "title": "Släpp ljud- eller videofiler här",
+        "hint": "Intervjuer, möten, föreläsningar och röstmemon av valfri längd",
+        "active": "Släpp för att lägga till",
+        "choose": "Välj filer…",
+        "skipped": "Överhoppade filer som inte är ljud eller video: {{number}}"
+      },
+      "picker": {
+        "title": "Välj inspelningar",
+        "filterName": "Ljud- och videofiler"
+      },
+      "formats": {
+        "native": "Öppnar {{formats}}",
+        "ffmpegAvailable": "Andra format som Opus, WebM, WMA och DSS öppnas med ffmpeg.",
+        "ffmpegMissing": "Installera ffmpeg för att även kunna öppna Opus, WebM, WMA, DSS och andra format."
+      },
+      "saveToHistory": {
+        "label": "Spara i historik",
+        "description": "Färdiga transkriptioner sparas och stjärnmarkeras så att automatisk rensning behåller dem."
+      },
+      "queue": {
+        "title": "Filer",
+        "cancelAll": "Avbryt alla",
+        "clearFinished": "Rensa färdiga"
+      },
+      "status": {
+        "queued": "Väntar på att starta",
+        "preparing": "Förbereder…",
+        "waiting": "Pausad medan du dikterar",
+        "transcribing": "Transkriberar…",
+        "completed": "Klar",
+        "partial": "Klar, med luckor",
+        "cancelled": "Avbruten",
+        "failed": "Misslyckades"
+      },
+      "progress": "{{processed}} av {{total}}",
+      "progressNoTotal": "{{processed}} transkriberat",
+      "noSpeech": "Inget tal hittades i den här filen.",
+      "actions": {
+        "cancel": "Avbryt",
+        "remove": "Ta bort från listan",
+        "view": "Visa transkription",
+        "copy": "Kopiera transkription",
+        "showFile": "Visa fil"
+      },
+      "copied": "Transkriptionen har kopierats till urklipp.",
+      "copyError": "Det gick inte att kopiera transkriptionen.",
+      "savedToHistory": "Sparad i historik",
+      "errors": {
+        "notFound": "Filen kan inte hittas eller öppnas.",
+        "unsupportedFormat": "Den här filtypen stöds inte.",
+        "needsFfmpeg": "Det här formatet kräver ffmpeg. Installera ffmpeg och försök igen.",
+        "noModel": "Ingen transkriptionsmodell är vald.",
+        "modelChanged": "Modellen ändrades medan den här filen transkriberades.",
+        "decodeFailed": "Ljudet i den här filen kunde inte läsas.",
+        "engineFailed": "Transkriberingen misslyckades.",
+        "internal": "Något gick fel.",
+        "enqueue": "Det gick inte att lägga till filer: {{error}}",
+        "cancel": "Det gick inte att avbryta: {{error}}",
+        "remove": "Det gick inte att ta bort från listan: {{error}}",
+        "loadTranscript": "Det gick inte att läsa in transkriptionen: {{error}}"
+      },
+      "transcript": {
+        "title": "Transkription: {{file}}",
+        "live": "Uppdateras medan transkriberingen pågår",
+        "partial": "Den här transkriptionen är ofullständig: {{reason}}",
+        "partialNoReason": "Den här transkriptionen är ofullständig.",
+        "approximateTimes": "Tiderna är ungefärliga eftersom den här modellen inte rapporterar tidsstämplar.",
+        "empty": "Inget tal hittades."
+      },
+      "export": {
+        "button": "Exportera…",
+        "dialogTitle": "Exportera transkription",
+        "formats": {
+          "txt": "Oformaterad text (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip-undertexter (.srt)",
+          "vtt": "WebVTT-undertexter (.vtt)"
+        },
+        "success": "Transkriptionen har exporterats.",
+        "showInFolder": "Visa i mapp",
+        "error": "Exporten misslyckades: {{error}}"
+      }
+    },
     "history": {
       "title": "Historik",
       "openFolder": "Öppna mapp för inspelningar",
@@ -477,7 +568,13 @@
       "retranscribe": "Transkribera igen",
       "retranscribeError": "Misslyckades med att transkribera igen. Försök igen.",
       "transcribing": "Transkriberar...",
-      "transcriptionFailed": "Transkribering misslyckades. Du kan transkribera igen med hjälp av ikonen för nytt försök."
+      "transcriptionFailed": "Transkribering misslyckades. Du kan transkribera igen med hjälp av ikonen för nytt försök.",
+      "openTranscript": "Öppna transkription",
+      "showOriginal": "Visa originalfil",
+      "originalMissing": "Originalfilen har flyttats eller tagits bort.",
+      "fileDuration": "Längd {{duration}}",
+      "incomplete": "Ofullständig",
+      "retranscribeFileUnavailable": "Använd sidan Transkribera för att transkribera den här filen igen."
     },
     "debug": {
       "title": "Felsökning",

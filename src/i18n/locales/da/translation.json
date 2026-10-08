@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Generelt",
+    "transcribe": "Transskription",
     "models": "Modeller",
     "advanced": "Avanceret",
     "postProcessing": "Efterbehandling",
@@ -463,6 +464,96 @@
         "createFirst": "Klik på 'Opret ny prompt' ovenfor for at oprette din første efterbehandlingsprompt."
       }
     },
+    "transcribeFiles": {
+      "title": "Transskribér filer",
+      "description": "Gør eksisterende optagelser til tekst på denne computer. Dine filer forlader aldrig din enhed.",
+      "settingsNote": "Bruger din valgte model og dine indstillinger for sprog, oversættelse, brugerdefinerede ord og fyldord.",
+      "model": "Model: {{model}}",
+      "noModel": "Vælg en downloadet model på siden Modeller for at transskribere filer.",
+      "dropzone": {
+        "title": "Slip lyd- eller videofiler her",
+        "hint": "Interviews, møder, forelæsninger og talememoer af enhver længde",
+        "active": "Slip for at tilføje",
+        "choose": "Vælg filer…",
+        "skipped": "Filer, der ikke er lyd eller video, blev sprunget over: {{number}}"
+      },
+      "picker": {
+        "title": "Vælg optagelser",
+        "filterName": "Lyd- og videofiler"
+      },
+      "formats": {
+        "native": "Åbner {{formats}}",
+        "ffmpegAvailable": "Andre formater som Opus, WebM, WMA og DSS åbnes med ffmpeg.",
+        "ffmpegMissing": "Installer ffmpeg for også at kunne åbne Opus, WebM, WMA, DSS og andre formater."
+      },
+      "saveToHistory": {
+        "label": "Gem i historik",
+        "description": "Færdige transskriptioner gemmes og stjernemarkeres, så automatisk oprydning beholder dem."
+      },
+      "queue": {
+        "title": "Filer",
+        "cancelAll": "Annuller alle",
+        "clearFinished": "Ryd færdige"
+      },
+      "status": {
+        "queued": "Venter på at starte",
+        "preparing": "Forbereder…",
+        "waiting": "Sat på pause, mens du dikterer",
+        "transcribing": "Transskriberer…",
+        "completed": "Færdig",
+        "partial": "Færdig, med huller",
+        "cancelled": "Annulleret",
+        "failed": "Mislykkedes"
+      },
+      "progress": "{{processed}} af {{total}}",
+      "progressNoTotal": "{{processed}} transskriberet",
+      "noSpeech": "Der blev ikke fundet tale i denne fil.",
+      "actions": {
+        "cancel": "Annuller",
+        "remove": "Fjern fra listen",
+        "view": "Vis transskription",
+        "copy": "Kopiér transskription",
+        "showFile": "Vis fil"
+      },
+      "copied": "Transskription kopieret til udklipsholder.",
+      "copyError": "Kunne ikke kopiere transskriptionen.",
+      "savedToHistory": "Gemt i historik",
+      "errors": {
+        "notFound": "Filen kan ikke findes eller åbnes.",
+        "unsupportedFormat": "Denne filtype understøttes ikke.",
+        "needsFfmpeg": "Dette format kræver ffmpeg. Installer ffmpeg, og prøv igen.",
+        "noModel": "Der er ikke valgt nogen transskriptionsmodel.",
+        "modelChanged": "Modellen blev ændret, mens denne fil blev transskriberet.",
+        "decodeFailed": "Lyden i denne fil kunne ikke læses.",
+        "engineFailed": "Transskription mislykkedes.",
+        "internal": "Noget gik galt.",
+        "enqueue": "Kunne ikke tilføje filer: {{error}}",
+        "cancel": "Kunne ikke annullere: {{error}}",
+        "remove": "Kunne ikke fjerne fra listen: {{error}}",
+        "loadTranscript": "Kunne ikke indlæse transskriptionen: {{error}}"
+      },
+      "transcript": {
+        "title": "Transskription: {{file}}",
+        "live": "Opdateres, mens transskriptionen kører",
+        "partial": "Denne transskription er ufuldstændig: {{reason}}",
+        "partialNoReason": "Denne transskription er ufuldstændig.",
+        "approximateTimes": "Tidspunkterne er omtrentlige, fordi denne model ikke angiver tidsstempler.",
+        "empty": "Der blev ikke fundet tale."
+      },
+      "export": {
+        "button": "Eksportér…",
+        "dialogTitle": "Eksportér transskription",
+        "formats": {
+          "txt": "Almindelig tekst (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip-undertekster (.srt)",
+          "vtt": "WebVTT-undertekster (.vtt)"
+        },
+        "success": "Transskription eksporteret.",
+        "showInFolder": "Vis i mappe",
+        "error": "Eksport mislykkedes: {{error}}"
+      }
+    },
     "history": {
       "title": "Historik",
       "openFolder": "Åbn optagelsesmappe",
@@ -477,7 +568,13 @@
       "retranscribe": "Transskribér igen",
       "retranscribeError": "Kunne ikke transskribere igen. Prøv igen.",
       "transcribing": "Transskriberer...",
-      "transcriptionFailed": "Transskription mislykkedes. Du kan transskribere igen ved hjælp af genforsøgsikonet."
+      "transcriptionFailed": "Transskription mislykkedes. Du kan transskribere igen ved hjælp af genforsøgsikonet.",
+      "openTranscript": "Åbn transskription",
+      "showOriginal": "Vis originalfil",
+      "originalMissing": "Originalfilen er blevet flyttet eller slettet.",
+      "fileDuration": "Længde {{duration}}",
+      "incomplete": "Ufuldstændig",
+      "retranscribeFileUnavailable": "Brug siden Transskription for at transskribere denne fil igen."
     },
     "debug": {
       "title": "Fejlfinding",

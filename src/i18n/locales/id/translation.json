@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Umum",
+    "transcribe": "Transkripsi",
     "models": "Model",
     "advanced": "Lanjutan",
     "postProcessing": "Pascaproses",
@@ -463,6 +464,96 @@
         "createFirst": "Klik 'Buat Prompt Baru' di atas untuk membuat prompt pascaproses pertama Anda."
       }
     },
+    "transcribeFiles": {
+      "title": "Transkripsikan File",
+      "description": "Ubah rekaman yang sudah ada menjadi teks di komputer ini. File Anda tidak pernah keluar dari perangkat Anda.",
+      "settingsNote": "Menggunakan model yang Anda pilih serta pengaturan bahasa, terjemahan, kata khusus, dan kata pengisi Anda.",
+      "model": "Model: {{model}}",
+      "noModel": "Pilih model yang sudah diunduh di halaman Model untuk mentranskripsikan file.",
+      "dropzone": {
+        "title": "Letakkan file audio atau video di sini",
+        "hint": "Wawancara, rapat, kuliah, dan memo suara dengan durasi berapa pun",
+        "active": "Lepaskan untuk menambahkan",
+        "choose": "Pilih File…",
+        "skipped": "File yang bukan audio atau video dilewati: {{number}}"
+      },
+      "picker": {
+        "title": "Pilih Rekaman",
+        "filterName": "File audio dan video"
+      },
+      "formats": {
+        "native": "Dapat membuka {{formats}}",
+        "ffmpegAvailable": "Format lain seperti Opus, WebM, WMA, dan DSS dibuka dengan ffmpeg.",
+        "ffmpegMissing": "Instal ffmpeg agar juga dapat membuka Opus, WebM, WMA, DSS, dan format lainnya."
+      },
+      "saveToHistory": {
+        "label": "Simpan ke Riwayat",
+        "description": "Transkripsi yang selesai akan disimpan dan diberi bintang agar tidak dihapus oleh pembersihan otomatis."
+      },
+      "queue": {
+        "title": "File",
+        "cancelAll": "Batalkan Semua",
+        "clearFinished": "Bersihkan yang Selesai"
+      },
+      "status": {
+        "queued": "Menunggu dimulai",
+        "preparing": "Menyiapkan…",
+        "waiting": "Dijeda saat Anda mendikte",
+        "transcribing": "Mentranskripsikan…",
+        "completed": "Selesai",
+        "partial": "Selesai, dengan bagian yang terlewat",
+        "cancelled": "Dibatalkan",
+        "failed": "Gagal"
+      },
+      "progress": "{{processed}} dari {{total}}",
+      "progressNoTotal": "{{processed}} ditranskripsikan",
+      "noSpeech": "Tidak ada ucapan yang ditemukan dalam file ini.",
+      "actions": {
+        "cancel": "Batal",
+        "remove": "Hapus dari Daftar",
+        "view": "Lihat Transkripsi",
+        "copy": "Salin Transkripsi",
+        "showFile": "Tampilkan File"
+      },
+      "copied": "Transkripsi disalin ke papan klip.",
+      "copyError": "Gagal menyalin transkripsi.",
+      "savedToHistory": "Disimpan ke Riwayat",
+      "errors": {
+        "notFound": "File tidak dapat ditemukan atau dibuka.",
+        "unsupportedFormat": "Jenis file ini tidak didukung.",
+        "needsFfmpeg": "Format ini memerlukan ffmpeg. Instal ffmpeg, lalu coba lagi.",
+        "noModel": "Belum ada model transkripsi yang dipilih.",
+        "modelChanged": "Model berubah saat file ini sedang ditranskripsikan.",
+        "decodeFailed": "Audio dalam file ini tidak dapat dibaca.",
+        "engineFailed": "Transkripsi gagal.",
+        "internal": "Terjadi kesalahan.",
+        "enqueue": "Tidak dapat menambahkan file: {{error}}",
+        "cancel": "Tidak dapat membatalkan: {{error}}",
+        "remove": "Tidak dapat menghapus dari daftar: {{error}}",
+        "loadTranscript": "Tidak dapat memuat transkripsi: {{error}}"
+      },
+      "transcript": {
+        "title": "Transkripsi: {{file}}",
+        "live": "Diperbarui selama transkripsi berjalan",
+        "partial": "Transkripsi ini tidak lengkap: {{reason}}",
+        "partialNoReason": "Transkripsi ini tidak lengkap.",
+        "approximateTimes": "Waktu bersifat perkiraan karena model ini tidak menyediakan stempel waktu.",
+        "empty": "Tidak ada ucapan yang ditemukan."
+      },
+      "export": {
+        "button": "Ekspor…",
+        "dialogTitle": "Ekspor Transkripsi",
+        "formats": {
+          "txt": "Teks biasa (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Subtitle SubRip (.srt)",
+          "vtt": "Subtitle WebVTT (.vtt)"
+        },
+        "success": "Transkripsi berhasil diekspor.",
+        "showInFolder": "Tampilkan di Folder",
+        "error": "Ekspor gagal: {{error}}"
+      }
+    },
     "history": {
       "title": "Riwayat",
       "openFolder": "Buka Folder Rekaman",
@@ -477,7 +568,13 @@
       "retranscribe": "Transkripsikan ulang",
       "retranscribeError": "Gagal mentranskripsikan ulang. Silakan coba lagi.",
       "transcribing": "Mentranskripsikan...",
-      "transcriptionFailed": "Transkripsi gagal. Anda dapat mentranskripsikan ulang menggunakan ikon coba lagi."
+      "transcriptionFailed": "Transkripsi gagal. Anda dapat mentranskripsikan ulang menggunakan ikon coba lagi.",
+      "openTranscript": "Buka Transkripsi",
+      "showOriginal": "Tampilkan File Asli",
+      "originalMissing": "File asli telah dipindahkan atau dihapus.",
+      "fileDuration": "Durasi {{duration}}",
+      "incomplete": "Tidak Lengkap",
+      "retranscribeFileUnavailable": "Untuk mentranskripsikan file ini lagi, gunakan halaman Transkripsi."
     },
     "debug": {
       "title": "Debug",
