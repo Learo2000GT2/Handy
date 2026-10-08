@@ -520,8 +520,7 @@
         },
         "test": "Test Connection",
         "testing": "Connecting…",
-        "connected_one": "Connected. {{count}} transcription model available.",
-        "connected_other": "Connected. {{count}} transcription models available.",
+        "connected": "Connected. Transcription models available: {{number}}",
         "checkFailed": "Couldn't check Lemonade Server: {{error}}",
         "saveError": "Couldn't save the Lemonade settings: {{error}}",
         "firstChunkSlow": "Lemonade may be downloading or loading the model. This can take a few minutes the first time.",
@@ -563,8 +562,7 @@
         "unassigned": "Some passages couldn't be matched to a speaker.",
         "state": {
           "running": "Identifying speakers…",
-          "done_one": "{{count}} speaker",
-          "done_other": "{{count}} speakers",
+          "done": "Speakers: {{number}}",
           "failed": "Couldn't label speakers",
           "skipped": {
             "modelMissing": "Speaker labels skipped: the speaker model isn't downloaded.",
@@ -660,8 +658,7 @@
       "originalMissing": "The original file has been moved or deleted.",
       "fileDuration": "Length {{duration}}",
       "incomplete": "Incomplete",
-      "speakerCount_one": "{{count}} speaker",
-      "speakerCount_other": "{{count}} speakers",
+      "speakerCount": "Speakers: {{number}}",
       "retranscribeFileUnavailable": "To transcribe this file again, use the Transcribe page."
     },
     "debug": {

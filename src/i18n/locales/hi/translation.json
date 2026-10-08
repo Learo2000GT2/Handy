@@ -520,8 +520,7 @@
         },
         "test": "कनेक्शन जांचें",
         "testing": "कनेक्ट हो रहा है…",
-        "connected_one": "कनेक्ट हो गया. {{count}} ट्रांसक्रिप्शन मॉडल उपलब्ध है.",
-        "connected_other": "कनेक्ट हो गया. {{count}} ट्रांसक्रिप्शन मॉडल उपलब्ध हैं.",
+        "connected": "कनेक्ट हो गया. उपलब्ध ट्रांसक्रिप्शन मॉडल: {{number}}",
         "checkFailed": "Lemonade Server की जांच नहीं हो सकी: {{error}}",
         "saveError": "Lemonade सेटिंग सेव नहीं हो सकीं: {{error}}",
         "firstChunkSlow": "हो सकता है Lemonade मॉडल डाउनलोड या लोड कर रहा हो. पहली बार इसमें कुछ मिनट लग सकते हैं.",
@@ -563,8 +562,7 @@
         "unassigned": "कुछ हिस्सों का किसी स्पीकर से मिलान नहीं हो सका.",
         "state": {
           "running": "स्पीकर की पहचान हो रही है…",
-          "done_one": "{{count}} स्पीकर",
-          "done_other": "{{count}} स्पीकर",
+          "done": "स्पीकर: {{number}}",
           "failed": "स्पीकर लेबल नहीं किए जा सके",
           "skipped": {
             "modelMissing": "स्पीकर लेबल छोड़े गए: स्पीकर मॉडल डाउनलोड नहीं किया गया है.",
@@ -660,8 +658,7 @@
       "originalMissing": "मूल फ़ाइल हटा दी गई है या कहीं और ले जाई गई है.",
       "fileDuration": "अवधि {{duration}}",
       "incomplete": "अधूरा",
-      "speakerCount_one": "{{count}} स्पीकर",
-      "speakerCount_other": "{{count}} स्पीकर",
+      "speakerCount": "स्पीकर: {{number}}",
       "retranscribeFileUnavailable": "इस फ़ाइल को फिर से ट्रांसक्राइब करने के लिए, 'ट्रांसक्राइब' पेज का इस्तेमाल करें."
     },
     "debug": {

@@ -520,8 +520,7 @@
         },
         "test": "Bağlantıyı Test Et",
         "testing": "Bağlanılıyor…",
-        "connected_one": "Bağlandı. {{count}} transkripsiyon modeli kullanılabilir.",
-        "connected_other": "Bağlandı. {{count}} transkripsiyon modeli kullanılabilir.",
+        "connected": "Bağlandı. Kullanılabilir transkripsiyon modelleri: {{number}}",
         "checkFailed": "Lemonade Server kontrol edilemedi: {{error}}",
         "saveError": "Lemonade ayarları kaydedilemedi: {{error}}",
         "firstChunkSlow": "Lemonade modeli indiriyor veya yüklüyor olabilir. İlk seferde bu birkaç dakika sürebilir.",
@@ -563,8 +562,7 @@
         "unassigned": "Bazı bölümler bir konuşmacıyla eşleştirilemedi.",
         "state": {
           "running": "Konuşmacılar belirleniyor…",
-          "done_one": "{{count}} konuşmacı",
-          "done_other": "{{count}} konuşmacı",
+          "done": "Konuşmacılar: {{number}}",
           "failed": "Konuşmacılar etiketlenemedi",
           "skipped": {
             "modelMissing": "Konuşmacı etiketleri atlandı: konuşmacı modeli indirilmemiş.",
@@ -660,8 +658,7 @@
       "originalMissing": "Orijinal dosya taşınmış veya silinmiş.",
       "fileDuration": "Süre {{duration}}",
       "incomplete": "Eksik",
-      "speakerCount_one": "{{count}} konuşmacı",
-      "speakerCount_other": "{{count}} konuşmacı",
+      "speakerCount": "Konuşmacılar: {{number}}",
       "retranscribeFileUnavailable": "Bu dosyayı yeniden transkribe etmek için Transkripsiyon sayfasını kullanın."
     },
     "debug": {

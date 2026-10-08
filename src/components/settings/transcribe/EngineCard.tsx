@@ -236,7 +236,7 @@ export const EngineCard: React.FC = () => {
         title={check.check.api_url ?? undefined}
       >
         {t("settings.transcribeFiles.lemonade.connected", {
-          count: models.length,
+          number: models.length,
         })}
       </p>
     );

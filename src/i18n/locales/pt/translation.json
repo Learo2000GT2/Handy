@@ -520,8 +520,7 @@
         },
         "test": "Testar Conexão",
         "testing": "Conectando…",
-        "connected_one": "Conectado. {{count}} modelo de transcrição disponível.",
-        "connected_other": "Conectado. {{count}} modelos de transcrição disponíveis.",
+        "connected": "Conectado. Modelos de transcrição disponíveis: {{number}}",
         "checkFailed": "Não foi possível verificar o Lemonade Server: {{error}}",
         "saveError": "Não foi possível salvar as configurações do Lemonade: {{error}}",
         "firstChunkSlow": "O Lemonade pode estar baixando ou carregando o modelo. Na primeira vez, isso pode levar alguns minutos.",
@@ -563,8 +562,7 @@
         "unassigned": "Alguns trechos não puderam ser associados a um locutor.",
         "state": {
           "running": "Identificando locutores…",
-          "done_one": "{{count}} locutor",
-          "done_other": "{{count}} locutores",
+          "done": "Locutores: {{number}}",
           "failed": "Não foi possível identificar os locutores",
           "skipped": {
             "modelMissing": "Identificação de locutores ignorada: o modelo de locutores não foi baixado.",
@@ -660,8 +658,7 @@
       "originalMissing": "O arquivo original foi movido ou excluído.",
       "fileDuration": "Duração {{duration}}",
       "incomplete": "Incompleta",
-      "speakerCount_one": "{{count}} locutor",
-      "speakerCount_other": "{{count}} locutores",
+      "speakerCount": "Locutores: {{number}}",
       "retranscribeFileUnavailable": "Para transcrever este arquivo novamente, use a página Transcrever."
     },
     "debug": {

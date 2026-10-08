@@ -520,8 +520,7 @@
         },
         "test": "Testuj połączenie",
         "testing": "Łączenie…",
-        "connected_one": "Połączono. Dostępny jest {{count}} model transkrypcji.",
-        "connected_other": "Połączono. Dostępne modele transkrypcji: {{count}}.",
+        "connected": "Połączono. Dostępne modele transkrypcji: {{number}}",
         "checkFailed": "Nie udało się sprawdzić Lemonade Server: {{error}}",
         "saveError": "Nie udało się zapisać ustawień Lemonade: {{error}}",
         "firstChunkSlow": "Lemonade może pobierać lub wczytywać model. Za pierwszym razem może to potrwać kilka minut.",
@@ -563,8 +562,7 @@
         "unassigned": "Niektórych fragmentów nie udało się przypisać do mówcy.",
         "state": {
           "running": "Rozpoznawanie mówców…",
-          "done_one": "{{count}} mówca",
-          "done_other": "Mówcy: {{count}}",
+          "done": "Mówcy: {{number}}",
           "failed": "Nie udało się oznaczyć mówców",
           "skipped": {
             "modelMissing": "Pominięto oznaczanie mówców: model mówców nie został pobrany.",
@@ -660,8 +658,7 @@
       "originalMissing": "Oryginalny plik został przeniesiony lub usunięty.",
       "fileDuration": "Długość {{duration}}",
       "incomplete": "Niekompletna",
-      "speakerCount_one": "{{count}} mówca",
-      "speakerCount_other": "Mówcy: {{count}}",
+      "speakerCount": "Mówcy: {{number}}",
       "retranscribeFileUnavailable": "Aby ponownie transkrybować ten plik, użyj strony Transkrypcja."
     },
     "debug": {

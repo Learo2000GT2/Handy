@@ -75,7 +75,7 @@ const SpeakerStatus: React.FC<{ view: JobSpeakerView }> = ({ view }) => {
         <span className="flex items-center gap-1">
           <Users className="w-3 h-3" aria-hidden="true" />
           {t("settings.transcribeFiles.speakers.state.done", {
-            count: view.speakers,
+            number: view.speakers,
           })}
         </span>
       );

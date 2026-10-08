@@ -520,8 +520,7 @@
         },
         "test": "Uji Koneksi",
         "testing": "Menghubungkan…",
-        "connected_one": "Terhubung. {{count}} model transkripsi tersedia.",
-        "connected_other": "Terhubung. {{count}} model transkripsi tersedia.",
+        "connected": "Terhubung. Model transkripsi tersedia: {{number}}",
         "checkFailed": "Tidak dapat memeriksa Lemonade Server: {{error}}",
         "saveError": "Tidak dapat menyimpan pengaturan Lemonade: {{error}}",
         "firstChunkSlow": "Lemonade mungkin sedang mengunduh atau memuat model. Pada penggunaan pertama, ini bisa memakan waktu beberapa menit.",
@@ -563,8 +562,7 @@
         "unassigned": "Beberapa bagian tidak dapat dicocokkan dengan pembicara.",
         "state": {
           "running": "Mengidentifikasi pembicara…",
-          "done_one": "{{count}} pembicara",
-          "done_other": "{{count}} pembicara",
+          "done": "Pembicara: {{number}}",
           "failed": "Tidak dapat memberi label pembicara",
           "skipped": {
             "modelMissing": "Label pembicara dilewati: model pembicara belum diunduh.",
@@ -660,8 +658,7 @@
       "originalMissing": "File asli telah dipindahkan atau dihapus.",
       "fileDuration": "Durasi {{duration}}",
       "incomplete": "Tidak Lengkap",
-      "speakerCount_one": "{{count}} pembicara",
-      "speakerCount_other": "{{count}} pembicara",
+      "speakerCount": "Pembicara: {{number}}",
       "retranscribeFileUnavailable": "Untuk mentranskripsikan file ini lagi, gunakan halaman Transkripsi."
     },
     "debug": {

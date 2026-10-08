@@ -520,8 +520,7 @@
         },
         "test": "जडान परीक्षण गर्नुहोस्",
         "testing": "जडान गरिँदैछ…",
-        "connected_one": "जडान भयो। {{count}} ट्रान्सक्रिप्सन मोडेल उपलब्ध छ।",
-        "connected_other": "जडान भयो। {{count}} वटा ट्रान्सक्रिप्सन मोडेल उपलब्ध छन्।",
+        "connected": "जडान भयो। उपलब्ध ट्रान्सक्रिप्सन मोडेलहरू: {{number}}",
         "checkFailed": "Lemonade Server जाँच गर्न सकिएन: {{error}}",
         "saveError": "Lemonade सेटिङहरू सेभ गर्न सकिएन: {{error}}",
         "firstChunkSlow": "Lemonade ले मोडेल डाउनलोड वा लोड गरिरहेको हुन सक्छ। पहिलो पटक यसमा केही मिनेट लाग्न सक्छ।",
@@ -563,8 +562,7 @@
         "unassigned": "केही अंशहरू कुनै वक्तासँग मिलाउन सकिएन।",
         "state": {
           "running": "वक्ताहरू पहिचान गरिँदैछ…",
-          "done_one": "{{count}} वक्ता",
-          "done_other": "{{count}} वक्ताहरू",
+          "done": "वक्ताहरू: {{number}}",
           "failed": "वक्ताहरू लेबल गर्न सकिएन",
           "skipped": {
             "modelMissing": "वक्ता लेबलहरू छोडियो: वक्ता मोडेल डाउनलोड गरिएको छैन।",
@@ -660,8 +658,7 @@
       "originalMissing": "मूल फाइल सारिएको वा मेटाइएको छ।",
       "fileDuration": "लम्बाइ {{duration}}",
       "incomplete": "अपूर्ण",
-      "speakerCount_one": "{{count}} वक्ता",
-      "speakerCount_other": "{{count}} वक्ताहरू",
+      "speakerCount": "वक्ताहरू: {{number}}",
       "retranscribeFileUnavailable": "यो फाइल फेरि ट्रान्सक्राइब गर्न ट्रान्सक्राइब पेज प्रयोग गर्नुहोस्।"
     },
     "debug": {

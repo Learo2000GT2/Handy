@@ -520,8 +520,7 @@
         },
         "test": "Kiểm tra kết nối",
         "testing": "Đang kết nối…",
-        "connected_one": "Đã kết nối. Có {{count}} mô hình phiên âm khả dụng.",
-        "connected_other": "Đã kết nối. Có {{count}} mô hình phiên âm khả dụng.",
+        "connected": "Đã kết nối. Mô hình phiên âm khả dụng: {{number}}",
         "checkFailed": "Không thể kiểm tra Lemonade Server: {{error}}",
         "saveError": "Không thể lưu cài đặt Lemonade: {{error}}",
         "firstChunkSlow": "Lemonade có thể đang tải xuống hoặc nạp mô hình. Lần đầu có thể mất vài phút.",
@@ -563,8 +562,7 @@
         "unassigned": "Một số đoạn không khớp được với người nói nào.",
         "state": {
           "running": "Đang xác định người nói…",
-          "done_one": "{{count}} người nói",
-          "done_other": "{{count}} người nói",
+          "done": "Số người nói: {{number}}",
           "failed": "Không thể gắn nhãn người nói",
           "skipped": {
             "modelMissing": "Đã bỏ qua nhãn người nói: chưa tải xuống mô hình người nói.",
@@ -660,8 +658,7 @@
       "originalMissing": "Tệp gốc đã bị di chuyển hoặc xóa.",
       "fileDuration": "Thời lượng {{duration}}",
       "incomplete": "Chưa đầy đủ",
-      "speakerCount_one": "{{count}} người nói",
-      "speakerCount_other": "{{count}} người nói",
+      "speakerCount": "Số người nói: {{number}}",
       "retranscribeFileUnavailable": "Để phiên âm lại tệp này, hãy dùng trang Phiên âm."
     },
     "debug": {

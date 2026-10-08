@@ -520,8 +520,7 @@
         },
         "test": "Prova la connexió",
         "testing": "S'està connectant…",
-        "connected_one": "Connectat. Hi ha {{count}} model de transcripció disponible.",
-        "connected_other": "Connectat. Hi ha {{count}} models de transcripció disponibles.",
+        "connected": "Connectat. Models de transcripció disponibles: {{number}}",
         "checkFailed": "No s'ha pogut comprovar Lemonade Server: {{error}}",
         "saveError": "No s'ha pogut desar la configuració de Lemonade: {{error}}",
         "firstChunkSlow": "És possible que Lemonade estigui baixant o carregant el model. La primera vegada pot trigar uns quants minuts.",
@@ -563,8 +562,7 @@
         "unassigned": "Alguns fragments no s'han pogut associar a cap parlant.",
         "state": {
           "running": "S'estan identificant els parlants…",
-          "done_one": "{{count}} parlant",
-          "done_other": "{{count}} parlants",
+          "done": "Parlants: {{number}}",
           "failed": "No s'han pogut etiquetar els parlants",
           "skipped": {
             "modelMissing": "S'ha omès l'etiquetatge de parlants: el model de parlants no s'ha baixat.",
@@ -660,8 +658,7 @@
       "originalMissing": "El fitxer original s'ha mogut o suprimit.",
       "fileDuration": "Durada {{duration}}",
       "incomplete": "Incompleta",
-      "speakerCount_one": "{{count}} parlant",
-      "speakerCount_other": "{{count}} parlants",
+      "speakerCount": "Parlants: {{number}}",
       "retranscribeFileUnavailable": "Per tornar a transcriure aquest fitxer, utilitzeu la pàgina Transcripció."
     },
     "debug": {

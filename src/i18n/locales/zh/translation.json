@@ -520,8 +520,7 @@
         },
         "test": "测试连接",
         "testing": "正在连接…",
-        "connected_one": "已连接。有 {{count}} 个可用的转录模型。",
-        "connected_other": "已连接。有 {{count}} 个可用的转录模型。",
+        "connected": "已连接。可用的转录模型：{{number}}",
         "checkFailed": "无法检查 Lemonade Server：{{error}}",
         "saveError": "无法保存 Lemonade 设置：{{error}}",
         "firstChunkSlow": "Lemonade 可能正在下载或加载模型。首次使用可能需要几分钟。",
@@ -563,8 +562,7 @@
         "unassigned": "部分段落无法匹配到说话人。",
         "state": {
           "running": "正在识别说话人…",
-          "done_one": "{{count}} 位说话人",
-          "done_other": "{{count}} 位说话人",
+          "done": "说话人：{{number}}",
           "failed": "无法标注说话人",
           "skipped": {
             "modelMissing": "已跳过说话人标注：未下载说话人模型。",
@@ -660,8 +658,7 @@
       "originalMissing": "原始文件已被移动或删除。",
       "fileDuration": "时长 {{duration}}",
       "incomplete": "不完整",
-      "speakerCount_one": "{{count}} 位说话人",
-      "speakerCount_other": "{{count}} 位说话人",
+      "speakerCount": "说话人：{{number}}",
       "retranscribeFileUnavailable": "如需重新转录此文件，请使用「转录」页面。"
     },
     "debug": {

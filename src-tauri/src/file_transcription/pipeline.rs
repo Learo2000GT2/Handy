@@ -1946,7 +1946,9 @@ mod tests {
             )
             .unwrap_err();
 
-        assert!(token.is_cancelled());
+        // Labelling is stopped through its own token; the job's token is the
+        // job's to cancel, never the labeller's.
+        assert!(!token.is_cancelled());
         let cancelled = SpeakerJobState::Failed {
             message: "cancelled".to_string(),
         };

@@ -520,8 +520,7 @@
         },
         "test": "接続をテスト",
         "testing": "接続中…",
-        "connected_one": "接続しました。{{count}}個の文字起こしモデルを利用できます。",
-        "connected_other": "接続しました。{{count}}個の文字起こしモデルを利用できます。",
+        "connected": "接続しました。利用可能な文字起こしモデル: {{number}}",
         "checkFailed": "Lemonade Server を確認できませんでした: {{error}}",
         "saveError": "Lemonade の設定を保存できませんでした: {{error}}",
         "firstChunkSlow": "Lemonade がモデルをダウンロードまたは読み込んでいる可能性があります。初回は数分かかることがあります。",
@@ -563,8 +562,7 @@
         "unassigned": "一部の箇所は話者を特定できませんでした。",
         "state": {
           "running": "話者を識別中…",
-          "done_one": "話者 {{count}} 人",
-          "done_other": "話者 {{count}} 人",
+          "done": "話者数: {{number}}",
           "failed": "話者ラベルを付けられませんでした",
           "skipped": {
             "modelMissing": "話者ラベルをスキップしました: 話者モデルがダウンロードされていません。",
@@ -660,8 +658,7 @@
       "originalMissing": "元のファイルは移動または削除されています。",
       "fileDuration": "長さ {{duration}}",
       "incomplete": "不完全",
-      "speakerCount_one": "話者 {{count}} 人",
-      "speakerCount_other": "話者 {{count}} 人",
+      "speakerCount": "話者数: {{number}}",
       "retranscribeFileUnavailable": "このファイルをもう一度文字起こしするには、「文字起こし」ページを使用してください。"
     },
     "debug": {

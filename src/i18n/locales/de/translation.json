@@ -520,8 +520,7 @@
         },
         "test": "Verbindung testen",
         "testing": "Verbindung wird hergestellt…",
-        "connected_one": "Verbunden. {{count}} Transkriptionsmodell verfügbar.",
-        "connected_other": "Verbunden. {{count}} Transkriptionsmodelle verfügbar.",
+        "connected": "Verbunden. Verfügbare Transkriptionsmodelle: {{number}}",
         "checkFailed": "Lemonade Server konnte nicht geprüft werden: {{error}}",
         "saveError": "Lemonade-Einstellungen konnten nicht gespeichert werden: {{error}}",
         "firstChunkSlow": "Lemonade lädt das Modell möglicherweise gerade herunter oder in den Speicher. Beim ersten Mal kann das einige Minuten dauern.",
@@ -563,8 +562,7 @@
         "unassigned": "Einige Abschnitte konnten keinem Sprecher zugeordnet werden.",
         "state": {
           "running": "Sprecher werden erkannt…",
-          "done_one": "{{count}} Sprecher",
-          "done_other": "{{count}} Sprecher",
+          "done": "Sprecher: {{number}}",
           "failed": "Sprecher konnten nicht gekennzeichnet werden",
           "skipped": {
             "modelMissing": "Sprecherkennzeichnung übersprungen: Das Sprechermodell ist nicht heruntergeladen.",
@@ -660,8 +658,7 @@
       "originalMissing": "Die Originaldatei wurde verschoben oder gelöscht.",
       "fileDuration": "Länge {{duration}}",
       "incomplete": "Unvollständig",
-      "speakerCount_one": "{{count}} Sprecher",
-      "speakerCount_other": "{{count}} Sprecher",
+      "speakerCount": "Sprecher: {{number}}",
       "retranscribeFileUnavailable": "Um diese Datei erneut zu transkribieren, verwende die Seite 'Transkribieren'."
     },
     "debug": {

@@ -520,8 +520,7 @@
         },
         "test": "Verifica connessione",
         "testing": "Connessione in corso…",
-        "connected_one": "Connesso. {{count}} modello di trascrizione disponibile.",
-        "connected_other": "Connesso. {{count}} modelli di trascrizione disponibili.",
+        "connected": "Connesso. Modelli di trascrizione disponibili: {{number}}",
         "checkFailed": "Impossibile verificare Lemonade Server: {{error}}",
         "saveError": "Impossibile salvare le impostazioni di Lemonade: {{error}}",
         "firstChunkSlow": "Lemonade potrebbe essere in fase di download o caricamento del modello. La prima volta può richiedere alcuni minuti.",
@@ -563,8 +562,7 @@
         "unassigned": "Non è stato possibile associare alcuni passaggi a un parlante.",
         "state": {
           "running": "Identificazione dei parlanti…",
-          "done_one": "{{count}} parlante",
-          "done_other": "{{count}} parlanti",
+          "done": "Parlanti: {{number}}",
           "failed": "Impossibile etichettare i parlanti",
           "skipped": {
             "modelMissing": "Etichette dei parlanti saltate: il modello dei parlanti non è stato scaricato.",
@@ -660,8 +658,7 @@
       "originalMissing": "Il file originale è stato spostato o eliminato.",
       "fileDuration": "Durata {{duration}}",
       "incomplete": "Incompleta",
-      "speakerCount_one": "{{count}} parlante",
-      "speakerCount_other": "{{count}} parlanti",
+      "speakerCount": "Parlanti: {{number}}",
       "retranscribeFileUnavailable": "Per trascrivere di nuovo questo file, usa la pagina Trascrivi."
     },
     "debug": {

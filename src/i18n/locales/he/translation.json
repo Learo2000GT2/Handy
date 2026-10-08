@@ -520,8 +520,7 @@
         },
         "test": "בדוק חיבור",
         "testing": "מתחבר…",
-        "connected_one": "מחובר. {{count}} מודל תמלול זמין.",
-        "connected_other": "מחובר. {{count}} מודלי תמלול זמינים.",
+        "connected": "מחובר. מודלי תמלול זמינים: {{number}}",
         "checkFailed": "לא ניתן לבדוק את Lemonade Server: {{error}}",
         "saveError": "לא ניתן לשמור את הגדרות Lemonade: {{error}}",
         "firstChunkSlow": "ייתכן ש-Lemonade מוריד או טוען את המודל. בפעם הראשונה זה עשוי להימשך כמה דקות.",
@@ -563,8 +562,7 @@
         "unassigned": "לא ניתן היה לשייך חלק מהקטעים לדובר.",
         "state": {
           "running": "מזהה דוברים…",
-          "done_one": "{{count}} דובר",
-          "done_other": "{{count}} דוברים",
+          "done": "דוברים: {{number}}",
           "failed": "לא ניתן לסמן דוברים",
           "skipped": {
             "modelMissing": "סימון הדוברים דולג: מודל הדוברים לא הורד.",
@@ -660,8 +658,7 @@
       "originalMissing": "הקובץ המקורי הועבר או נמחק.",
       "fileDuration": "אורך {{duration}}",
       "incomplete": "לא שלם",
-      "speakerCount_one": "{{count}} דובר",
-      "speakerCount_other": "{{count}} דוברים",
+      "speakerCount": "דוברים: {{number}}",
       "retranscribeFileUnavailable": "כדי לתמלל את הקובץ הזה מחדש, השתמש בעמוד 'תמלול'."
     },
     "debug": {

@@ -520,8 +520,7 @@
         },
         "test": "Probar conexión",
         "testing": "Conectando…",
-        "connected_one": "Conectado. {{count}} modelo de transcripción disponible.",
-        "connected_other": "Conectado. {{count}} modelos de transcripción disponibles.",
+        "connected": "Conectado. Modelos de transcripción disponibles: {{number}}",
         "checkFailed": "No se pudo comprobar Lemonade Server: {{error}}",
         "saveError": "No se pudieron guardar los ajustes de Lemonade: {{error}}",
         "firstChunkSlow": "Es posible que Lemonade esté descargando o cargando el modelo. La primera vez puede tardar unos minutos.",
@@ -563,8 +562,7 @@
         "unassigned": "Algunos fragmentos no se pudieron asignar a un hablante.",
         "state": {
           "running": "Identificando hablantes…",
-          "done_one": "{{count}} hablante",
-          "done_other": "{{count}} hablantes",
+          "done": "Hablantes: {{number}}",
           "failed": "No se pudieron etiquetar los hablantes",
           "skipped": {
             "modelMissing": "Etiquetas de hablantes omitidas: el modelo de hablantes no está descargado.",
@@ -660,8 +658,7 @@
       "originalMissing": "El archivo original se movió o se eliminó.",
       "fileDuration": "Duración {{duration}}",
       "incomplete": "Incompleta",
-      "speakerCount_one": "{{count}} hablante",
-      "speakerCount_other": "{{count}} hablantes",
+      "speakerCount": "Hablantes: {{number}}",
       "retranscribeFileUnavailable": "Para volver a transcribir este archivo, usa la página 'Transcribir'."
     },
     "debug": {

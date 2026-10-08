@@ -520,8 +520,7 @@
         },
         "test": "Testa anslutning",
         "testing": "Ansluter…",
-        "connected_one": "Ansluten. {{count}} transkriptionsmodell tillgänglig.",
-        "connected_other": "Ansluten. {{count}} transkriptionsmodeller tillgängliga.",
+        "connected": "Ansluten. Tillgängliga transkriptionsmodeller: {{number}}",
         "checkFailed": "Det gick inte att kontrollera Lemonade Server: {{error}}",
         "saveError": "Det gick inte att spara Lemonade-inställningarna: {{error}}",
         "firstChunkSlow": "Lemonade kanske laddar ner eller läser in modellen. Första gången kan det ta några minuter.",
@@ -563,8 +562,7 @@
         "unassigned": "Vissa avsnitt kunde inte kopplas till en talare.",
         "state": {
           "running": "Identifierar talare…",
-          "done_one": "{{count}} talare",
-          "done_other": "{{count}} talare",
+          "done": "Talare: {{number}}",
           "failed": "Det gick inte att märka ut talare",
           "skipped": {
             "modelMissing": "Talarmärkning hoppades över: talarmodellen är inte nedladdad.",
@@ -660,8 +658,7 @@
       "originalMissing": "Originalfilen har flyttats eller tagits bort.",
       "fileDuration": "Längd {{duration}}",
       "incomplete": "Ofullständig",
-      "speakerCount_one": "{{count}} talare",
-      "speakerCount_other": "{{count}} talare",
+      "speakerCount": "Talare: {{number}}",
       "retranscribeFileUnavailable": "Använd sidan Transkribera för att transkribera den här filen igen."
     },
     "debug": {

@@ -520,8 +520,7 @@
         },
         "test": "測試連線",
         "testing": "連線中…",
-        "connected_one": "已連線。有 {{count}} 個可用的轉錄模型。",
-        "connected_other": "已連線。有 {{count}} 個可用的轉錄模型。",
+        "connected": "已連線。可用的轉錄模型：{{number}}",
         "checkFailed": "無法檢查 Lemonade Server：{{error}}",
         "saveError": "無法儲存 Lemonade 設定：{{error}}",
         "firstChunkSlow": "Lemonade 可能正在下載或載入模型。首次使用可能需要幾分鐘。",
@@ -563,8 +562,7 @@
         "unassigned": "部分段落無法對應到說話者。",
         "state": {
           "running": "正在辨識說話者…",
-          "done_one": "{{count}} 位說話者",
-          "done_other": "{{count}} 位說話者",
+          "done": "說話者：{{number}}",
           "failed": "無法標示說話者",
           "skipped": {
             "modelMissing": "已略過說話者標示：尚未下載說話者模型。",
@@ -660,8 +658,7 @@
       "originalMissing": "原始檔案已被移動或刪除。",
       "fileDuration": "長度 {{duration}}",
       "incomplete": "不完整",
-      "speakerCount_one": "{{count}} 位說話者",
-      "speakerCount_other": "{{count}} 位說話者",
+      "speakerCount": "說話者：{{number}}",
       "retranscribeFileUnavailable": "如要重新轉錄此檔案，請使用「轉錄」頁面。"
     },
     "debug": {

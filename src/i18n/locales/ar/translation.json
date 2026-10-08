@@ -497,8 +497,7 @@
         },
         "test": "اختبار الاتصال",
         "testing": "جارٍ الاتصال…",
-        "connected_one": "متصل. يتوفر {{count}} نموذج تفريغ.",
-        "connected_other": "متصل. يتوفر {{count}} من نماذج التفريغ.",
+        "connected": "متصل. نماذج التفريغ المتاحة: {{number}}",
         "checkFailed": "تعذر التحقق من Lemonade Server: {{error}}",
         "saveError": "تعذر حفظ إعدادات Lemonade: {{error}}",
         "firstChunkSlow": "قد يكون Lemonade بصدد تنزيل النموذج أو تحميله. قد يستغرق ذلك بضع دقائق في المرة الأولى.",
@@ -540,8 +539,7 @@
         "unassigned": "تعذر ربط بعض المقاطع بمتحدث.",
         "state": {
           "running": "جارٍ تحديد المتحدثين…",
-          "done_one": "{{count}} متحدث",
-          "done_other": "{{count}} متحدثين",
+          "done": "المتحدثون: {{number}}",
           "failed": "تعذر تمييز المتحدثين",
           "skipped": {
             "modelMissing": "تم تخطي تمييز المتحدثين: نموذج المتحدثين غير منزَّل.",
@@ -637,8 +635,7 @@
       "originalMissing": "تم نقل الملف الأصلي أو حذفه.",
       "fileDuration": "المدة {{duration}}",
       "incomplete": "غير مكتمل",
-      "speakerCount_one": "{{count}} متحدث",
-      "speakerCount_other": "{{count}} متحدثين",
+      "speakerCount": "المتحدثون: {{number}}",
       "retranscribeFileUnavailable": "لإعادة تفريغ هذا الملف، استخدم صفحة التفريغ الصوتي."
     },
     "debug": {

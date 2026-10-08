@@ -337,9 +337,11 @@ pub enum VadBackend {
     Earshot,
 }
 
+// `pub` because `AppSettings` is reachable from the public `file_transcription`
+// module; the map itself stays private to the crate.
 #[derive(Clone, Serialize, Deserialize, Type)]
 #[serde(transparent)]
-pub(crate) struct SecretMap(HashMap<String, String>);
+pub struct SecretMap(HashMap<String, String>);
 
 impl fmt::Debug for SecretMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

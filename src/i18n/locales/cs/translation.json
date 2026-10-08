@@ -520,8 +520,7 @@
         },
         "test": "Otestovat připojení",
         "testing": "Připojuji…",
-        "connected_one": "Připojeno. K dispozici je {{count}} model pro přepis.",
-        "connected_other": "Připojeno. K dispozici je {{count}} modelů pro přepis.",
+        "connected": "Připojeno. Dostupné modely pro přepis: {{number}}",
         "checkFailed": "Lemonade Server se nepodařilo zkontrolovat: {{error}}",
         "saveError": "Nastavení Lemonade se nepodařilo uložit: {{error}}",
         "firstChunkSlow": "Lemonade možná stahuje nebo načítá model. Poprvé to může trvat několik minut.",
@@ -563,8 +562,7 @@
         "unassigned": "Některé pasáže se nepodařilo přiřadit k žádnému mluvčímu.",
         "state": {
           "running": "Rozpoznávám mluvčí…",
-          "done_one": "{{count}} mluvčí",
-          "done_other": "{{count}} mluvčích",
+          "done": "Mluvčí: {{number}}",
           "failed": "Mluvčí se nepodařilo označit",
           "skipped": {
             "modelMissing": "Označení mluvčích přeskočeno: model mluvčích není stažen.",
@@ -660,8 +658,7 @@
       "originalMissing": "Původní soubor byl přesunut nebo smazán.",
       "fileDuration": "Délka {{duration}}",
       "incomplete": "Neúplný",
-      "speakerCount_one": "{{count}} mluvčí",
-      "speakerCount_other": "{{count}} mluvčích",
+      "speakerCount": "Mluvčí: {{number}}",
       "retranscribeFileUnavailable": "Chcete-li tento soubor přepsat znovu, použijte stránku Přepis."
     },
     "debug": {

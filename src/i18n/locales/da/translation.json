@@ -520,8 +520,7 @@
         },
         "test": "Test forbindelse",
         "testing": "Opretter forbindelse…",
-        "connected_one": "Forbundet. {{count}} transskriptionsmodel tilgængelig.",
-        "connected_other": "Forbundet. {{count}} transskriptionsmodeller tilgængelige.",
+        "connected": "Forbundet. Tilgængelige transskriptionsmodeller: {{number}}",
         "checkFailed": "Kunne ikke tjekke Lemonade Server: {{error}}",
         "saveError": "Kunne ikke gemme Lemonade-indstillingerne: {{error}}",
         "firstChunkSlow": "Lemonade downloader eller indlæser muligvis modellen. Det kan tage et par minutter første gang.",
@@ -563,8 +562,7 @@
         "unassigned": "Nogle passager kunne ikke knyttes til en taler.",
         "state": {
           "running": "Identificerer talere…",
-          "done_one": "{{count}} taler",
-          "done_other": "{{count}} talere",
+          "done": "Talere: {{number}}",
           "failed": "Kunne ikke markere talere",
           "skipped": {
             "modelMissing": "Talermarkering sprunget over: talermodellen er ikke downloadet.",
@@ -660,8 +658,7 @@
       "originalMissing": "Originalfilen er blevet flyttet eller slettet.",
       "fileDuration": "Længde {{duration}}",
       "incomplete": "Ufuldstændig",
-      "speakerCount_one": "{{count}} taler",
-      "speakerCount_other": "{{count}} talere",
+      "speakerCount": "Talere: {{number}}",
       "retranscribeFileUnavailable": "Brug siden Transskription for at transskribere denne fil igen."
     },
     "debug": {

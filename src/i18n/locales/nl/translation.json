@@ -520,8 +520,7 @@
         },
         "test": "Verbinding testen",
         "testing": "Verbinden…",
-        "connected_one": "Verbonden. {{count}} transcriptiemodel beschikbaar.",
-        "connected_other": "Verbonden. {{count}} transcriptiemodellen beschikbaar.",
+        "connected": "Verbonden. Beschikbare transcriptiemodellen: {{number}}",
         "checkFailed": "Lemonade Server controleren mislukt: {{error}}",
         "saveError": "Lemonade-instellingen opslaan mislukt: {{error}}",
         "firstChunkSlow": "Lemonade is mogelijk het model aan het downloaden of laden. De eerste keer kan dit enkele minuten duren.",
@@ -563,8 +562,7 @@
         "unassigned": "Sommige passages konden niet aan een spreker worden gekoppeld.",
         "state": {
           "running": "Sprekers identificeren…",
-          "done_one": "{{count}} spreker",
-          "done_other": "{{count}} sprekers",
+          "done": "Sprekers: {{number}}",
           "failed": "Sprekers aanduiden mislukt",
           "skipped": {
             "modelMissing": "Sprekeraanduiding overgeslagen: het sprekermodel is niet gedownload.",
@@ -660,8 +658,7 @@
       "originalMissing": "Het originele bestand is verplaatst of verwijderd.",
       "fileDuration": "Lengte {{duration}}",
       "incomplete": "Onvolledig",
-      "speakerCount_one": "{{count}} spreker",
-      "speakerCount_other": "{{count}} sprekers",
+      "speakerCount": "Sprekers: {{number}}",
       "retranscribeFileUnavailable": "Gebruik de pagina Transcriberen om dit bestand opnieuw te transcriberen."
     },
     "debug": {

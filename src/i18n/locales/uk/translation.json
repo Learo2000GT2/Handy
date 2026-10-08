@@ -520,8 +520,7 @@
         },
         "test": "Перевірити з’єднання",
         "testing": "Підключення…",
-        "connected_one": "З’єднано. Доступна {{count}} модель транскрипції.",
-        "connected_other": "З’єднано. Доступно моделей транскрипції: {{count}}.",
+        "connected": "З’єднано. Доступно моделей транскрипції: {{number}}",
         "checkFailed": "Не вдалося перевірити Lemonade Server: {{error}}",
         "saveError": "Не вдалося зберегти налаштування Lemonade: {{error}}",
         "firstChunkSlow": "Можливо, Lemonade завантажує модель або готує її до роботи. Першого разу це може тривати кілька хвилин.",
@@ -563,8 +562,7 @@
         "unassigned": "Деякі фрагменти не вдалося зіставити з мовцем.",
         "state": {
           "running": "Визначення мовців…",
-          "done_one": "{{count}} мовець",
-          "done_other": "Мовців: {{count}}",
+          "done": "Мовців: {{number}}",
           "failed": "Не вдалося позначити мовців",
           "skipped": {
             "modelMissing": "Позначення мовців пропущено: модель мовців не завантажено.",
@@ -660,8 +658,7 @@
       "originalMissing": "Оригінальний файл переміщено або видалено.",
       "fileDuration": "Тривалість {{duration}}",
       "incomplete": "Неповна",
-      "speakerCount_one": "{{count}} мовець",
-      "speakerCount_other": "Мовців: {{count}}",
+      "speakerCount": "Мовців: {{number}}",
       "retranscribeFileUnavailable": "Щоб транскрибувати цей файл ще раз, скористайтеся сторінкою «Транскрипція»."
     },
     "debug": {

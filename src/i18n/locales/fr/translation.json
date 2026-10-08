@@ -520,8 +520,7 @@
         },
         "test": "Tester la connexion",
         "testing": "Connexion en cours…",
-        "connected_one": "Connecté. {{count}} modèle de transcription disponible.",
-        "connected_other": "Connecté. {{count}} modèles de transcription disponibles.",
+        "connected": "Connecté. Modèles de transcription disponibles : {{number}}",
         "checkFailed": "Impossible de vérifier Lemonade Server : {{error}}",
         "saveError": "Impossible d'enregistrer les paramètres Lemonade : {{error}}",
         "firstChunkSlow": "Lemonade est peut-être en train de télécharger ou de charger le modèle. La première fois, cela peut prendre quelques minutes.",
@@ -563,8 +562,7 @@
         "unassigned": "Certains passages n'ont pas pu être attribués à un intervenant.",
         "state": {
           "running": "Identification des intervenants…",
-          "done_one": "{{count}} intervenant",
-          "done_other": "{{count}} intervenants",
+          "done": "Intervenants : {{number}}",
           "failed": "Impossible d'identifier les intervenants",
           "skipped": {
             "modelMissing": "Identification des intervenants ignorée : le modèle d'intervenants n'est pas téléchargé.",
@@ -660,8 +658,7 @@
       "originalMissing": "Le fichier original a été déplacé ou supprimé.",
       "fileDuration": "Durée {{duration}}",
       "incomplete": "Incomplète",
-      "speakerCount_one": "{{count}} intervenant",
-      "speakerCount_other": "{{count}} intervenants",
+      "speakerCount": "Intervenants : {{number}}",
       "retranscribeFileUnavailable": "Pour transcrire à nouveau ce fichier, utilisez la page 'Transcrire'."
     },
     "debug": {
