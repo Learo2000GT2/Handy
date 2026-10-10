@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local, Utc};
 use log::{debug, error, info, warn};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use rusqlite_migration::{Migrations, M};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -12,10 +12,15 @@ use std::time::Duration;
 use tauri::AppHandle;
 use tauri_specta::Event;
 
+use crate::file_transcription::label_job::SourceIdentity;
 use crate::file_transcription::types::{
     FileHistoryInfo, FileTranscript, TimingGrain, TranscriptSegment, TranscriptSpeakers,
     TranscriptStatus,
 };
+
+/// Why `store_file_labels` wrote nothing: the entry was edited after the
+/// labels were made from it.
+pub const TRANSCRIPT_CHANGED: &str = "The transcript changed while speakers were being identified";
 
 /// Database migrations for transcription history.
 /// Each migration is applied in order. The library tracks which migrations
@@ -982,11 +987,14 @@ impl HistoryManager {
         Ok(Some(transcript))
     }
 
-    /// Applies `edit` (a speaker rename) to the stored transcript of a file
-    /// entry and saves its speakers_json and transcription_text in one
-    /// transaction; emits HistoryUpdatePayload::Updated. Returns the edited
-    /// transcript, or None when the entry no longer exists or is a dictation.
-    /// A failed edit changes nothing.
+    /// Applies `edit` (a speaker rename, merge, passage change or undo) to
+    /// the stored transcript of a file entry and saves its speakers_json and
+    /// transcription_text, and its paragraphs_json and segments_json when the
+    /// edit changed them, in one IMMEDIATE transaction (it waits for, rather
+    /// than fails on, another writer); emits HistoryUpdatePayload::Updated.
+    /// Returns the edited transcript, or None when the entry no longer exists
+    /// or is a dictation. A failed edit changes nothing. `edit` runs inside
+    /// the transaction, so it must be quick.
     pub fn edit_file_speakers(
         &self,
         history_id: i64,
@@ -1010,12 +1018,14 @@ impl HistoryManager {
         history_id: i64,
         edit: impl FnOnce(&mut FileTranscript) -> Result<(), String>,
     ) -> Result<Option<(FileTranscript, HistoryEntry)>> {
-        // Read and write in one transaction, so a rename starts from the
-        // stored labels and keeps every earlier one.
-        let tx = conn.transaction()?;
-        let Some(mut transcript) = Self::get_file_transcript_with_conn(&tx, history_id)? else {
+        // Read and write in one transaction, so an edit starts from the
+        // stored labels and keeps every earlier one. IMMEDIATE takes the
+        // write lock first, so two edits never both read and then clash.
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let Some(stored) = Self::get_file_transcript_with_conn(&tx, history_id)? else {
             return Ok(None);
         };
+        let mut transcript = stored.clone();
         edit(&mut transcript).map_err(|e| anyhow!(e))?;
         let speakers_json = transcript
             .speakers
@@ -1030,8 +1040,131 @@ impl HistoryManager {
             "UPDATE transcription_history SET transcription_text = ?1 WHERE id = ?2",
             params![&transcript.text, history_id],
         )?;
+        // A rename leaves the turns alone; only rewrite what changed.
+        if transcript.paragraphs != stored.paragraphs {
+            tx.execute(
+                "UPDATE file_transcription SET paragraphs_json = ?1 WHERE history_id = ?2",
+                params![serde_json::to_string(&transcript.paragraphs)?, history_id],
+            )?;
+        }
+        if transcript.segments != stored.segments {
+            tx.execute(
+                "UPDATE file_transcription SET segments_json = ?1 WHERE history_id = ?2",
+                params![serde_json::to_string(&transcript.segments)?, history_id],
+            )?;
+        }
         tx.commit()?;
 
+        let entry = conn.query_row(
+            &format!("SELECT {ENTRY_COLUMNS} {ENTRY_FROM} WHERE h.id = ?1"),
+            params![history_id],
+            Self::map_history_entry,
+        )?;
+        Ok(Some((transcript, entry)))
+    }
+
+    /// The size and modification time recorded for the recording of a file
+    /// entry when it was transcribed; None for a dictation or an unknown id.
+    pub fn get_file_source_identity(&self, history_id: i64) -> Result<Option<SourceIdentity>> {
+        let conn = self.get_connection()?;
+        Self::get_file_source_identity_with_conn(&conn, history_id)
+    }
+
+    fn get_file_source_identity_with_conn(
+        conn: &Connection,
+        history_id: i64,
+    ) -> Result<Option<SourceIdentity>> {
+        let identity = conn
+            .query_row(
+                "SELECT f.source_size_bytes, f.source_modified_at
+                 FROM file_transcription f
+                 JOIN transcription_history h ON h.id = f.history_id
+                 WHERE f.history_id = ?1",
+                params![history_id],
+                |row| {
+                    Ok(SourceIdentity {
+                        size_bytes: row
+                            .get::<_, Option<i64>>(0)?
+                            .and_then(|size| u64::try_from(size).ok()),
+                        modified_at: row.get(1)?,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(identity)
+    }
+
+    /// Stores the speaker labels made from `expected` (what the entry held
+    /// when labelling started): speakers, turns, segments and text, plus the
+    /// recording's new location when it was `relocated` (path, modification
+    /// time). Compare-and-swap in one IMMEDIATE transaction: if the entry
+    /// changed since, nothing is written and this fails with
+    /// [`TRANSCRIPT_CHANGED`]. Emits HistoryUpdatePayload::Updated and
+    /// returns the stored transcript; None when the entry is gone.
+    pub fn store_file_labels(
+        &self,
+        history_id: i64,
+        expected: &FileTranscript,
+        labelled: &FileTranscript,
+        relocated: Option<(String, Option<i64>)>,
+    ) -> Result<Option<FileTranscript>> {
+        let mut conn = self.get_connection()?;
+        let Some((transcript, entry)) = Self::store_file_labels_with_conn(
+            &mut conn, history_id, expected, labelled, relocated,
+        )?
+        else {
+            return Ok(None);
+        };
+        debug!("Stored new speaker labels for history entry {}", history_id);
+        if let Err(e) = (HistoryUpdatePayload::Updated { entry }).emit(&self.app_handle) {
+            error!("Failed to emit history-updated event: {}", e);
+        }
+        Ok(Some(transcript))
+    }
+
+    fn store_file_labels_with_conn(
+        conn: &mut Connection,
+        history_id: i64,
+        expected: &FileTranscript,
+        labelled: &FileTranscript,
+        relocated: Option<(String, Option<i64>)>,
+    ) -> Result<Option<(FileTranscript, HistoryEntry)>> {
+        let speakers_json = labelled
+            .speakers
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
+        let paragraphs_json = serde_json::to_string(&labelled.paragraphs)?;
+        let segments_json = serde_json::to_string(&labelled.segments)?;
+
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let Some(stored) = Self::get_file_transcript_with_conn(&tx, history_id)? else {
+            return Ok(None);
+        };
+        if stored != *expected {
+            return Err(anyhow!(TRANSCRIPT_CHANGED));
+        }
+        tx.execute(
+            "UPDATE file_transcription
+             SET speakers_json = ?1, paragraphs_json = ?2, segments_json = ?3
+             WHERE history_id = ?4",
+            params![speakers_json, paragraphs_json, segments_json, history_id],
+        )?;
+        tx.execute(
+            "UPDATE transcription_history SET transcription_text = ?1 WHERE id = ?2",
+            params![&labelled.text, history_id],
+        )?;
+        if let Some((path, modified_at)) = &relocated {
+            tx.execute(
+                "UPDATE file_transcription SET source_path = ?1, source_modified_at = ?2
+                 WHERE history_id = ?3",
+                params![path, modified_at, history_id],
+            )?;
+        }
+        tx.commit()?;
+
+        let transcript = Self::get_file_transcript_with_conn(conn, history_id)?
+            .ok_or_else(|| anyhow!("History entry {} disappeared", history_id))?;
         let entry = conn.query_row(
             &format!("SELECT {ENTRY_COLUMNS} {ENTRY_FROM} WHERE h.id = ?1"),
             params![history_id],
@@ -1092,7 +1225,7 @@ async fn check_sources(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file_transcription::speakers::{rename_speaker, render_text};
+    use crate::file_transcription::speakers::{merge_speakers, rename_speaker, render_text};
     use crate::file_transcription::types::TranscriptSpeaker;
     use rusqlite::{params, Connection};
 
@@ -1427,8 +1560,9 @@ mod tests {
             unassigned_segments: 0,
             model: "sortformer-4spk-v2.1-q8_0".to_string(),
         };
+        // Turns as `apply_speakers` builds them from the segments.
         let paragraphs = vec![
-            labelled(0, 2_400, "Hello there.", 1),
+            labelled(500, 2_400, "Hello there.", 1),
             labelled(28_300, 30_000, "Second part.", 2),
         ];
         FileTranscript {
@@ -1613,6 +1747,268 @@ mod tests {
             &mut conn,
             entry.id,
             rename(1, "Ann")
+        )
+        .expect("no error")
+        .is_none());
+    }
+
+    /// The raw paragraphs_json and segments_json of an entry.
+    fn turns_json(conn: &Connection, history_id: i64) -> (String, String) {
+        conn.query_row(
+            "SELECT paragraphs_json, segments_json FROM file_transcription WHERE history_id = ?1",
+            params![history_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("read turns")
+    }
+
+    #[test]
+    fn edit_writes_turns_only_when_changed() {
+        let mut conn = setup_conn();
+        let entry = insert_file(&mut conn, &labelled_transcript("/missing/a.m4a"), 100);
+        // Stored with different (but equivalent) spacing than serde writes,
+        // so a rewrite would show.
+        let (paragraphs_json, segments_json) = turns_json(&conn, entry.id);
+        let spaced = |json: &str| json.replace(",\"", ", \"");
+        conn.execute(
+            "UPDATE file_transcription SET paragraphs_json = ?1, segments_json = ?2
+             WHERE history_id = ?3",
+            params![spaced(&paragraphs_json), spaced(&segments_json), entry.id],
+        )
+        .expect("respace");
+        let before = turns_json(&conn, entry.id);
+
+        // A rename changes neither.
+        HistoryManager::edit_file_speakers_with_conn(&mut conn, entry.id, |t| {
+            rename_speaker(t, 1, Some("Ann"))
+        })
+        .expect("rename")
+        .expect("file entry exists");
+        assert_eq!(turns_json(&conn, entry.id), before);
+
+        // A failed edit writes nothing, even what it changed before failing.
+        assert!(
+            HistoryManager::edit_file_speakers_with_conn(&mut conn, entry.id, |t| {
+                t.segments.clear();
+                t.text = "Half done".to_string();
+                Err("no".to_string())
+            })
+            .is_err()
+        );
+        assert_eq!(turns_json(&conn, entry.id), before);
+
+        // A merge rewrites both.
+        let (merged, updated) =
+            HistoryManager::edit_file_speakers_with_conn(&mut conn, entry.id, |t| {
+                merge_speakers(t, 2, 1)
+            })
+            .expect("merge")
+            .expect("file entry exists");
+        assert_ne!(turns_json(&conn, entry.id), before);
+        assert_eq!(updated.file.expect("file info").speaker_count, 1);
+        let stored = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("read transcript")
+            .expect("file transcript exists");
+        assert_eq!(stored, merged);
+        assert_eq!(stored.paragraphs.len(), 1);
+        assert!(stored.segments.iter().all(|s| s.speaker == Some(1)));
+        assert_eq!(stored.text, "Ann: Hello there. Second part.");
+
+        // A dictation or a deleted entry is none.
+        insert_entry(&conn, 300, "dictation", None);
+        let dictation = conn.last_insert_rowid();
+        assert!(
+            HistoryManager::edit_file_speakers_with_conn(&mut conn, dictation, |t| {
+                merge_speakers(t, 2, 1)
+            })
+            .expect("no error")
+            .is_none()
+        );
+        HistoryManager::delete_entry_rows(&conn, entry.id).expect("delete");
+        assert!(
+            HistoryManager::edit_file_speakers_with_conn(&mut conn, entry.id, |t| {
+                merge_speakers(t, 2, 1)
+            })
+            .expect("no error")
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn edit_uses_immediate_transaction() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("history.db");
+        let mut conn = Connection::open(&path).expect("open");
+        Migrations::new(MIGRATIONS.to_vec())
+            .to_latest(&mut conn)
+            .expect("run migrations");
+        ensure_file_transcription_schema(&conn).expect("schema");
+        let entry = insert_file(&mut conn, &labelled_transcript("/missing/a.m4a"), 100);
+        conn.busy_timeout(Duration::from_secs(5))
+            .expect("busy timeout");
+
+        // Another connection writes, and commits a little later.
+        let other = Connection::open(&path).expect("open again");
+        other
+            .busy_timeout(Duration::from_millis(100))
+            .expect("busy");
+        other
+            .execute_batch(
+                "BEGIN IMMEDIATE;
+                 UPDATE transcription_history SET saved = 0 WHERE id = 0;",
+            )
+            .expect("hold the write lock");
+        let started = std::time::Instant::now();
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            other.execute_batch("COMMIT").expect("commit");
+        });
+
+        // The edit waits for it instead of failing.
+        let edited = HistoryManager::edit_file_speakers_with_conn(&mut conn, entry.id, |t| {
+            merge_speakers(t, 2, 1)
+        })
+        .expect("the edit waits for the other writer")
+        .expect("file entry exists");
+        writer.join().expect("writer");
+        assert!(started.elapsed() >= Duration::from_millis(250));
+        assert_eq!(edited.0.speakers.map(|s| s.speakers.len()), Some(1));
+    }
+
+    #[test]
+    fn get_file_source_identity_reads_size_and_time() {
+        let mut conn = setup_conn();
+        let entry = insert_file(&mut conn, &file_transcript("/missing/a.m4a"), 100);
+        assert_eq!(
+            HistoryManager::get_file_source_identity_with_conn(&conn, entry.id).expect("read"),
+            Some(SourceIdentity {
+                size_bytes: Some(1_234),
+                modified_at: Some(1_600_000_000),
+            })
+        );
+
+        let unknown = HistoryManager::insert_file_entry_with_conn(
+            &mut conn,
+            &file_transcript("/missing/b.m4a"),
+            None,
+            None,
+            200,
+        )
+        .expect("insert");
+        assert_eq!(
+            HistoryManager::get_file_source_identity_with_conn(&conn, unknown.id).expect("read"),
+            Some(SourceIdentity::default())
+        );
+
+        insert_entry(&conn, 300, "dictation", None);
+        let dictation = conn.last_insert_rowid();
+        assert_eq!(
+            HistoryManager::get_file_source_identity_with_conn(&conn, dictation).expect("read"),
+            None
+        );
+        assert_eq!(
+            HistoryManager::get_file_source_identity_with_conn(&conn, 999).expect("read"),
+            None
+        );
+    }
+
+    #[test]
+    fn store_file_labels_compare_and_swap() {
+        let mut conn = setup_conn();
+        let entry = insert_file(&mut conn, &file_transcript("/missing/a.m4a"), 100);
+        let expected = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("read")
+            .expect("exists");
+        let labelled = FileTranscript {
+            history_id: Some(entry.id),
+            ..labelled_transcript("/missing/a.m4a")
+        };
+
+        // Written when the entry is what labelling started from.
+        let (stored, updated) = HistoryManager::store_file_labels_with_conn(
+            &mut conn, entry.id, &expected, &labelled, None,
+        )
+        .expect("store")
+        .expect("exists");
+        assert_eq!(stored, labelled);
+        assert_eq!(updated.file.expect("file info").speaker_count, 2);
+        assert_eq!(
+            updated.transcription_text,
+            "Speaker 1: Hello there.\n\nDoug: Second part."
+        );
+
+        // Not when it changed since (here: it already has these labels).
+        let err = HistoryManager::store_file_labels_with_conn(
+            &mut conn, entry.id, &expected, &expected, None,
+        )
+        .expect_err("changed");
+        assert_eq!(err.to_string(), TRANSCRIPT_CHANGED);
+        let unchanged = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("read")
+            .expect("exists");
+        assert_eq!(unchanged, labelled);
+
+        // A found recording's location is stored with the labels.
+        let relocated = Some(("/found/a.m4a".to_string(), Some(1_700_000_123)));
+        let relabelled = FileTranscript {
+            speakers: None,
+            text: "Hello there.\n\nSecond part.".to_string(),
+            ..expected.clone()
+        };
+        let (stored, updated) = HistoryManager::store_file_labels_with_conn(
+            &mut conn,
+            entry.id,
+            &labelled,
+            &relabelled,
+            relocated,
+        )
+        .expect("store")
+        .expect("exists");
+        assert_eq!(stored.source_path, "/found/a.m4a");
+        assert_eq!(stored.source_name, "interview.m4a");
+        assert_eq!(updated.title, "interview.m4a");
+        assert_eq!(updated.file.expect("file info").source_path, "/found/a.m4a");
+        assert_eq!(
+            HistoryManager::get_file_source_identity_with_conn(&conn, entry.id).expect("read"),
+            Some(SourceIdentity {
+                size_bytes: Some(1_234),
+                modified_at: Some(1_700_000_123),
+            })
+        );
+
+        // No speech: only the location changes; the labels stay.
+        let labelled_again = FileTranscript {
+            history_id: Some(entry.id),
+            source_path: "/found/a.m4a".to_string(),
+            ..labelled_transcript("/found/a.m4a")
+        };
+        HistoryManager::store_file_labels_with_conn(
+            &mut conn,
+            entry.id,
+            &stored,
+            &labelled_again,
+            None,
+        )
+        .expect("store")
+        .expect("exists");
+        let current = HistoryManager::get_file_transcript_with_conn(&conn, entry.id)
+            .expect("read")
+            .expect("exists");
+        let moved = Some(("/moved/a.m4a".to_string(), None));
+        let (kept, _) = HistoryManager::store_file_labels_with_conn(
+            &mut conn, entry.id, &current, &current, moved,
+        )
+        .expect("store")
+        .expect("exists");
+        assert_eq!(kept.speakers, current.speakers);
+        assert_eq!(kept.text, current.text);
+        assert_eq!(kept.segments, current.segments);
+        assert_eq!(kept.source_path, "/moved/a.m4a");
+
+        // A deleted entry is none.
+        HistoryManager::delete_entry_rows(&conn, entry.id).expect("delete");
+        assert!(HistoryManager::store_file_labels_with_conn(
+            &mut conn, entry.id, &kept, &kept, None,
         )
         .expect("no error")
         .is_none());

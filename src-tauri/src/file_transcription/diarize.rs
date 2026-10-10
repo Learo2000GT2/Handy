@@ -88,6 +88,21 @@ pub struct DiarizeRequest {
     pub model_path: PathBuf,
     /// Probe estimate: sizes the sample buffer and fails early with TooLong.
     pub estimated_duration_ms: Option<u64>,
+    /// Diarize only the audio before this point (the transcribed span of a
+    /// partial transcript); None for the whole file.
+    pub limit_ms: Option<u64>,
+}
+
+/// How far a diarization has got, reported as it runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiarizeProgress {
+    /// Held before a window while dictation is active (sent once per window).
+    Waiting,
+    /// A window is being diarized.
+    Running,
+    /// The windows up to `through_ms` are done. Never decreases, because
+    /// each window ends later than the one before.
+    Diarized { through_ms: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -219,6 +234,8 @@ pub struct DiarizationHandle {
     token: WorkToken,
     /// The diarizer's engine while it exists, so a cancel can stop its run.
     engine: Arc<Mutex<Option<EngineSupervisor>>>,
+    /// What the thread reports as it goes; see [`Self::wait_reporting`].
+    progress: mpsc::Receiver<DiarizeProgress>,
 }
 
 /// Starts diarizing `req.path` on a "file-diarize" thread, waiting while
@@ -232,12 +249,14 @@ pub fn start_diarization(
     let own = WorkToken::new();
     let engine = Arc::new(Mutex::new(None));
     let (done_tx, done) = mpsc::channel::<()>();
+    let (progress_tx, progress) = mpsc::channel();
     let context = Diarization {
         job: token.clone(),
         token: own.clone(),
         hold,
         engine: Arc::clone(&engine),
         limits: Limits::default(),
+        progress: progress_tx,
     };
     let spawned = thread::Builder::new()
         .name("file-diarize".into())
@@ -259,13 +278,23 @@ pub fn start_diarization(
         job: token,
         token: own,
         engine,
+        progress,
     }
 }
 
 impl DiarizationHandle {
     /// Blocks until the diarization ends. Polls the job's token every
     /// DIARIZE_POLL and, on cancel, kills only the diarizer worker.
-    pub fn wait(mut self) -> Result<Vec<SpeakerTurn>, DiarizeError> {
+    pub fn wait(self) -> Result<Vec<SpeakerTurn>, DiarizeError> {
+        self.wait_reporting(&mut |_| {})
+    }
+
+    /// [`Self::wait`], passing what the diarization reports to `on_progress`
+    /// on the waiting thread, at most every DIARIZE_POLL.
+    pub fn wait_reporting(
+        mut self,
+        on_progress: &mut dyn FnMut(DiarizeProgress),
+    ) -> Result<Vec<SpeakerTurn>, DiarizeError> {
         let Some(thread) = self.thread.take() else {
             return Err(DiarizeError::Engine(
                 "the speaker labelling thread could not start".to_string(),
@@ -273,11 +302,14 @@ impl DiarizationHandle {
         };
         let mut cancelled = false;
         while let Err(mpsc::RecvTimeoutError::Timeout) = self.done.recv_timeout(DIARIZE_POLL) {
+            self.progress.try_iter().for_each(&mut *on_progress);
             if !cancelled && self.job.is_cancelled() {
                 self.cancel();
                 cancelled = true;
             }
         }
+        // The thread has ended, so everything it reported is here.
+        self.progress.try_iter().for_each(&mut *on_progress);
         thread.join().unwrap_or_else(|_| {
             Err(DiarizeError::Engine(
                 "the speaker labelling thread stopped unexpectedly".to_string(),
@@ -335,7 +367,12 @@ struct Diarization {
     hold: Arc<dyn Fn() -> bool + Send + Sync>,
     engine: Arc<Mutex<Option<EngineSupervisor>>>,
     limits: Limits,
+    /// Send errors are ignored: nobody may be listening.
+    progress: mpsc::Sender<DiarizeProgress>,
 }
+
+/// The decode sink's error once it has all the audio `limit_ms` asks for.
+const REACHED_LIMIT: &str = "the speaker labelling limit was reached";
 
 impl Diarization {
     fn stopped(&self) -> bool {
@@ -372,15 +409,15 @@ impl Diarization {
         if !req.model_path.is_file() {
             return Err(DiarizeError::ModelMissing(req.model_path.clone()));
         }
-        if let Some(duration_ms) = req
-            .estimated_duration_ms
-            .filter(|&ms| ms > self.limits.max_ms)
-        {
+        // Only the audio before the limit is diarized.
+        let estimated_duration_ms = match (req.estimated_duration_ms, req.limit_ms) {
+            (Some(estimate), Some(limit)) => Some(estimate.min(limit)),
+            (estimate, _) => estimate,
+        };
+        if let Some(duration_ms) = estimated_duration_ms.filter(|&ms| ms > self.limits.max_ms) {
             return Err(DiarizeError::TooLong { duration_ms });
         }
 
-        let max_samples = self.limits.max_ms * SAMPLES_PER_MS;
-        let mut windows = Windows::new(self.limits, req.estimated_duration_ms);
         let mut stitcher = Stitcher::default();
         let mut exemplars = Exemplars::default();
         let mut engine: Option<EngineSupervisor> = None;
@@ -393,9 +430,24 @@ impl Diarization {
                 };
                 self.run_window(req, &mut engine, &mut stitcher, &mut exemplars, window)
             };
+        self.decode_windows(req, estimated_duration_ms, &mut run_window)?;
+        Ok(stitcher.finish())
+    }
 
+    /// Decodes `req.path`, up to `req.limit_ms`, and hands its audio to
+    /// `run` window by window.
+    fn decode_windows(
+        &self,
+        req: &DiarizeRequest,
+        estimated_duration_ms: Option<u64>,
+        run: &mut RunWindow<'_>,
+    ) -> Result<(), DiarizeError> {
+        let max_samples = self.limits.max_ms * SAMPLES_PER_MS;
+        let limit_samples = req.limit_ms.map(|ms| ms * SAMPLES_PER_MS);
+        let mut windows = Windows::new(self.limits, estimated_duration_ms);
         let mut failure: Option<DiarizeError> = None;
         let mut decoded: u64 = 0;
+        let mut reached_limit = false;
         let decode = decode_to_16k_mono(
             &req.path,
             &req.decode,
@@ -406,19 +458,31 @@ impl Diarization {
                     self.token.cancel();
                     return Ok(());
                 }
+                let block = match limit_samples {
+                    Some(limit) if decoded + block.len() as u64 >= limit => {
+                        reached_limit = true;
+                        &block[..(limit.saturating_sub(decoded)) as usize]
+                    }
+                    _ => block,
+                };
                 decoded += block.len() as u64;
                 let step = if decoded > max_samples {
                     Err(DiarizeError::TooLong {
                         duration_ms: decoded / SAMPLES_PER_MS,
                     })
                 } else {
-                    windows.push(block, &mut run_window)
+                    windows.push(block, run)
                 };
                 step.map_err(|e| {
                     let message = anyhow::anyhow!("speaker labelling stopped: {e}");
                     failure = Some(e);
                     message
-                })
+                })?;
+                if reached_limit {
+                    // Stops the decoder; the audio after the limit is not needed.
+                    return Err(anyhow::anyhow!(REACHED_LIMIT));
+                }
+                Ok(())
             },
         );
         if let Some(e) = failure {
@@ -436,13 +500,17 @@ impl Diarization {
             }
             Err(DecodeError::Cancelled) => return Err(DiarizeError::Cancelled),
             Err(_) if self.stopped() => return Err(DiarizeError::Cancelled),
+            Err(_) if reached_limit => debug!(
+                "Labelling speakers of {} up to {} s",
+                req.path.display(),
+                decoded / SAMPLES_PER_MS / 1000
+            ),
             Err(e) => return Err(DiarizeError::Decode(e.to_string())),
         }
         if self.stopped() {
             return Err(DiarizeError::Cancelled);
         }
-        windows.finish(&mut run_window)?;
-        Ok(stitcher.finish())
+        windows.finish(run)
     }
 
     /// Diarizes one window once dictation is idle, after the exemplars of
@@ -468,6 +536,7 @@ impl Diarization {
             }
             if !held {
                 debug!("Speaker labelling waits while dictation is active");
+                let _ = self.progress.send(DiarizeProgress::Waiting);
                 held = true;
             }
             thread::sleep(DIARIZE_POLL);
@@ -496,6 +565,7 @@ impl Diarization {
             more.then_some(samples)
         };
         let started = Instant::now();
+        let _ = self.progress.send(DiarizeProgress::Running);
         let turns = diarize_samples(engine, &req.model_path, input, &self.token)?;
         debug!(
             "Diarized {}–{} s of {} (after {} exemplar(s)) in {:.1}s: {} turns",
@@ -520,6 +590,9 @@ impl Diarization {
             turns: prefix_turns,
         };
         let ids = stitcher.add(start_ms, end_ms, turns.clone(), &prefix);
+        let _ = self
+            .progress
+            .send(DiarizeProgress::Diarized { through_ms: end_ms });
         if let Some(samples) = samples {
             exemplars.update(&samples, start_ms, &turns, &ids);
         }
@@ -1422,6 +1495,7 @@ mod tests {
             decode: DecodeOptions::default(),
             model_path,
             estimated_duration_ms,
+            limit_ms: None,
         }
     }
 
@@ -1432,6 +1506,7 @@ mod tests {
             hold: Arc::new(|| false),
             engine: Arc::new(Mutex::new(None)),
             limits,
+            progress: mpsc::channel().0,
         }
     }
 
@@ -1510,6 +1585,87 @@ mod tests {
         assert!(!job.is_cancelled());
     }
 
+    #[test]
+    fn progress_reports_waiting_then_cancel() {
+        let dir = tempfile::tempdir().unwrap();
+        let req = request(dir.path(), None);
+        write_wav(&req.path, 1.0);
+        let job = WorkToken::new();
+        // Held as if dictation never ends. Once the hold has been asked
+        // twice, the first ask's Waiting has been sent.
+        let asked = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let hold = {
+            let asked = Arc::clone(&asked);
+            Arc::new(move || {
+                asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                true
+            })
+        };
+        let handle = start_diarization(req, job.clone(), hold);
+        let started = Instant::now();
+        while asked.load(std::sync::atomic::Ordering::SeqCst) < 2 {
+            assert!(started.elapsed() < Duration::from_secs(20), "never held");
+            thread::sleep(Duration::from_millis(10));
+        }
+        handle.cancel();
+
+        let mut seen = Vec::new();
+        let result = handle.wait_reporting(&mut |progress| seen.push(progress));
+        assert_eq!(result, Err(DiarizeError::Cancelled));
+        assert_eq!(seen, [DiarizeProgress::Waiting]);
+        assert!(!job.is_cancelled());
+    }
+
+    #[test]
+    fn limit_stops_decoding() {
+        let dir = tempfile::tempdir().unwrap();
+        let req = DiarizeRequest {
+            limit_ms: Some(1_000),
+            ..request(dir.path(), None)
+        };
+        write_wav(&req.path, 3.0);
+        let mut windows: Vec<(u64, usize, bool)> = Vec::new();
+        let mut record = |start: u64, samples: Vec<f32>, more: bool| -> Result<(), DiarizeError> {
+            windows.push((start, samples.len(), more));
+            Ok(())
+        };
+        diarization(Limits::default())
+            .decode_windows(&req, None, &mut record)
+            .expect("decode up to the limit");
+        // One window of exactly the first second.
+        assert_eq!(windows, [(0, 16_000, false)]);
+
+        // Without a limit, the whole file.
+        let mut windows: Vec<(u64, usize, bool)> = Vec::new();
+        let mut record = |start: u64, samples: Vec<f32>, more: bool| -> Result<(), DiarizeError> {
+            windows.push((start, samples.len(), more));
+            Ok(())
+        };
+        let whole = DiarizeRequest {
+            limit_ms: None,
+            ..req
+        };
+        diarization(Limits::default())
+            .decode_windows(&whole, None, &mut record)
+            .expect("decode");
+        assert_eq!(windows, [(0, 48_000, false)]);
+    }
+
+    #[test]
+    fn limit_shortens_the_too_long_check() {
+        let dir = tempfile::tempdir().unwrap();
+        // A file estimated beyond the bound, but only its start is needed.
+        let req = DiarizeRequest {
+            limit_ms: Some(1_000),
+            ..request(dir.path(), Some(MAX_DIARIZE_MS + 1))
+        };
+        // Not TooLong: it fails decoding instead (there is no audio file).
+        assert!(matches!(
+            diarization(Limits::default()).run(&req),
+            Err(DiarizeError::Decode(_))
+        ));
+    }
+
     // ---- With the real model ----------------------------------------------
 
     /// The utterances of dialog2.wav (two synthetic voices), in seconds.
@@ -1534,6 +1690,7 @@ mod tests {
             decode: DecodeOptions::default(),
             model_path: env_path("HANDY_SPEAKER_MODEL"),
             estimated_duration_ms: None,
+            limit_ms: None,
         }
     }
 
@@ -1651,6 +1808,33 @@ mod tests {
             names
         );
         assert!(correct * 100 >= total * 95, "{correct}/{total}");
+    }
+
+    /// The same long recording (`HANDY_DIARIZE_LONG_WAV`): the progress
+    /// reported never goes back and ends at the file's length.
+    #[test]
+    #[ignore]
+    fn progress_follows_the_windows_with_the_real_model() {
+        let path = env_path("HANDY_DIARIZE_LONG_WAV");
+        let length_ms = hound::WavReader::open(&path)
+            .map(|wav| u64::from(wav.duration()) * 1000 / u64::from(wav.spec().sample_rate))
+            .expect("read the WAV header");
+        let mut reported = Vec::new();
+        start_diarization(real_request(path), WorkToken::new(), Arc::new(|| false))
+            .wait_reporting(&mut |progress| {
+                if let DiarizeProgress::Diarized { through_ms } = progress {
+                    reported.push(through_ms);
+                }
+            })
+            .expect("diarize");
+        println!("progress: {reported:?} of {length_ms} ms");
+        assert!(!reported.is_empty());
+        assert!(
+            reported.windows(2).all(|pair| pair[0] <= pair[1]),
+            "{reported:?}"
+        );
+        let last = reported.last().copied().unwrap_or(0);
+        assert!(last.abs_diff(length_ms) <= 1, "{last} of {length_ms}");
     }
 
     /// `HANDY_DIARIZE_WAV` and its truth (`HANDY_DIARIZE_TRUTH`: a JSON list

@@ -1054,11 +1054,66 @@ async deleteSpeakerModel() : Promise<Result<null, string>> {
  * for a saved transcript: a job whose result has a history_id is renamed in History
  * first and then takes the entry's labels, so a failure changes neither copy (if
  * that entry was deleted, only the job is renamed). A History rename also updates
- * the jobs saved as that entry. Running jobs: Err("still running").
+ * the jobs saved as that entry. Running jobs: Err("still running"). Refused while
+ * speaker labels are being made for the transcript; can be undone.
  */
 async renameTranscriptSpeaker(source: TranscriptSource, speakerId: number, name: string | null) : Promise<Result<FileTranscript, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("rename_transcript_speaker", { source, speakerId, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Gives all of speaker `from_id`'s passages to speaker `into_id`, which keeps
+ * its name (or takes `from_id`'s when it has none); `from_id` is removed. Saved
+ * like a rename, and can be undone.
+ */
+async mergeTranscriptSpeakers(source: TranscriptSource, fromId: number, intoId: number) : Promise<Result<FileTranscript, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("merge_transcript_speakers", { source, fromId, intoId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Gives the turn (paragraph) `paragraph_index`, which the caller saw start at
+ * `start_ms` with speaker `from_speaker`, to speaker `speaker_id`, or to a new
+ * speaker when that is None. Saved like a rename, and can be undone.
+ */
+async reassignTranscriptTurn(source: TranscriptSource, paragraphIndex: number, startMs: number, fromSpeaker: number | null, speakerId: number | null) : Promise<Result<FileTranscript, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reassign_transcript_turn", { source, paragraphIndex, startMs, fromSpeaker, speakerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Undoes the last rename, merge or passage change of the transcript (one
+ * level, and only while nothing else changed it since). Err("Nothing to undo")
+ * otherwise. An undo can't itself be undone.
+ */
+async undoTranscriptSpeakerEdit(source: TranscriptSource) : Promise<Result<FileTranscript, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("undo_transcript_speaker_edit", { source }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Queues a speaker-label job for a finished transcript (a job's result or a
+ * History entry): its recording is diarized and the labels stored with the
+ * transcript. `replace` relabels a labelled transcript, dropping names and
+ * fixes; `path` is a recording the user found in place of the stored one.
+ * Returns the job's snapshot. All errors are English.
+ */
+async labelTranscriptSpeakers(source: TranscriptSource, replace: boolean, path: string | null) : Promise<Result<FileJobSnapshot, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("label_transcript_speakers", { source, replace, path }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1231,7 +1286,16 @@ export type FileJobErrorCode = "not_found" | "unsupported_format" | "needs_ffmpe
 /**
  * Lemonade Server does not know the requested model.
  */
-"server_model_missing" | "internal"
+"server_model_missing" | "internal" | 
+/**
+ * Speaker labels: the recording at the stored path is not the one that
+ * was transcribed (another size, or modified since).
+ */
+"source_changed" | 
+/**
+ * Speaker labels: the diarizer failed or its model is missing.
+ */
+"speaker_labels_failed"
 export type FileJobSnapshot = { job_id: number; path: string; file_name: string; status: FileJobStatus; duration_ms: number | null; 
 /**
  * End of the last finished (or skipped) chunk.
@@ -1252,7 +1316,12 @@ has_transcript: boolean; transcript_status: TranscriptStatus | null; history_id:
 /**
  * Unix milliseconds.
  */
-enqueued_at: number }
+enqueued_at: number; 
+/**
+ * Set for a speaker-label job: the transcript it labels. Such a job
+ * transcribes nothing and never has a transcript of its own.
+ */
+labels_for: TranscriptSource | null }
 export type FileJobStatus = "queued" | 
 /**
  * Probing the file and loading the model.
@@ -1572,7 +1641,9 @@ speaker?: number | null }
 export type TranscriptSource = { kind: "job"; job_id: number } | { kind: "history"; history_id: number }
 export type TranscriptSpeaker = { 
 /**
- * 1-based, in order of first appearance in the transcript.
+ * Unique and 1-based. Numbered by first appearance when labels are made.
+ * Never renumbered by a merge or a passage change, so there can be gaps,
+ * and an id freed by a merge can be given to a new speaker.
  */
 id: number; 
 /**

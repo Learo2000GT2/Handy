@@ -1,33 +1,14 @@
 import React, { useEffect, useRef } from "react";
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { Download } from "lucide-react";
 import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
-import {
-  downloadPercent,
-  refocusTarget,
-  runIfConfirmed,
-} from "@/lib/utils/transcript";
-import { Alert } from "../../ui/Alert";
+import { refocusTarget, runIfConfirmed } from "@/lib/utils/transcript";
 import { Button } from "../../ui/Button";
 import { ToggleSwitch } from "../../ui/ToggleSwitch";
-import { PROGRESS_CLASSES } from "./progress";
-
-/** Model card of the speaker model, which shows its license. */
-const SPEAKER_MODEL_PAGE_URL =
-  "https://huggingface.co/handy-computer/diar_streaming_sortformer_4spk-v2.1-gguf";
-
-/** Size of the speaker model until the backend has reported it. */
-const SPEAKER_MODEL_SIZE_BYTES = 139_310_336;
-
-const openModelPage = async () => {
-  try {
-    await openUrl(SPEAKER_MODEL_PAGE_URL);
-  } catch (error) {
-    console.error("Failed to open the speaker model page:", error);
-  }
-};
+import {
+  SpeakerModelDownload,
+  speakerModelMegabytes,
+} from "./SpeakerModelDownload";
 
 /**
  * "Label Speakers" for new file jobs, with the speaker model it needs: its
@@ -48,12 +29,6 @@ export const SpeakerLabelsToggle: React.FC = () => {
   );
   const refreshSpeakerModel = useFileTranscriptionStore(
     (state) => state.refreshSpeakerModel,
-  );
-  const downloadSpeakerModel = useFileTranscriptionStore(
-    (state) => state.downloadSpeakerModel,
-  );
-  const cancelSpeakerModelDownload = useFileTranscriptionStore(
-    (state) => state.cancelSpeakerModelDownload,
   );
   const deleteSpeakerModel = useFileTranscriptionStore(
     (state) => state.deleteSpeakerModel,
@@ -92,9 +67,7 @@ export const SpeakerLabelsToggle: React.FC = () => {
     if (rowRef.current === null) focusInRowRef.current = false;
   }, [rowKind]);
 
-  const size = Math.round(
-    (model?.size_bytes || SPEAKER_MODEL_SIZE_BYTES) / 1_000_000,
-  );
+  const size = speakerModelMegabytes(model);
 
   // Asks first, like deleting a dictation model: it takes a new download to
   // label speakers again.
@@ -109,35 +82,8 @@ export const SpeakerLabelsToggle: React.FC = () => {
     );
 
   let modelRow: React.ReactNode = null;
-  if (rowKind === "downloading" && download !== null) {
-    const percent = downloadPercent(download.downloaded, download.total);
-    const progressText = download.verifying
-      ? t("settings.transcribeFiles.speakers.verifying")
-      : t("settings.transcribeFiles.speakers.downloading", { percent });
-    modelRow = (
-      <div className="px-4 py-3 flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-text/70 tabular-nums" role="status">
-            {progressText}
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => void cancelSpeakerModelDownload()}
-          >
-            {t("settings.transcribeFiles.speakers.cancelDownload")}
-          </Button>
-        </div>
-        <progress
-          className={`${PROGRESS_CLASSES} ${download.verifying ? "animate-pulse" : ""}`}
-          max={100}
-          value={download.verifying ? 100 : percent}
-          aria-label={t("settings.transcribeFiles.speakers.label")}
-          aria-valuetext={progressText}
-        />
-      </div>
-    );
+  if (rowKind === "downloading" || rowKind === "download") {
+    modelRow = <SpeakerModelDownload />;
   } else if (rowKind === "installed") {
     modelRow = (
       <div className="px-4 py-2 flex items-center justify-between gap-3">
@@ -152,47 +98,6 @@ export const SpeakerLabelsToggle: React.FC = () => {
         >
           {t("settings.transcribeFiles.speakers.remove")}
         </Button>
-      </div>
-    );
-  } else if (rowKind === "download") {
-    // The license is shown before anything is downloaded.
-    modelRow = (
-      <div className="px-4 py-3 flex flex-col gap-2">
-        {downloadError !== null && (
-          <Alert variant="error">
-            {t("settings.transcribeFiles.speakers.downloadFailed", {
-              error: downloadError,
-            })}
-          </Alert>
-        )}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <Button
-            type="button"
-            variant="primary-soft"
-            size="sm"
-            className="flex items-center gap-1.5"
-            onClick={() => void downloadSpeakerModel()}
-          >
-            <Download className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>
-              {t("settings.transcribeFiles.speakers.download", { size })}
-            </span>
-          </Button>
-          <p className="text-xs text-text/60">
-            <Trans
-              i18nKey="settings.transcribeFiles.speakers.license"
-              components={{
-                page: (
-                  <button
-                    type="button"
-                    onClick={() => void openModelPage()}
-                    className="underline cursor-pointer hover:text-logo-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-logo-primary rounded-sm"
-                  />
-                ),
-              }}
-            />
-          </p>
-        </div>
       </div>
     );
   }

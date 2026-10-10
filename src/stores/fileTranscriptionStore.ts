@@ -11,8 +11,13 @@ import {
   type SpeakerModelStatus,
   type SupportedAudioFormats,
   type TranscriptSegment,
+  type TranscriptSource,
 } from "@/bindings";
-import { isFinishedStatus } from "@/lib/utils/transcript";
+import {
+  isFinishedStatus,
+  isLabelJob,
+  isLabelTarget,
+} from "@/lib/utils/transcript";
 
 const SAVE_TO_HISTORY_STORAGE_KEY = "handy.transcribeFiles.saveToHistory";
 const LABEL_SPEAKERS_STORAGE_KEY = "handy.transcribeFiles.labelSpeakers";
@@ -67,8 +72,21 @@ interface FileTranscriptionState {
   cancel: (jobId: number) => Promise<void>;
   cancelAll: () => Promise<void>;
   dismiss: (jobId: number) => Promise<void>;
-  /** Dismisses every completed, cancelled or failed job. */
+  /**
+   * Dismisses every completed, cancelled or failed job, except those an
+   * unfinished speaker-label job is labelling.
+   */
   clearFinished: () => Promise<void>;
+  /**
+   * Queues a speaker-label job for a finished transcript (`replace`: label
+   * it again; `path`: a recording found in place of the stored one).
+   * Returns the job, or null after showing why it couldn't be queued.
+   */
+  labelTranscriptSpeakers: (
+    source: TranscriptSource,
+    replace: boolean,
+    path?: string,
+  ) => Promise<FileJobSnapshot | null>;
   setSaveToHistory: (value: boolean) => void;
   setLabelSpeakers: (value: boolean) => void;
   refreshSpeakerModel: () => Promise<void>;
@@ -125,7 +143,8 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
   // A completed job can still have an empty transcript (every chunk was
   // silent). The snapshot doesn't say, so look at the text once.
   const checkCompletedText = async (job: FileJobSnapshot) => {
-    if (job.status !== "completed") return;
+    // A speaker-label job has no transcript of its own.
+    if (job.status !== "completed" || isLabelJob(job)) return;
     if (checkedCompletedJobIds.has(job.job_id)) return;
     checkedCompletedJobIds.add(job.job_id);
 
@@ -407,7 +426,10 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
     clearFinished: async () => {
       const { jobs, order } = get();
       const finished = order.filter(
-        (id) => jobs[id] && isFinishedStatus(jobs[id].status),
+        (id) =>
+          jobs[id] &&
+          isFinishedStatus(jobs[id].status) &&
+          !isLabelTarget(jobs, id),
       );
       const errors = await Promise.all(finished.map(dismissJob));
       const firstError = errors.find((error) => error !== null);
@@ -418,6 +440,28 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
           }),
         );
       }
+    },
+
+    labelTranscriptSpeakers: async (source, replace, path) => {
+      let error: string;
+      try {
+        const result = await commands.labelTranscriptSpeakers(
+          source,
+          replace,
+          path ?? null,
+        );
+        if (result.status === "ok") {
+          addJobs([result.data]);
+          return result.data;
+        }
+        error = result.error;
+      } catch (caught) {
+        error = errorText(caught);
+      }
+      toast.error(
+        i18n.t("settings.transcribeFiles.speakers.labelError", { error }),
+      );
+      return null;
     },
 
     setSaveToHistory: (value) => {

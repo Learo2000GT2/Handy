@@ -110,7 +110,9 @@ pub struct FileTranscript {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct TranscriptSpeaker {
-    /// 1-based, in order of first appearance in the transcript.
+    /// Unique and 1-based. Numbered by first appearance when labels are made.
+    /// Never renumbered by a merge or a passage change, so there can be gaps,
+    /// and an id freed by a merge can be given to a new speaker.
     pub id: u32,
     /// User-given name; None shows "Speaker {id}".
     pub name: Option<String>,
@@ -215,7 +217,7 @@ impl TranscriptFormat {
 }
 
 /// Where a transcript to view or export comes from.
-#[derive(Clone, Debug, Serialize, Deserialize, Type)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TranscriptSource {
     Job { job_id: u64 },
@@ -271,6 +273,11 @@ pub enum FileJobErrorCode {
     /// Lemonade Server does not know the requested model.
     ServerModelMissing,
     Internal,
+    /// Speaker labels: the recording at the stored path is not the one that
+    /// was transcribed (another size, or modified since).
+    SourceChanged,
+    /// Speaker labels: the diarizer failed or its model is missing.
+    SpeakerLabelsFailed,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
@@ -303,6 +310,9 @@ pub struct FileJobSnapshot {
     pub history_id: Option<i64>,
     /// Unix milliseconds.
     pub enqueued_at: i64,
+    /// Set for a speaker-label job: the transcript it labels. Such a job
+    /// transcribes nothing and never has a transcript of its own.
+    pub labels_for: Option<TranscriptSource>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, tauri_specta::Event)]
@@ -403,5 +413,58 @@ mod tests {
         for (state, expected) in cases {
             assert_eq!(serde_json::to_value(&state).expect("serialize"), expected);
         }
+    }
+
+    #[test]
+    fn snapshot_serializes_labels_for_as_null_or_a_tagged_source() {
+        let snapshot = FileJobSnapshot {
+            job_id: 3,
+            path: "/audio/talk.m4a".to_string(),
+            file_name: "talk.m4a".to_string(),
+            status: FileJobStatus::Queued,
+            duration_ms: None,
+            processed_ms: 0,
+            chunks_done: 0,
+            decoder: None,
+            model_id: None,
+            engine: FileTranscriptionEngine::Handy,
+            speakers: None,
+            error: None,
+            has_transcript: false,
+            transcript_status: None,
+            history_id: None,
+            enqueued_at: 1,
+            labels_for: None,
+        };
+        let value = serde_json::to_value(&snapshot).expect("serialize");
+        assert_eq!(value["labels_for"], serde_json::Value::Null);
+
+        let label_job = FileJobSnapshot {
+            labels_for: Some(TranscriptSource::History { history_id: 7 }),
+            ..snapshot.clone()
+        };
+        let value = serde_json::to_value(&label_job).expect("serialize");
+        assert_eq!(
+            value["labels_for"],
+            json!({"kind": "history", "history_id": 7})
+        );
+        let job = FileJobSnapshot {
+            labels_for: Some(TranscriptSource::Job { job_id: 2 }),
+            ..snapshot
+        };
+        let value = serde_json::to_value(&job).expect("serialize");
+        assert_eq!(value["labels_for"], json!({"kind": "job", "job_id": 2}));
+    }
+
+    #[test]
+    fn new_error_codes_are_snake_case() {
+        assert_eq!(
+            serde_json::to_value(FileJobErrorCode::SourceChanged).expect("serialize"),
+            json!("source_changed")
+        );
+        assert_eq!(
+            serde_json::to_value(FileJobErrorCode::SpeakerLabelsFailed).expect("serialize"),
+            json!("speaker_labels_failed")
+        );
     }
 }

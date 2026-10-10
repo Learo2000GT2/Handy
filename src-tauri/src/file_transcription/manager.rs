@@ -2,28 +2,40 @@
 //! at a time, in the order they were added, publishes their state as
 //! `FileTranscriptionEvent`s and saves results to history.
 //!
+//! Besides transcriptions, the queue runs speaker-label jobs, which label
+//! the speakers of a finished transcript (a job's result or a History entry)
+//! from its recording. They transcribe nothing, so they take no model, lease
+//! or run gate; running in the same queue means there is never more than one
+//! diarizer, nor one beside a transcription.
+//!
 //! Jobs live only in memory. The window hides on close, so jobs keep running
 //! until the app exits; only what was saved to history outlives the app.
 
 use crate::engine_supervisor::WorkToken;
+use crate::file_transcription::decode::{self, DecodeOptions};
+use crate::file_transcription::diarize::{
+    self, DiarizeError, DiarizeProgress, DiarizeRequest, DIARIZER_MODEL_ID,
+};
 use crate::file_transcription::formats;
+use crate::file_transcription::label_job::{self, LabelSkip, SourceIdentity};
 use crate::file_transcription::lemonade::{self, LemonadeJobConfig, LEMONADE_MODEL_PREFIX};
 use crate::file_transcription::pipeline::{
     self, PipelineEngine, PipelineError, PipelineEvent, PipelineOptions, PipelineOutput,
     TranscriptBuilder, TranscriptMeta,
 };
 use crate::file_transcription::speaker_model;
+use crate::file_transcription::speakers::SpeakerState;
 use crate::file_transcription::types::{
     DecoderKind, FileJobError, FileJobErrorCode, FileJobSnapshot, FileJobStatus, FileTranscript,
     FileTranscriptionEvent, FileTranscriptionOptions, SpeakerJobState, SpeakerSkipReason,
-    TranscriptStatus,
+    TranscriptSource, TranscriptSpeakers, TranscriptStatus,
 };
-use crate::managers::history::HistoryManager;
+use crate::managers::history::{HistoryManager, TRANSCRIPT_CHANGED};
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings::{AppSettings, FileTranscriptionEngine};
 use chrono::Utc;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -38,6 +50,8 @@ const PROGRESS_EMIT_INTERVAL: Duration = Duration::from_millis(250);
 const MAX_FINISHED_JOBS: usize = 20;
 /// `status_detail` of the transcript of a job that is still running.
 const IN_PROGRESS_DETAIL: &str = "Transcription in progress";
+/// Why a speaker-label job found nothing to label.
+const TRANSCRIPT_GONE: &str = "The transcript no longer exists";
 
 pub struct FileTranscriptionManager {
     app: AppHandle,
@@ -47,6 +61,73 @@ pub struct FileTranscriptionManager {
     /// Signalled when a job is queued.
     wake: Condvar,
     next_id: AtomicU64,
+    /// The last speaker edit, for a one-level undo.
+    undo: Mutex<UndoSlot>,
+}
+
+/// A speaker-label job: which transcript it labels, from which recording.
+#[derive(Clone, Debug)]
+pub struct LabelJobRequest {
+    /// The transcript, as [`FileTranscriptionManager::canonical_target`] gives it.
+    pub target: TranscriptSource,
+    /// Replace the transcript's labels (Label Again); else it has none.
+    pub replace: bool,
+    /// The recording to diarize.
+    pub path: String,
+    /// The user picked `path` (Find Recording…) instead of the stored one,
+    /// which vouches for its modification time; it is stored with the labels.
+    pub path_override: bool,
+    pub file_name: String,
+    /// The transcript's length.
+    pub duration_ms: u64,
+    /// See [`label_job::diarize_limit`].
+    pub limit_ms: Option<u64>,
+}
+
+/// The last speaker edit (rename, merge or passage change) of a transcript,
+/// kept so it can be undone once.
+#[derive(Clone, Debug)]
+pub struct SpeakerUndo {
+    pub target: TranscriptSource,
+    pub before: SpeakerState,
+    pub after: SpeakerState,
+}
+
+impl SpeakerUndo {
+    /// Puts `t` back as it was before the edit, if it is still as the edit
+    /// left it.
+    pub fn undo(&self, t: &mut FileTranscript) -> Result<(), String> {
+        if SpeakerState::of(t) != self.after {
+            return Err("The transcript changed since; this can't be undone".to_string());
+        }
+        self.before.apply_to(t);
+        Ok(())
+    }
+}
+
+/// Holds at most one [`SpeakerUndo`], for whichever transcript was edited last.
+#[derive(Default)]
+struct UndoSlot(Option<SpeakerUndo>);
+
+impl UndoSlot {
+    fn remember(&mut self, undo: SpeakerUndo) {
+        self.0 = Some(undo);
+    }
+
+    /// The undo of `target`'s last edit, which is then gone.
+    fn take(&mut self, target: TranscriptSource) -> Option<SpeakerUndo> {
+        if self.0.as_ref().is_some_and(|undo| undo.target == target) {
+            self.0.take()
+        } else {
+            None
+        }
+    }
+
+    fn forget(&mut self, target: TranscriptSource) {
+        if self.0.as_ref().is_some_and(|undo| undo.target == target) {
+            self.0 = None;
+        }
+    }
 }
 
 impl FileTranscriptionManager {
@@ -63,6 +144,7 @@ impl FileTranscriptionManager {
             state: Mutex::new(JobTable::default()),
             wake: Condvar::new(),
             next_id: AtomicU64::new(1),
+            undo: Mutex::new(UndoSlot::default()),
         });
 
         let worker = Arc::clone(&manager);
@@ -143,7 +225,7 @@ impl FileTranscriptionManager {
         let cancellation = self.lock_state().cancel(job_id)?;
         match cancellation {
             Cancellation::Dequeued(snapshot) => {
-                self.emit(FileTranscriptionEvent::Updated { job: snapshot });
+                self.emit(FileTranscriptionEvent::Updated { job: *snapshot });
             }
             Cancellation::Running(token) => {
                 info!("Cancelling file transcription job {}", job_id);
@@ -196,8 +278,9 @@ impl FileTranscriptionManager {
     }
 
     /// Applies `edit` to a finished job's stored result (`JobRecord.result`)
-    /// and returns the updated transcript. Err if the job is unknown, still
-    /// running, or has no result.
+    /// and returns the updated transcript; emits Updated when the job's
+    /// snapshot changed with it (its speaker count). Err if the job is
+    /// unknown, still running, or has no result.
     ///
     /// `edit` runs with the job table locked, so it must not block. A
     /// failed edit leaves the stored result unchanged.
@@ -206,7 +289,11 @@ impl FileTranscriptionManager {
         job_id: u64,
         edit: impl FnOnce(&mut FileTranscript) -> Result<(), String>,
     ) -> Result<FileTranscript, String> {
-        self.lock_state().edit_result(job_id, edit)
+        let (edited, snapshot) = self.lock_state().edit_result(job_id, edit)?;
+        if let Some(job) = snapshot {
+            self.emit(FileTranscriptionEvent::Updated { job });
+        }
+        Ok(edited)
     }
 
     /// The History entry a finished job's result was saved as. Err like
@@ -217,18 +304,110 @@ impl FileTranscriptionManager {
             .map(|result| result.history_id)
     }
 
-    /// After the speakers of History entry `stored.history_id` were renamed,
-    /// gives every finished job whose result was saved as that entry the
-    /// entry's labels and text, so the History rename shows there too and a
-    /// later rename from the job keeps it. Emits Updated for each such job.
-    pub fn sync_history_speakers(&self, stored: &FileTranscript) {
+    /// After the speakers of History entry `stored.history_id` changed (an
+    /// edit, or new labels), gives every finished job whose result was saved
+    /// as that entry the entry's labels, turns, segments, text and recording
+    /// path, so the change shows there too and a later edit from the job
+    /// keeps it. Emits Updated for each such job.
+    pub fn sync_history_transcript(&self, stored: &FileTranscript) {
         let Some(history_id) = stored.history_id else {
             return;
         };
-        let synced = self.lock_state().sync_history_speakers(history_id, stored);
+        let synced = self
+            .lock_state()
+            .sync_history_transcript(history_id, stored);
         for job in synced {
             self.emit(FileTranscriptionEvent::Updated { job });
         }
+    }
+
+    /// Where the speakers of `source` live: a job whose result was saved
+    /// to a History entry that still exists is that entry, so both spellings
+    /// of one transcript name the same target. Reads the database.
+    pub fn canonical_target(
+        &self,
+        source: TranscriptSource,
+        history: &HistoryManager,
+    ) -> Result<TranscriptSource, String> {
+        canonical_target_with(
+            source,
+            |job_id| self.lock_state().saved_history_id(job_id),
+            |history_id| {
+                history
+                    .get_file_source_identity(history_id)
+                    .map(|identity| identity.is_some())
+                    .map_err(|e| format!("Failed to read history: {e}"))
+            },
+        )
+    }
+
+    /// Queues a speaker-label job (Failed at once when its recording can't
+    /// be opened) and emits Updated. Err while another one for the same
+    /// target (canonical, see [`Self::canonical_target`]) is unfinished.
+    pub fn enqueue_label_job(&self, request: LabelJobRequest) -> Result<FileJobSnapshot, String> {
+        let enqueued_at = Utc::now().timestamp_millis();
+        // Touch the file system before taking the lock.
+        let validation = validate_path(Path::new(&request.path), |path| {
+            formats::route_for_path(path).is_some()
+        });
+        let (snapshot, evicted) = {
+            let mut state = self.lock_state();
+            if state.label_job_active(request.target) {
+                return Err("Speaker labels are already being made for this transcript".to_string());
+            }
+            let job_id = self.next_id.fetch_add(1, Ordering::Relaxed);
+            let snapshot = state.add_label(job_id, request, validation, enqueued_at);
+            (snapshot, state.evict_finished(MAX_FINISHED_JOBS))
+        };
+        self.wake.notify_one();
+
+        match &snapshot.error {
+            Some(error) => warn!(
+                "Not labelling the speakers of {}: {}",
+                snapshot.path, error.message
+            ),
+            None => info!("Queued speaker label job {}", snapshot.job_id),
+        }
+        self.emit(FileTranscriptionEvent::Updated {
+            job: snapshot.clone(),
+        });
+        self.emit_removed(evicted);
+        Ok(snapshot)
+    }
+
+    /// Whether a speaker-label job for `target` (canonical) is queued or running.
+    pub fn label_job_active(&self, target: TranscriptSource) -> bool {
+        self.lock_state().label_job_active(target)
+    }
+
+    /// Keeps `target`'s last speaker edit for [`Self::take_undo`], in place
+    /// of any earlier one.
+    pub fn remember_edit(
+        &self,
+        target: TranscriptSource,
+        before: SpeakerState,
+        after: SpeakerState,
+    ) {
+        self.lock_undo().remember(SpeakerUndo {
+            target,
+            before,
+            after,
+        });
+    }
+
+    /// The undo of `target`'s last speaker edit, if it is the last one kept;
+    /// it can be taken only once.
+    pub fn take_undo(&self, target: TranscriptSource) -> Option<SpeakerUndo> {
+        self.lock_undo().take(target)
+    }
+
+    /// Drops the undo of `target`'s last edit (new labels replaced it).
+    pub fn forget_undo(&self, target: TranscriptSource) {
+        self.lock_undo().forget(target);
+    }
+
+    fn lock_undo(&self) -> MutexGuard<'_, UndoSlot> {
+        self.undo.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     fn lock_state(&self) -> MutexGuard<'_, JobTable> {
@@ -255,7 +434,10 @@ impl FileTranscriptionManager {
             });
             self.refresh_queued_engine(settings.file_transcription_engine);
 
-            self.run_job(&job, &settings);
+            match &job.label {
+                Some(request) => self.run_label_job(&job, request),
+                None => self.run_job(&job, &settings),
+            }
 
             crate::memory::trim_freed_memory();
             let evicted = self.lock_state().evict_finished(MAX_FINISHED_JOBS);
@@ -337,25 +519,36 @@ impl FileTranscriptionManager {
             Ok(Ok(output)) => {
                 info!("File transcription job {} completed", job.job_id);
                 let decoder = output.decoder;
+                let source = source_identity(&output);
                 let transcript = self.store_result(job, &model_id, output);
                 JobFinish {
                     status: FileJobStatus::Completed,
                     error: None,
                     decoder: Some(decoder),
                     result: Some(transcript),
+                    source: Some(source),
+                    speakers: None,
                 }
             }
             Ok(Err(PipelineError::Cancelled { partial })) => {
                 info!("File transcription job {} cancelled", job.job_id);
                 // Kept for viewing and export, but never saved to history.
-                let result = partial
+                let kept = partial
                     .filter(|partial| !partial.transcript.paragraphs.is_empty())
-                    .map(|partial| self.finish_transcript(partial.transcript, &model_id));
+                    .map(|partial| {
+                        let source = source_identity(&partial);
+                        (
+                            self.finish_transcript(partial.transcript, &model_id),
+                            source,
+                        )
+                    });
                 JobFinish {
                     status: FileJobStatus::Cancelled,
                     error: None,
                     decoder: None,
-                    result,
+                    source: kept.as_ref().map(|(_, source)| *source),
+                    result: kept.map(|(result, _)| result),
+                    speakers: None,
                 }
             }
             Ok(Err(PipelineError::Failed {
@@ -367,27 +560,28 @@ impl FileTranscriptionManager {
                     "File transcription job {} failed ({:?}): {}",
                     job.job_id, code, message
                 );
-                let result = partial
+                let kept = partial
                     .filter(|partial| !partial.transcript.paragraphs.is_empty())
-                    .map(|partial| self.store_result(job, &model_id, *partial));
+                    .map(|partial| {
+                        let source = source_identity(&partial);
+                        (self.store_result(job, &model_id, *partial), source)
+                    });
                 JobFinish {
                     status: FileJobStatus::Failed,
                     error: Some(FileJobError { code, message }),
                     decoder: None,
-                    result,
+                    source: kept.as_ref().map(|(_, source)| *source),
+                    result: kept.map(|(result, _)| result),
+                    speakers: None,
                 }
             }
             Err(_) => {
                 error!("File transcription job {} panicked", job.job_id);
-                JobFinish {
-                    status: FileJobStatus::Failed,
-                    error: Some(FileJobError {
-                        code: FileJobErrorCode::Internal,
-                        message: "File transcription stopped unexpectedly".to_string(),
-                    }),
-                    decoder: None,
-                    result: None,
-                }
+                JobFinish::failed(
+                    FileJobErrorCode::Internal,
+                    "File transcription stopped unexpectedly".to_string(),
+                    None,
+                )
             }
         };
 
@@ -432,6 +626,314 @@ impl FileTranscriptionManager {
         transcript.created_at = Utc::now().timestamp();
         transcript
     }
+
+    /// Runs one speaker-label job to its end, like [`Self::run_job`]: the
+    /// job table is never locked during disk, database or diarizer work.
+    fn run_label_job(&self, job: &StartedJob, request: &LabelJobRequest) {
+        info!(
+            "Starting speaker label job {} for {:?}",
+            job.job_id, request.target
+        );
+        let mut on_event = |event: PipelineEvent| {
+            let events =
+                self.lock_state()
+                    .apply(job.job_id, DIARIZER_MODEL_ID, event, Instant::now());
+            for event in events {
+                self.emit(event);
+            }
+        };
+        let finish = catch_unwind(AssertUnwindSafe(|| {
+            self.label_speakers(job, request, &mut on_event)
+        }))
+        .unwrap_or_else(|_| {
+            error!("Speaker label job {} panicked", job.job_id);
+            JobFinish::label_failed(
+                FileJobErrorCode::Internal,
+                "Speaker labelling stopped unexpectedly".to_string(),
+            )
+        });
+        match &finish.error {
+            Some(error) => warn!(
+                "Speaker label job {} failed ({:?}): {}",
+                job.job_id, error.code, error.message
+            ),
+            None => info!(
+                "Speaker label job {} ended: {:?}",
+                job.job_id, finish.status
+            ),
+        }
+
+        let snapshot = self.lock_state().finish(job.job_id, finish);
+        if let Some(snapshot) = snapshot {
+            self.emit(FileTranscriptionEvent::Updated { job: snapshot });
+        }
+    }
+
+    /// Labels the speakers of `request.target` from `request.path` and
+    /// stores the labels, if the transcript is still what it was when the
+    /// job started. Diarizing and placing the turns happen before anything
+    /// is written, outside any lock or transaction.
+    fn label_speakers(
+        &self,
+        job: &StartedJob,
+        request: &LabelJobRequest,
+        on_event: &mut dyn FnMut(PipelineEvent),
+    ) -> JobFinish {
+        use FileJobErrorCode::{Internal, SourceChanged, SpeakerLabelsFailed};
+        let target = request.target;
+
+        // The transcript as it is now; the labels are written only if it is
+        // still this.
+        let expected = match self.load_target(target) {
+            Ok(Some(transcript)) => transcript,
+            Ok(None) => return JobFinish::label_failed(Internal, TRANSCRIPT_GONE.to_string()),
+            Err(message) => return JobFinish::label_failed(Internal, message),
+        };
+        if expected.text.trim().is_empty()
+            || (expected.paragraphs.is_empty() && expected.segments.is_empty())
+        {
+            return JobFinish::label_failed(
+                Internal,
+                "The transcript has no text to label".to_string(),
+            );
+        }
+        if expected.speakers.is_some() && !request.replace {
+            return JobFinish::label_failed(
+                Internal,
+                "The transcript already has speaker labels".to_string(),
+            );
+        }
+
+        let path = Path::new(&request.path);
+        let decode_options = DecodeOptions::default();
+        let probe = match decode::probe(path, &decode_options) {
+            Ok(probe) => probe,
+            Err(e) => {
+                return match pipeline::decode_error_code(&e) {
+                    Some(code) => JobFinish::label_failed(code, e.to_string()),
+                    None => JobFinish::label_cancelled(),
+                }
+            }
+        };
+        let stored = match self.stored_identity(target) {
+            Ok(Some(identity)) => identity,
+            Ok(None) => return JobFinish::label_failed(Internal, TRANSCRIPT_GONE.to_string()),
+            Err(message) => return JobFinish::label_failed(Internal, message),
+        };
+        if let Err(reason) =
+            label_job::check_source(stored, &probe, expected.duration_ms, request.path_override)
+        {
+            return JobFinish::label_failed(SourceChanged, reason);
+        }
+        let Some(model_path) = speaker_model::installed_speaker_model(&self.app) else {
+            return JobFinish {
+                speakers: Some(SpeakerJobState::Skipped {
+                    reason: SpeakerSkipReason::ModelMissing,
+                }),
+                ..JobFinish::label_failed(
+                    SpeakerLabelsFailed,
+                    "The speaker model isn't downloaded".to_string(),
+                )
+            };
+        };
+
+        on_event(PipelineEvent::Speakers(SpeakerJobState::Running));
+        let diarize_request = DiarizeRequest {
+            path: path.to_path_buf(),
+            decode: decode_options,
+            model_path,
+            estimated_duration_ms: probe.duration_ms,
+            limit_ms: label_job::diarize_limit(&expected),
+        };
+        let hold: Arc<dyn Fn() -> bool + Send + Sync> = {
+            let tm = Arc::clone(&self.tm);
+            Arc::new(move || tm.dictation_active())
+        };
+        let mut through_ms = 0;
+        let diarized = diarize::start_diarization(diarize_request, job.token.clone(), hold)
+            .wait_reporting(&mut |progress| on_event(progress_event(progress, &mut through_ms)));
+        let turns = match diarized {
+            Ok(_) if job.token.is_cancelled() => return JobFinish::label_cancelled(),
+            Ok(turns) => turns,
+            Err(DiarizeError::Cancelled) => return JobFinish::label_cancelled(),
+            Err(error) => {
+                let (code, state) = label_job::diarize_failure(&error);
+                return JobFinish {
+                    speakers: Some(state),
+                    ..JobFinish::label_failed(code, error.to_string())
+                };
+            }
+        };
+
+        // A recording the user found is remembered even without labels.
+        let relocated = request
+            .path_override
+            .then(|| (request.path.clone(), probe.source_modified_at));
+        let (labelled, speakers) = match label_job::label(&expected, &turns, request.replace) {
+            Ok((labelled, count)) => (labelled, SpeakerJobState::Done { speakers: count }),
+            Err(LabelSkip::NoSpeech) => {
+                let skipped = SpeakerJobState::Skipped {
+                    reason: SpeakerSkipReason::NoSpeech,
+                };
+                if relocated.is_none() {
+                    return JobFinish::label_completed(skipped);
+                }
+                (expected.clone(), skipped)
+            }
+            Err(LabelSkip::AlreadyLabelled) => {
+                return JobFinish::label_failed(
+                    Internal,
+                    "The transcript already has speaker labels".to_string(),
+                )
+            }
+        };
+        if let Err(message) = self.store_labels(target, &expected, labelled, relocated) {
+            return JobFinish::label_failed(Internal, message);
+        }
+        // The labels replaced whatever an undo would restore.
+        self.forget_undo(target);
+        JobFinish::label_completed(speakers)
+    }
+
+    /// A copy of the transcript `target` names; None when it is gone.
+    fn load_target(&self, target: TranscriptSource) -> Result<Option<FileTranscript>, String> {
+        match target {
+            TranscriptSource::History { history_id } => self
+                .history
+                .get_file_transcript(history_id)
+                .map_err(|e| format!("Failed to read history: {e}")),
+            TranscriptSource::Job { job_id } => Ok(self
+                .lock_state()
+                .result_mut(job_id)
+                .ok()
+                .map(|result| result.clone())),
+        }
+    }
+
+    /// What was recorded about `target`'s recording when it was transcribed;
+    /// None when the transcript is gone.
+    fn stored_identity(&self, target: TranscriptSource) -> Result<Option<SourceIdentity>, String> {
+        match target {
+            TranscriptSource::History { history_id } => self
+                .history
+                .get_file_source_identity(history_id)
+                .map_err(|e| format!("Failed to read history: {e}")),
+            TranscriptSource::Job { job_id } => Ok(self
+                .lock_state()
+                .record(job_id)
+                .map(|record| record.source.unwrap_or_default())),
+        }
+    }
+
+    /// Writes `labelled` over `target` if it still is `expected`, then
+    /// shows it everywhere it is listed.
+    fn store_labels(
+        &self,
+        target: TranscriptSource,
+        expected: &FileTranscript,
+        labelled: FileTranscript,
+        relocated: Option<(String, Option<i64>)>,
+    ) -> Result<(), String> {
+        match target {
+            TranscriptSource::History { history_id } => {
+                let stored = self
+                    .history
+                    .store_file_labels(history_id, expected, &labelled, relocated)
+                    .map_err(|e| e.to_string())?
+                    .ok_or_else(|| TRANSCRIPT_GONE.to_string())?;
+                self.sync_history_transcript(&stored);
+            }
+            TranscriptSource::Job { job_id } => {
+                let snapshot = self
+                    .lock_state()
+                    .replace_result_if(job_id, expected, labelled, relocated)?;
+                self.emit(FileTranscriptionEvent::Updated { job: snapshot });
+            }
+        }
+        Ok(())
+    }
+}
+
+/// `source`, with a job whose result was saved as a History entry that
+/// still exists given as that entry. `saved_as` gives a finished job's
+/// History id, `entry_exists` whether an entry exists.
+fn canonical_target_with(
+    source: TranscriptSource,
+    saved_as: impl FnOnce(u64) -> Option<i64>,
+    entry_exists: impl FnOnce(i64) -> Result<bool, String>,
+) -> Result<TranscriptSource, String> {
+    let TranscriptSource::Job { job_id } = source else {
+        return Ok(source);
+    };
+    match saved_as(job_id) {
+        Some(history_id) if entry_exists(history_id)? => {
+            Ok(TranscriptSource::History { history_id })
+        }
+        Some(history_id) => {
+            debug!(
+                "History entry {} no longer exists; job {} keeps its own transcript",
+                history_id, job_id
+            );
+            Ok(source)
+        }
+        None => Ok(source),
+    }
+}
+
+/// The job event for a speaker-label job's diarizer `progress`. Its progress
+/// is the end of the last diarized window (`through_ms`, kept across
+/// calls), which never goes back.
+fn progress_event(progress: DiarizeProgress, through_ms: &mut u64) -> PipelineEvent {
+    match progress {
+        DiarizeProgress::Waiting => PipelineEvent::Waiting,
+        DiarizeProgress::Running => PipelineEvent::Transcribing {
+            chunk_index: 0,
+            processed_ms: *through_ms,
+        },
+        DiarizeProgress::Diarized { through_ms: done } => {
+            *through_ms = (*through_ms).max(done);
+            PipelineEvent::Transcribing {
+                chunk_index: 0,
+                processed_ms: *through_ms,
+            }
+        }
+    }
+}
+
+/// What a pipeline output says about its recording, for a later label job.
+fn source_identity(output: &PipelineOutput) -> SourceIdentity {
+    SourceIdentity {
+        size_bytes: Some(output.source_size_bytes),
+        modified_at: output.source_modified_at,
+    }
+}
+
+/// The speaker state a job row shows for a result with `labels`: their
+/// count; without labels, what it showed unless that was a count.
+fn speaker_job_state(
+    current: Option<&SpeakerJobState>,
+    labels: Option<&TranscriptSpeakers>,
+) -> Option<SpeakerJobState> {
+    match (labels, current) {
+        (Some(labels), _) => Some(SpeakerJobState::Done {
+            speakers: labels.speakers.len() as u32,
+        }),
+        (None, Some(SpeakerJobState::Done { .. })) => None,
+        (None, current) => current.cloned(),
+    }
+}
+
+/// Makes a finished job's snapshot show its (changed) result: the speaker
+/// count and, when the recording `moved`, its path. True if it changed.
+fn refresh_snapshot(snapshot: &mut FileJobSnapshot, result: &FileTranscript, moved: bool) -> bool {
+    let speakers = speaker_job_state(snapshot.speakers.as_ref(), result.speakers.as_ref());
+    let mut changed = speakers != snapshot.speakers;
+    snapshot.speakers = speakers;
+    if moved && snapshot.path != result.source_path {
+        snapshot.path = result.source_path.clone();
+        changed = true;
+    }
+    changed
 }
 
 /// The pipeline engine for a job started with `settings`, and the model id
@@ -500,6 +1002,10 @@ struct JobRecord {
     /// The final (or partial) transcript once the job finished.
     result: Option<FileTranscript>,
     last_progress_emit: Option<Instant>,
+    /// Set for a speaker-label job.
+    label: Option<LabelJobRequest>,
+    /// The recording's size and modification time when `result` was made.
+    source: Option<SourceIdentity>,
 }
 
 /// A job the worker just took off the queue.
@@ -509,11 +1015,13 @@ struct StartedJob {
     options: FileTranscriptionOptions,
     token: WorkToken,
     snapshot: FileJobSnapshot,
+    /// Set for a speaker-label job.
+    label: Option<LabelJobRequest>,
 }
 
 enum Cancellation {
     /// The job was queued and is now cancelled.
-    Dequeued(FileJobSnapshot),
+    Dequeued(Box<FileJobSnapshot>),
     /// The job is running; its work must be cancelled with this token.
     Running(WorkToken),
 }
@@ -524,6 +1032,54 @@ struct JobFinish {
     error: Option<FileJobError>,
     decoder: Option<DecoderKind>,
     result: Option<FileTranscript>,
+    /// The recording behind `result`.
+    source: Option<SourceIdentity>,
+    /// The final speaker state, when the job sets it here rather than by events.
+    speakers: Option<SpeakerJobState>,
+}
+
+impl JobFinish {
+    fn failed(code: FileJobErrorCode, message: String, speakers: Option<SpeakerJobState>) -> Self {
+        Self {
+            status: FileJobStatus::Failed,
+            error: Some(FileJobError { code, message }),
+            decoder: None,
+            result: None,
+            source: None,
+            speakers,
+        }
+    }
+
+    /// A speaker-label job that failed; its speaker state says why.
+    fn label_failed(code: FileJobErrorCode, message: String) -> Self {
+        let state = SpeakerJobState::Failed {
+            message: message.clone(),
+        };
+        Self::failed(code, message, Some(state))
+    }
+
+    /// A speaker-label job that ended without an error.
+    fn label_ended(status: FileJobStatus, speakers: SpeakerJobState) -> Self {
+        Self {
+            status,
+            error: None,
+            decoder: None,
+            result: None,
+            source: None,
+            speakers: Some(speakers),
+        }
+    }
+
+    fn label_cancelled() -> Self {
+        Self::label_ended(
+            FileJobStatus::Cancelled,
+            DiarizeError::Cancelled.job_state(),
+        )
+    }
+
+    fn label_completed(speakers: SpeakerJobState) -> Self {
+        Self::label_ended(FileJobStatus::Completed, speakers)
+    }
 }
 
 /// All jobs in enqueue order. Pure state, so it can be tested without an
@@ -577,6 +1133,7 @@ impl JobTable {
             transcript_status: None,
             history_id: None,
             enqueued_at,
+            labels_for: None,
         };
         self.jobs.push(JobRecord {
             snapshot: snapshot.clone(),
@@ -585,18 +1142,101 @@ impl JobTable {
             transcript: TranscriptBuilder::default(),
             result: None,
             last_progress_emit: None,
+            label: None,
+            source: None,
         });
         snapshot
     }
 
-    /// Takes the oldest queued job and marks it `Preparing` on `engine`.
+    /// Adds a speaker-label job: `Queued`, or `Failed` with the validation
+    /// error of its recording. Its length is the span to diarize.
+    fn add_label(
+        &mut self,
+        job_id: u64,
+        request: LabelJobRequest,
+        validation: Result<(), FileJobError>,
+        enqueued_at: i64,
+    ) -> FileJobSnapshot {
+        let error = validation.err();
+        let span_ms = match request.limit_ms {
+            Some(limit) if request.duration_ms > 0 => limit.min(request.duration_ms),
+            Some(limit) => limit,
+            None => request.duration_ms,
+        };
+        let snapshot = FileJobSnapshot {
+            job_id,
+            path: request.path.clone(),
+            file_name: request.file_name.clone(),
+            status: if error.is_some() {
+                FileJobStatus::Failed
+            } else {
+                FileJobStatus::Queued
+            },
+            duration_ms: Some(span_ms).filter(|&ms| ms > 0),
+            processed_ms: 0,
+            chunks_done: 0,
+            decoder: None,
+            model_id: Some(DIARIZER_MODEL_ID.to_string()),
+            // The diarizer runs in Handy, whatever engine transcribes.
+            engine: FileTranscriptionEngine::Handy,
+            speakers: Some(SpeakerJobState::Pending),
+            error,
+            has_transcript: false,
+            transcript_status: None,
+            history_id: None,
+            enqueued_at,
+            labels_for: Some(request.target),
+        };
+        self.jobs.push(JobRecord {
+            snapshot: snapshot.clone(),
+            options: FileTranscriptionOptions::default(),
+            token: WorkToken::new(),
+            transcript: TranscriptBuilder::default(),
+            result: None,
+            last_progress_emit: None,
+            label: Some(request),
+            source: None,
+        });
+        snapshot
+    }
+
+    /// Whether an unfinished speaker-label job targets `target`.
+    fn label_job_active(&self, target: TranscriptSource) -> bool {
+        self.jobs.iter().any(|job| {
+            !is_finished(job.snapshot.status)
+                && job
+                    .label
+                    .as_ref()
+                    .is_some_and(|label| label.target == target)
+        })
+    }
+
+    /// Whether job `job_id`'s result is the target of an unfinished
+    /// speaker-label job, so it must stay listed.
+    fn is_label_target(&self, job_id: u64) -> bool {
+        self.label_job_active(TranscriptSource::Job { job_id })
+    }
+
+    /// The History entry a finished job's result was saved as.
+    fn saved_history_id(&self, job_id: u64) -> Option<i64> {
+        self.record(job_id)
+            .filter(|record| is_finished(record.snapshot.status))?
+            .result
+            .as_ref()?
+            .history_id
+    }
+
+    /// Takes the oldest queued job (of either kind) and marks it
+    /// `Preparing`; a transcription job on `engine`.
     fn start_next(&mut self, engine: FileTranscriptionEngine) -> Option<StartedJob> {
         let record = self
             .jobs
             .iter_mut()
             .find(|job| job.snapshot.status == FileJobStatus::Queued)?;
         record.snapshot.status = FileJobStatus::Preparing;
-        record.snapshot.engine = engine;
+        if record.label.is_none() {
+            record.snapshot.engine = engine;
+        }
         record.last_progress_emit = None;
         Some(StartedJob {
             job_id: record.snapshot.job_id,
@@ -604,14 +1244,17 @@ impl JobTable {
             options: record.options.clone(),
             token: record.token.clone(),
             snapshot: record.snapshot.clone(),
+            label: record.label.clone(),
         })
     }
 
-    /// Sets `engine` on the queued jobs; returns the snapshots that changed.
+    /// Sets `engine` on the queued transcription jobs; returns the snapshots
+    /// that changed.
     fn refresh_queued_engine(&mut self, engine: FileTranscriptionEngine) -> Vec<FileJobSnapshot> {
         self.jobs
             .iter_mut()
             .filter(|job| job.snapshot.status == FileJobStatus::Queued)
+            .filter(|job| job.label.is_none())
             .filter(|job| job.snapshot.engine != engine)
             .map(|job| {
                 job.snapshot.engine = engine;
@@ -627,7 +1270,7 @@ impl JobTable {
         match record.snapshot.status {
             FileJobStatus::Queued => {
                 record.snapshot.status = FileJobStatus::Cancelled;
-                Ok(Cancellation::Dequeued(record.snapshot.clone()))
+                Ok(Cancellation::Dequeued(Box::new(record.snapshot.clone())))
             }
             FileJobStatus::Preparing | FileJobStatus::Waiting | FileJobStatus::Transcribing => {
                 record.token.cancel();
@@ -647,7 +1290,7 @@ impl JobTable {
         let ids: Vec<u64> = self.jobs.iter().map(|job| job.snapshot.job_id).collect();
         for job_id in ids {
             match self.cancel(job_id) {
-                Ok(Cancellation::Dequeued(snapshot)) => dequeued.push(snapshot),
+                Ok(Cancellation::Dequeued(snapshot)) => dequeued.push(*snapshot),
                 Ok(Cancellation::Running(token)) => running.push(token),
                 Err(_) => {}
             }
@@ -671,27 +1314,47 @@ impl JobTable {
                 job_id
             ));
         }
+        if self.is_label_target(job_id) {
+            return Err(
+                "Speaker labels are being made for this transcript; cancel them first".to_string(),
+            );
+        }
         self.jobs.remove(index);
         Ok(())
     }
 
     /// Applies `edit` to a finished job's result; see
-    /// [`FileTranscriptionManager::edit_job_transcript`].
+    /// [`FileTranscriptionManager::edit_job_transcript`]. Also returns the
+    /// job's snapshot when the edit changed it.
     fn edit_result(
         &mut self,
         job_id: u64,
         edit: impl FnOnce(&mut FileTranscript) -> Result<(), String>,
-    ) -> Result<FileTranscript, String> {
-        let result = self.result_mut(job_id)?;
+    ) -> Result<(FileTranscript, Option<FileJobSnapshot>), String> {
+        let record = self.finished_record_mut(job_id)?;
+        let result = record
+            .result
+            .as_mut()
+            .ok_or_else(|| no_transcript(job_id))?;
         let mut edited = result.clone();
         edit(&mut edited)?;
+        let moved = edited.source_path != result.source_path;
         *result = edited.clone();
-        Ok(edited)
+        let changed = refresh_snapshot(&mut record.snapshot, &edited, moved);
+        Ok((edited, changed.then(|| record.snapshot.clone())))
     }
 
     /// A finished job's result; Err if the job is unknown, still running or
     /// has no result.
     fn result_mut(&mut self, job_id: u64) -> Result<&mut FileTranscript, String> {
+        self.finished_record_mut(job_id)?
+            .result
+            .as_mut()
+            .ok_or_else(|| no_transcript(job_id))
+    }
+
+    /// A finished job; Err if the job is unknown or still running.
+    fn finished_record_mut(&mut self, job_id: u64) -> Result<&mut JobRecord, String> {
         let record = self
             .record_mut(job_id)
             .ok_or_else(|| format!("Unknown file transcription job {}", job_id))?;
@@ -701,16 +1364,46 @@ impl JobTable {
                 job_id
             ));
         }
-        record
-            .result
-            .as_mut()
-            .ok_or_else(|| format!("File transcription job {} has no transcript", job_id))
+        Ok(record)
     }
 
-    /// Copies the speaker labels and text of History entry `history_id`
-    /// (`stored`) into the results saved as that entry; returns those jobs'
-    /// snapshots.
-    fn sync_history_speakers(
+    /// Stores the speaker labels a label job made from `expected` in job
+    /// `job_id`'s result, if that is still `expected`, with the recording's
+    /// new location when it was `relocated`. Returns the job's snapshot.
+    fn replace_result_if(
+        &mut self,
+        job_id: u64,
+        expected: &FileTranscript,
+        mut labelled: FileTranscript,
+        relocated: Option<(String, Option<i64>)>,
+    ) -> Result<FileJobSnapshot, String> {
+        let record = self
+            .finished_record_mut(job_id)
+            .map_err(|_| TRANSCRIPT_GONE.to_string())?;
+        let result = record
+            .result
+            .as_mut()
+            .ok_or_else(|| TRANSCRIPT_GONE.to_string())?;
+        if *result != *expected {
+            return Err(TRANSCRIPT_CHANGED.to_string());
+        }
+        let moved = relocated.is_some();
+        if let Some((path, modified_at)) = relocated {
+            labelled.source_path = path;
+            record.source = Some(SourceIdentity {
+                size_bytes: record.source.and_then(|source| source.size_bytes),
+                modified_at,
+            });
+        }
+        *result = labelled;
+        refresh_snapshot(&mut record.snapshot, result, moved);
+        Ok(record.snapshot.clone())
+    }
+
+    /// Copies the speaker labels, turns, segments, text and recording path
+    /// of History entry `history_id` (`stored`) into the results saved as
+    /// that entry; returns those jobs' snapshots.
+    fn sync_history_transcript(
         &mut self,
         history_id: i64,
         stored: &FileTranscript,
@@ -722,8 +1415,13 @@ impl JobTable {
                     .result
                     .as_mut()
                     .filter(|result| result.history_id == Some(history_id))?;
+                let moved = result.source_path != stored.source_path;
                 result.speakers = stored.speakers.clone();
                 result.text = stored.text.clone();
+                result.paragraphs = stored.paragraphs.clone();
+                result.segments = stored.segments.clone();
+                result.source_path = stored.source_path.clone();
+                refresh_snapshot(&mut job.snapshot, result, moved);
                 Some(job.snapshot.clone())
             })
             .collect()
@@ -847,23 +1545,39 @@ impl JobTable {
                 snapshot.processed_ms = transcript.duration_ms;
             }
         }
+        if record.label.is_some() && finish.status == FileJobStatus::Completed {
+            // The diarizer's last window may end short of the span asked for.
+            snapshot.processed_ms = snapshot.duration_ms.unwrap_or(snapshot.processed_ms);
+        }
+        if finish.speakers.is_some() {
+            snapshot.speakers = finish.speakers;
+        }
+        if finish.source.is_some() {
+            record.source = finish.source;
+        }
         record.result = finish.result;
         // The result holds everything the live view had.
         record.transcript = TranscriptBuilder::default();
         Some(snapshot.clone())
     }
 
-    /// Drops the oldest finished jobs beyond `keep`; returns their ids.
+    /// Drops the oldest finished jobs beyond `keep`; returns their ids. A
+    /// job an unfinished speaker-label job targets is kept.
     fn evict_finished(&mut self, keep: usize) -> Vec<u64> {
-        let finished = self
+        let kept: Vec<u64> = self
             .jobs
             .iter()
-            .filter(|job| is_finished(job.snapshot.status))
-            .count();
+            .map(|job| job.snapshot.job_id)
+            .filter(|&job_id| self.is_label_target(job_id))
+            .collect();
+        let evictable = |job: &JobRecord| {
+            is_finished(job.snapshot.status) && !kept.contains(&job.snapshot.job_id)
+        };
+        let finished = self.jobs.iter().filter(|job| evictable(job)).count();
         let mut excess = finished.saturating_sub(keep);
         let mut evicted = Vec::new();
         self.jobs.retain(|job| {
-            if excess > 0 && is_finished(job.snapshot.status) {
+            if excess > 0 && evictable(job) {
                 excess -= 1;
                 evicted.push(job.snapshot.job_id);
                 false
@@ -873,6 +1587,10 @@ impl JobTable {
         });
         evicted
     }
+}
+
+fn no_transcript(job_id: u64) -> String {
+    format!("File transcription job {} has no transcript", job_id)
 }
 
 /// Sets the status; true if it changed.
@@ -923,6 +1641,8 @@ mod tests {
             error: None,
             decoder: Some(DecoderKind::Symphonia),
             result,
+            source: None,
+            speakers: None,
         }
     }
 
@@ -1425,6 +2145,8 @@ mod tests {
                     }),
                     decoder: None,
                     result: None,
+                    source: None,
+                    speakers: None,
                 },
             )
             .expect("job exists");
@@ -1538,7 +2260,7 @@ mod tests {
             1,
             finished(FileJobStatus::Completed, Some(transcript("Hi."))),
         );
-        let edited = table.edit_result(1, rename).expect("edit");
+        let (edited, _) = table.edit_result(1, rename).expect("edit");
         assert_eq!(edited.text, "Edited.");
         assert_eq!(table.transcript(1, 0).expect("result").text, "Edited.");
 
@@ -1604,9 +2326,13 @@ mod tests {
             }),
             ..transcript("Ann: Hi.")
         };
-        let synced = table.sync_history_speakers(10, &stored);
+        let synced = table.sync_history_transcript(10, &stored);
 
         assert_eq!(synced.iter().map(|job| job.job_id).collect::<Vec<_>>(), [2]);
+        assert_eq!(
+            synced[0].speakers,
+            Some(SpeakerJobState::Done { speakers: 1 })
+        );
         let result = table.transcript(2, 0).expect("result");
         assert_eq!(result.text, "Ann: Hi.");
         assert_eq!(result.speakers, stored.speakers);
@@ -1614,6 +2340,532 @@ mod tests {
         let other = table.transcript(1, 0).expect("result");
         assert_eq!(other.text, "Speaker 1: Hi.");
         assert_eq!(other.speakers, None);
+        assert_eq!(table.record(1).expect("job").snapshot.speakers, None);
         assert!(table.record(3).expect("job").result.is_none());
+    }
+
+    #[test]
+    fn sync_history_transcript_copies_turns() {
+        let mut table = table_with_queued(1);
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+        table.finish(
+            1,
+            finished(FileJobStatus::Completed, Some(transcript("Hi. Bye."))),
+        );
+
+        // New labels, with the recording found elsewhere.
+        let (labelled, _) = labelled_transcript(3);
+        let stored = FileTranscript {
+            source_path: "/found/file-1.mp3".to_string(),
+            history_id: Some(9),
+            ..labelled
+        };
+        let synced = table.sync_history_transcript(9, &stored);
+        assert_eq!(synced.len(), 1);
+        assert_eq!(
+            synced[0].speakers,
+            Some(SpeakerJobState::Done { speakers: 3 })
+        );
+        assert_eq!(synced[0].path, "/found/file-1.mp3");
+        let result = table.transcript(1, 0).expect("result");
+        assert_eq!(result.paragraphs, stored.paragraphs);
+        assert_eq!(result.segments, stored.segments);
+        assert_eq!(result.text, stored.text);
+        assert_eq!(result.source_path, "/found/file-1.mp3");
+        // What the job itself knows stays.
+        assert_eq!(result.model_name.as_deref(), Some("Tiny"));
+        assert_eq!(result.created_at, 1_700_000_000);
+    }
+
+    /// A transcript with `speakers` speakers, one per sentence, and its
+    /// sentences' texts.
+    fn labelled_transcript(speakers: u32) -> (FileTranscript, Vec<String>) {
+        use crate::file_transcription::speakers::{apply_speakers, MergeOptions, SpeakerTurn};
+        let texts: Vec<String> = (0..speakers).map(|i| format!("Part {i}.")).collect();
+        let segments: Vec<TranscriptSegment> = texts
+            .iter()
+            .enumerate()
+            .map(|(i, text)| segment(i as u64 * 2_000, (i as u64 + 1) * 2_000, text))
+            .collect();
+        let mut t = FileTranscript {
+            timing: TimingGrain::Segment,
+            paragraphs: segments.clone(),
+            segments,
+            ..transcript(&texts.join("\n\n"))
+        };
+        let turns: Vec<SpeakerTurn> = (0..speakers)
+            .map(|i| SpeakerTurn {
+                start_ms: u64::from(i) * 2_000,
+                end_ms: (u64::from(i) + 1) * 2_000,
+                speaker: 10 + i,
+            })
+            .collect();
+        let options = MergeOptions::for_transcript(&t);
+        apply_speakers(&mut t, &turns, DIARIZER_MODEL_ID, &options);
+        t.history_id = None;
+        (t, texts)
+    }
+
+    fn label_request(target: TranscriptSource) -> LabelJobRequest {
+        LabelJobRequest {
+            target,
+            replace: false,
+            path: "/audio/talk.m4a".to_string(),
+            path_override: false,
+            file_name: "talk.m4a".to_string(),
+            duration_ms: 600_000,
+            limit_ms: None,
+        }
+    }
+
+    #[test]
+    fn label_job_snapshot() {
+        let mut table = table_with_queued(1);
+        let target = TranscriptSource::History { history_id: 4 };
+        let snapshot = table.add_label(2, label_request(target), Ok(()), 5_000);
+        assert_eq!(snapshot.labels_for, Some(target));
+        assert_eq!(snapshot.status, FileJobStatus::Queued);
+        assert_eq!(snapshot.speakers, Some(SpeakerJobState::Pending));
+        assert_eq!(snapshot.duration_ms, Some(600_000));
+        assert_eq!(snapshot.model_id.as_deref(), Some(DIARIZER_MODEL_ID));
+        assert_eq!(snapshot.file_name, "talk.m4a");
+        assert!(!snapshot.has_transcript);
+        assert_eq!(snapshot.history_id, None);
+        // Transcription jobs label nothing.
+        assert_eq!(table.record(1).expect("job").snapshot.labels_for, None);
+
+        // A partial transcript is diarized up to its limit.
+        let partial = table.add_label(
+            3,
+            LabelJobRequest {
+                limit_ms: Some(90_000),
+                ..label_request(TranscriptSource::Job { job_id: 1 })
+            },
+            Ok(()),
+            5_001,
+        );
+        assert_eq!(partial.duration_ms, Some(90_000));
+        let missing = table.add_label(
+            4,
+            label_request(TranscriptSource::Job { job_id: 7 }),
+            Err(FileJobError {
+                code: FileJobErrorCode::NotFound,
+                message: "gone".to_string(),
+            }),
+            5_002,
+        );
+        assert_eq!(missing.status, FileJobStatus::Failed);
+        table.add(
+            5,
+            "/audio/file-5.mp3".to_string(),
+            WITH_HISTORY,
+            FileTranscriptionEngine::Handy,
+            Ok(()),
+            5_003,
+        );
+
+        // The engine setting never touches a label job.
+        let refreshed = table.refresh_queued_engine(FileTranscriptionEngine::Lemonade);
+        assert_eq!(
+            refreshed.iter().map(|job| job.job_id).collect::<Vec<_>>(),
+            [1, 5]
+        );
+        assert_eq!(
+            table.record(2).expect("job").snapshot.engine,
+            FileTranscriptionEngine::Handy
+        );
+
+        // One queue, in the order jobs were added, of both kinds.
+        let order: Vec<(u64, bool)> = std::iter::from_fn(|| {
+            let started = table.start_next(FileTranscriptionEngine::Lemonade)?;
+            let finish = finished(FileJobStatus::Completed, None);
+            table.finish(started.job_id, finish);
+            Some((started.job_id, started.label.is_some()))
+        })
+        .collect();
+        assert_eq!(order, [(1, false), (2, true), (3, true), (5, false)]);
+        assert_eq!(
+            table.record(2).expect("job").snapshot.engine,
+            FileTranscriptionEngine::Handy
+        );
+    }
+
+    #[test]
+    fn label_progress() {
+        let mut table = JobTable::default();
+        table.add_label(
+            1,
+            label_request(TranscriptSource::History { history_id: 4 }),
+            Ok(()),
+            1,
+        );
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+        let start = Instant::now();
+        let mut through_ms = 0;
+        let mut apply = |table: &mut JobTable, progress, at_ms: u64| {
+            let event = progress_event(progress, &mut through_ms);
+            table.apply(
+                1,
+                DIARIZER_MODEL_ID,
+                event,
+                start + Duration::from_millis(at_ms),
+            )
+        };
+
+        // Held for dictation, then running: both sent at once.
+        assert_eq!(
+            updated_count(&apply(&mut table, DiarizeProgress::Waiting, 0)),
+            1
+        );
+        assert_eq!(status(&table, 1), FileJobStatus::Waiting);
+        assert_eq!(
+            updated_count(&apply(&mut table, DiarizeProgress::Running, 10)),
+            1
+        );
+        assert_eq!(status(&table, 1), FileJobStatus::Transcribing);
+        assert_eq!(table.record(1).expect("job").snapshot.processed_ms, 0);
+
+        // A finished window is progress: throttled, but recorded.
+        let window = DiarizeProgress::Diarized {
+            through_ms: 1_200_000,
+        };
+        assert_eq!(updated_count(&apply(&mut table, window, 100)), 0);
+        assert_eq!(
+            table.record(1).expect("job").snapshot.processed_ms,
+            1_200_000
+        );
+        // The next window running never moves it back.
+        assert_eq!(
+            updated_count(&apply(&mut table, DiarizeProgress::Running, 400)),
+            1
+        );
+        assert_eq!(
+            table.record(1).expect("job").snapshot.processed_ms,
+            1_200_000
+        );
+        let earlier = DiarizeProgress::Diarized { through_ms: 5_000 };
+        apply(&mut table, earlier, 800);
+        assert_eq!(
+            table.record(1).expect("job").snapshot.processed_ms,
+            1_200_000
+        );
+
+        let snapshot = table
+            .finish(
+                1,
+                JobFinish::label_completed(SpeakerJobState::Done { speakers: 3 }),
+            )
+            .expect("job");
+        assert_eq!(snapshot.status, FileJobStatus::Completed);
+        assert_eq!(snapshot.processed_ms, 600_000);
+        assert_eq!(
+            snapshot.speakers,
+            Some(SpeakerJobState::Done { speakers: 3 })
+        );
+        assert!(!snapshot.has_transcript);
+        assert_eq!(snapshot.history_id, None);
+        assert!(snapshot.error.is_none());
+
+        // Failed and cancelled label jobs say why in their speaker state.
+        let failed = JobFinish::label_failed(FileJobErrorCode::SourceChanged, "moved".to_string());
+        assert_eq!(
+            failed.speakers,
+            Some(SpeakerJobState::Failed {
+                message: "moved".to_string()
+            })
+        );
+        assert_eq!(
+            JobFinish::label_cancelled().status,
+            FileJobStatus::Cancelled
+        );
+        assert!(JobFinish::label_cancelled().error.is_none());
+    }
+
+    #[test]
+    fn evict_and_dismiss_keep_label_targets() {
+        let mut table = table_with_queued(2);
+        for _ in 0..2 {
+            let started = table
+                .start_next(FileTranscriptionEngine::Handy)
+                .expect("start");
+            let mut result = transcript("Hi.");
+            result.history_id = None;
+            table.finish(
+                started.job_id,
+                finished(FileJobStatus::Completed, Some(result)),
+            );
+        }
+        table.add_label(
+            3,
+            label_request(TranscriptSource::Job { job_id: 1 }),
+            Ok(()),
+            3,
+        );
+
+        let err = table.dismiss(1).expect_err("a label job targets it");
+        assert!(err.contains("Speaker labels"), "{err}");
+        assert_eq!(table.evict_finished(0), vec![2]);
+        assert!(table.record(1).is_some());
+
+        // Once the label job has ended, the target goes like any other.
+        table.cancel(3).expect("cancel the label job");
+        assert_eq!(table.evict_finished(1), vec![1]);
+        table.dismiss(3).expect("dismiss");
+        assert!(table.snapshots().is_empty());
+    }
+
+    #[test]
+    fn canonical_targets() {
+        let job = TranscriptSource::Job { job_id: 1 };
+        let entry = TranscriptSource::History { history_id: 9 };
+        let exists = |_| Ok(true);
+        let deleted = |_| Ok(false);
+        assert_eq!(canonical_target_with(job, |_| Some(9), exists), Ok(entry));
+        assert_eq!(canonical_target_with(job, |_| Some(9), deleted), Ok(job));
+        assert_eq!(canonical_target_with(job, |_| None, exists), Ok(job));
+        assert_eq!(
+            canonical_target_with(entry, |_| panic!("not a job"), |_| panic!("no lookup")),
+            Ok(entry)
+        );
+        assert_eq!(
+            canonical_target_with(job, |_| Some(9), |_| Err("db".to_string())),
+            Err("db".to_string())
+        );
+
+        // The History id is read from a finished job's result only.
+        let mut table = table_with_queued(2);
+        assert_eq!(table.saved_history_id(1), None);
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+        table.finish(
+            1,
+            finished(FileJobStatus::Completed, Some(transcript("Hi."))),
+        );
+        assert_eq!(table.saved_history_id(1), Some(9));
+        assert_eq!(table.saved_history_id(2), None);
+    }
+
+    #[test]
+    fn duplicate_label_jobs_and_edits_see_one_target() {
+        // Job 1 was saved as History entry 9, which still exists.
+        let mut table = table_with_queued(1);
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+        table.finish(
+            1,
+            finished(FileJobStatus::Completed, Some(transcript("Hi."))),
+        );
+        let canonical = |table: &JobTable, source| {
+            canonical_target_with(
+                source,
+                |job_id| table.saved_history_id(job_id),
+                |_| Ok(true),
+            )
+            .expect("canonical")
+        };
+        let from_job = canonical(&table, TranscriptSource::Job { job_id: 1 });
+        let from_entry = canonical(&table, TranscriptSource::History { history_id: 9 });
+        assert_eq!(from_job, from_entry);
+
+        assert!(!table.label_job_active(from_entry));
+        table.add_label(2, label_request(from_job), Ok(()), 2);
+        // A second label job, and every edit, is refused for both spellings.
+        assert!(table.label_job_active(from_job));
+        assert!(table.label_job_active(from_entry));
+        assert!(!table.label_job_active(TranscriptSource::History { history_id: 10 }));
+        // Running counts too; finished does not.
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start the label job");
+        assert!(table.label_job_active(from_entry));
+        table.finish(2, JobFinish::label_cancelled());
+        assert!(!table.label_job_active(from_entry));
+    }
+
+    #[test]
+    fn replace_result_if() {
+        let mut table = table_with_queued(2);
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+        let (labelled, _) = labelled_transcript(3);
+        let mut expected = labelled.clone();
+        crate::file_transcription::speakers::clear_speakers(&mut expected);
+        table.finish(
+            1,
+            JobFinish {
+                source: Some(SourceIdentity {
+                    size_bytes: Some(10),
+                    modified_at: Some(5),
+                }),
+                ..finished(FileJobStatus::Cancelled, Some(expected.clone()))
+            },
+        );
+
+        // Not when the result changed since the job read it.
+        let other = FileTranscript {
+            text: "Edited.".to_string(),
+            ..expected.clone()
+        };
+        let err = table
+            .replace_result_if(1, &other, labelled.clone(), None)
+            .expect_err("changed");
+        assert_eq!(err, TRANSCRIPT_CHANGED);
+        assert_eq!(table.transcript(1, 0), Some(expected.clone()));
+
+        // Written, and the row shows the count.
+        let snapshot = table
+            .replace_result_if(1, &expected, labelled.clone(), None)
+            .expect("write");
+        assert_eq!(
+            snapshot.speakers,
+            Some(SpeakerJobState::Done { speakers: 3 })
+        );
+        assert_eq!(snapshot.path, "/audio/file-1.mp3");
+        assert_eq!(table.transcript(1, 0), Some(labelled.clone()));
+
+        // A found recording moves the row and the result.
+        let snapshot = table
+            .replace_result_if(
+                1,
+                &labelled,
+                labelled.clone(),
+                Some(("/found/file-1.mp3".to_string(), Some(77))),
+            )
+            .expect("write");
+        assert_eq!(snapshot.path, "/found/file-1.mp3");
+        assert_eq!(
+            table.transcript(1, 0).map(|t| t.source_path),
+            Some("/found/file-1.mp3".to_string())
+        );
+        assert_eq!(
+            table.record(1).expect("job").source,
+            Some(SourceIdentity {
+                size_bytes: Some(10),
+                modified_at: Some(77),
+            })
+        );
+
+        // Gone, or not finished.
+        assert!(table
+            .replace_result_if(2, &expected, labelled.clone(), None)
+            .is_err());
+        assert!(table
+            .replace_result_if(42, &expected, labelled, None)
+            .is_err());
+    }
+
+    #[test]
+    fn edit_result_updates_speaker_count() {
+        use crate::file_transcription::speakers::{merge_speakers, rename_speaker};
+        let mut table = table_with_queued(1);
+        table
+            .start_next(FileTranscriptionEngine::Handy)
+            .expect("start");
+        let (labelled, _) = labelled_transcript(3);
+        table.finish(
+            1,
+            JobFinish {
+                speakers: Some(SpeakerJobState::Done { speakers: 3 }),
+                ..finished(FileJobStatus::Completed, Some(labelled))
+            },
+        );
+        assert_eq!(
+            table.record(1).expect("job").snapshot.speakers,
+            Some(SpeakerJobState::Done { speakers: 3 })
+        );
+
+        let (edited, snapshot) = table
+            .edit_result(1, |t| merge_speakers(t, 3, 2))
+            .expect("merge");
+        assert_eq!(edited.speakers.map(|s| s.speakers.len()), Some(2));
+        let snapshot = snapshot.expect("the count changed");
+        assert_eq!(
+            snapshot.speakers,
+            Some(SpeakerJobState::Done { speakers: 2 })
+        );
+
+        // A rename changes no count, so nothing to send.
+        let (_, snapshot) = table
+            .edit_result(1, |t| rename_speaker(t, 1, Some("Ann")))
+            .expect("rename");
+        assert!(snapshot.is_none());
+    }
+
+    #[test]
+    fn speaker_state_of_a_row_follows_its_result() {
+        let labels = |n: usize| TranscriptSpeakers {
+            speakers: (1..=n as u32)
+                .map(|id| TranscriptSpeaker { id, name: None })
+                .collect(),
+            approximate: false,
+            unassigned_segments: 0,
+            model: "m".to_string(),
+        };
+        let skipped = SpeakerJobState::Skipped {
+            reason: SpeakerSkipReason::ModelMissing,
+        };
+        assert_eq!(
+            speaker_job_state(None, Some(&labels(2))),
+            Some(SpeakerJobState::Done { speakers: 2 })
+        );
+        assert_eq!(
+            speaker_job_state(Some(&skipped), Some(&labels(1))),
+            Some(SpeakerJobState::Done { speakers: 1 })
+        );
+        assert_eq!(speaker_job_state(Some(&skipped), None), Some(skipped));
+        assert_eq!(
+            speaker_job_state(Some(&SpeakerJobState::Done { speakers: 2 }), None),
+            None
+        );
+        assert_eq!(speaker_job_state(None, None), None);
+    }
+
+    #[test]
+    fn undo_slot() {
+        use crate::file_transcription::speakers::{merge_speakers, rename_speaker};
+        let target = TranscriptSource::History { history_id: 1 };
+        let (original, _) = labelled_transcript(3);
+        let mut edited = original.clone();
+        merge_speakers(&mut edited, 3, 2).expect("merge");
+        let undo = SpeakerUndo {
+            target,
+            before: SpeakerState::of(&original),
+            after: SpeakerState::of(&edited),
+        };
+
+        let mut slot = UndoSlot::default();
+        slot.remember(undo.clone());
+        // Another transcript has nothing to undo.
+        assert!(slot
+            .take(TranscriptSource::History { history_id: 2 })
+            .is_none());
+        let taken = slot.take(target).expect("undo");
+        // Once only.
+        assert!(slot.take(target).is_none());
+
+        // Not when the transcript changed since the edit.
+        let mut changed = edited.clone();
+        rename_speaker(&mut changed, 1, Some("Ann")).expect("rename");
+        let before_undo = changed.clone();
+        assert!(taken.undo(&mut changed).is_err());
+        assert_eq!(changed, before_undo);
+        // Restores what was there before the edit.
+        taken.undo(&mut edited).expect("undo");
+        assert_eq!(edited, original);
+
+        // New labels drop it, for their transcript only.
+        slot.remember(undo);
+        slot.forget(TranscriptSource::Job { job_id: 1 });
+        slot.forget(TranscriptSource::History { history_id: 2 });
+        assert!(slot.0.is_some());
+        slot.forget(target);
+        assert!(slot.take(target).is_none());
     }
 }

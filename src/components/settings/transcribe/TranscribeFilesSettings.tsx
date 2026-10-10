@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { FileJobSnapshot, ModelInfo } from "@/bindings";
+import type { FileJobSnapshot, ModelInfo, TranscriptSource } from "@/bindings";
 import { useSettings } from "@/hooks/useSettings";
 import { useModelStore } from "@/stores/modelStore";
 import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
@@ -17,7 +17,7 @@ import { SpeakerLabelsToggle } from "./SpeakerLabelsToggle";
 import { TranscriptDialog } from "./TranscriptDialog";
 
 interface ViewedJob {
-  jobId: number;
+  source: TranscriptSource;
   fileName: string;
 }
 
@@ -160,12 +160,7 @@ export const TranscribeFilesSettings: React.FC = () => {
                   key={job.job_id}
                   job={job}
                   noSpeech={noSpeech[job.job_id] === true}
-                  onView={(viewedJob) =>
-                    setViewed({
-                      jobId: viewedJob.job_id,
-                      fileName: viewedJob.file_name,
-                    })
-                  }
+                  onView={(source, fileName) => setViewed({ source, fileName })}
                 />
               ))}
             </div>
@@ -174,7 +169,7 @@ export const TranscribeFilesSettings: React.FC = () => {
       )}
 
       <TranscriptDialog
-        source={viewed ? { kind: "job", job_id: viewed.jobId } : null}
+        source={viewed?.source ?? null}
         fileName={viewed?.fileName ?? ""}
         onClose={() => setViewed(null)}
       />

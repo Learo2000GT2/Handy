@@ -8,6 +8,7 @@ pub mod engine;
 pub mod export;
 pub mod ffmpeg;
 pub mod formats;
+pub mod label_job;
 pub mod lemonade;
 pub mod manager;
 pub mod pipeline;

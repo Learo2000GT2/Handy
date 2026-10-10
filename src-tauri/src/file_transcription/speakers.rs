@@ -682,37 +682,254 @@ fn coalesce(source: &[TranscriptSegment], pieces: Vec<Piece>) -> Vec<TranscriptS
         .collect()
 }
 
-/// Paragraphs as speaker turns: a new one when the speaker changes, or when
-/// a monologue reaches `max_paragraph_ms` at a sentence end (twice that
-/// anywhere). An unlabelled segment joins the paragraph it follows; one that
-/// comes first starts an unlabelled paragraph, which a labelled segment never
-/// joins (its text would be shown under that speaker).
+/// Paragraphs as speaker turns, one per [`turn_ranges`] range: the first
+/// segment's start and speaker, the texts joined, the latest end.
 fn speaker_paragraphs(
     segments: &[TranscriptSegment],
     opts: &MergeOptions,
 ) -> Vec<TranscriptSegment> {
     let separator = if opts.no_space { "" } else { " " };
-    let mut paragraphs: Vec<TranscriptSegment> = Vec::new();
-    let mut last_text: Option<&str> = None;
-    for segment in segments {
-        let continues = paragraphs.last().is_some_and(|current| {
-            let span = current.end_ms.saturating_sub(current.start_ms);
-            let speaker_changed = segment.speaker.is_some() && segment.speaker != current.speaker;
+    turn_ranges(segments, opts)
+        .into_iter()
+        .map(|range| {
+            let mut paragraph = segments[range.start].clone();
+            for segment in &segments[range.start + 1..range.end] {
+                paragraph.text.push_str(separator);
+                paragraph.text.push_str(&segment.text);
+                paragraph.end_ms = paragraph.end_ms.max(segment.end_ms);
+            }
+            paragraph
+        })
+        .collect()
+}
+
+/// The segments of each speaker turn: a new turn when the speaker changes,
+/// or when a monologue reaches `max_paragraph_ms` at a sentence end (twice
+/// that anywhere). An unlabelled segment joins the turn it follows; one that
+/// comes first starts an unlabelled turn, which a labelled segment never
+/// joins (its text would be shown under that speaker).
+fn turn_ranges(segments: &[TranscriptSegment], opts: &MergeOptions) -> Vec<Range<usize>> {
+    let mut ranges: Vec<Range<usize>> = Vec::new();
+    // Latest end of the current turn's segments.
+    let mut turn_end_ms: u64 = 0;
+    for (index, segment) in segments.iter().enumerate() {
+        let continues = ranges.last().is_some_and(|current| {
+            let first = &segments[current.start];
+            let span = turn_end_ms.saturating_sub(first.start_ms);
+            let speaker_changed = segment.speaker.is_some() && segment.speaker != first.speaker;
             let monologue_ends = span >= 2 * opts.max_paragraph_ms
-                || (span >= opts.max_paragraph_ms && last_text.is_some_and(ends_sentence));
+                || (span >= opts.max_paragraph_ms && ends_sentence(&segments[index - 1].text));
             !speaker_changed && !monologue_ends
         });
-        match paragraphs.last_mut() {
+        match ranges.last_mut() {
             Some(current) if continues => {
-                current.text.push_str(separator);
-                current.text.push_str(&segment.text);
-                current.end_ms = current.end_ms.max(segment.end_ms);
+                current.end = index + 1;
+                turn_end_ms = turn_end_ms.max(segment.end_ms);
             }
-            _ => paragraphs.push(segment.clone()),
+            _ => {
+                ranges.push(index..index + 1);
+                turn_end_ms = segment.end_ms;
+            }
         }
-        last_text = Some(&segment.text);
     }
-    paragraphs
+    ranges
+}
+
+/// The segments each stored paragraph was built from, found by walking the
+/// segments in order: a paragraph's first segment starts when it does, and
+/// its segments' texts joined (by "" in a language written without spaces,
+/// else " ") are its text. Works for paragraphs built by any rule that joins
+/// consecutive segments. None when the paragraphs and segments don't match
+/// that way, or segments are left over.
+pub fn paragraph_ranges(t: &FileTranscript) -> Option<Vec<Range<usize>>> {
+    let separator = if is_no_space_language(t.language.as_deref()) {
+        ""
+    } else {
+        " "
+    };
+    let mut ranges = Vec::with_capacity(t.paragraphs.len());
+    let mut next = 0;
+    for paragraph in &t.paragraphs {
+        let start = next;
+        if t.segments.get(start)?.start_ms != paragraph.start_ms {
+            return None;
+        }
+        // Bytes of the paragraph's text matched so far.
+        let mut matched = 0;
+        loop {
+            let segment = t.segments.get(next)?;
+            let rest = &paragraph.text[matched..];
+            let rest = if next > start {
+                matched += separator.len();
+                rest.strip_prefix(separator)?
+            } else {
+                rest
+            };
+            if !rest.starts_with(segment.text.as_str()) {
+                return None;
+            }
+            matched += segment.text.len();
+            next += 1;
+            if matched == paragraph.text.len() {
+                break;
+            }
+        }
+        ranges.push(start..next);
+    }
+    (next == t.segments.len()).then_some(ranges)
+}
+
+/// Removes every speaker label: from the segments, the paragraphs and the
+/// text. The paragraphs stay as they are (speaker turns).
+pub fn clear_speakers(t: &mut FileTranscript) {
+    for segment in t.segments.iter_mut().chain(t.paragraphs.iter_mut()) {
+        segment.speaker = None;
+    }
+    t.speakers = None;
+    t.text = render_text(&t.paragraphs, None);
+}
+
+/// Gives all of speaker `from`'s passages to speaker `into`, which keeps its
+/// name (or takes `from`'s when it has none); `from` is removed. Turns of
+/// the same speaker that now meet are joined. Ids are never renumbered.
+/// Err (leaving `t` unchanged) without labels, when `from == into`, or for
+/// an unknown id.
+pub fn merge_speakers(t: &mut FileTranscript, from: u32, into: u32) -> Result<(), String> {
+    let speakers = t
+        .speakers
+        .as_ref()
+        .ok_or_else(|| "This transcript has no speaker labels".to_string())?;
+    if from == into {
+        return Err("A speaker can't be merged into itself".to_string());
+    }
+    let name_of = |id: u32| {
+        speakers
+            .speakers
+            .iter()
+            .find(|speaker| speaker.id == id)
+            .map(|speaker| speaker.name.clone())
+            .ok_or_else(|| format!("This transcript has no speaker {id}"))
+    };
+    let (from_name, into_name) = (name_of(from)?, name_of(into)?);
+    if paragraph_ranges(t).is_none() {
+        return Err(STALE_TURNS.to_string());
+    }
+
+    if let Some(speakers) = t.speakers.as_mut() {
+        for speaker in &mut speakers.speakers {
+            if speaker.id == into {
+                speaker.name = into_name.clone().or(from_name.clone());
+            }
+        }
+    }
+    for segment in &mut t.segments {
+        if segment.speaker == Some(from) {
+            segment.speaker = Some(into);
+        }
+    }
+    relabel_turns(t);
+    Ok(())
+}
+
+/// What an edit of a turn reports when the transcript is not what the
+/// caller saw.
+const STALE_TURNS: &str = "The transcript changed; close it and open it again";
+
+/// Gives every segment of turn `paragraph` (unlabelled ones included) the
+/// speaker `to`, or a new speaker (the highest id + 1, unnamed) when `to` is
+/// None, and rebuilds the turns. The turn must still start at `start_ms`
+/// and belong to `from`, else the caller saw an older transcript and this
+/// fails. Returns the id given.
+pub fn reassign_turn(
+    t: &mut FileTranscript,
+    paragraph: usize,
+    start_ms: u64,
+    from: Option<u32>,
+    to: Option<u32>,
+) -> Result<u32, String> {
+    let speakers = t
+        .speakers
+        .as_ref()
+        .ok_or_else(|| "This transcript has no speaker labels".to_string())?;
+    let ranges = paragraph_ranges(t).ok_or_else(|| STALE_TURNS.to_string())?;
+    let turn = t
+        .paragraphs
+        .get(paragraph)
+        .filter(|turn| turn.start_ms == start_ms && turn.speaker == from)
+        .ok_or_else(|| STALE_TURNS.to_string())?;
+    let id = match to {
+        Some(id) if Some(id) == turn.speaker => {
+            return Err("The passage already has this speaker".to_string());
+        }
+        Some(id) if speakers.speakers.iter().any(|speaker| speaker.id == id) => id,
+        Some(id) => return Err(format!("This transcript has no speaker {id}")),
+        None => {
+            let listed = speakers.speakers.iter().map(|speaker| speaker.id);
+            let labelled = t.segments.iter().filter_map(|segment| segment.speaker);
+            listed.chain(labelled).max().unwrap_or(0) + 1
+        }
+    };
+    for segment in &mut t.segments[ranges[paragraph].clone()] {
+        segment.speaker = Some(id);
+    }
+    relabel_turns(t);
+    Ok(id)
+}
+
+/// Rebuilds what follows from the segments' speaker ids after they were
+/// edited: the speaker list in order of first appearance (names from the
+/// old list; None when no segment is labelled), the unassigned count, the
+/// turns and the text. Keeps `approximate` and `model`.
+fn relabel_turns(t: &mut FileTranscript) {
+    let old = t.speakers.take();
+    let mut speakers: Vec<TranscriptSpeaker> = Vec::new();
+    for id in t.segments.iter().filter_map(|segment| segment.speaker) {
+        if speakers.iter().all(|speaker| speaker.id != id) {
+            let name = old
+                .as_ref()
+                .and_then(|old| old.speakers.iter().find(|speaker| speaker.id == id))
+                .and_then(|speaker| speaker.name.clone());
+            speakers.push(TranscriptSpeaker { id, name });
+        }
+    }
+    t.paragraphs = speaker_paragraphs(&t.segments, &MergeOptions::for_transcript(t));
+    t.speakers = (!speakers.is_empty()).then(|| {
+        let unassigned = t.segments.iter().filter(|s| s.speaker.is_none()).count();
+        TranscriptSpeakers {
+            speakers,
+            approximate: old.as_ref().is_some_and(|old| old.approximate),
+            unassigned_segments: unassigned as u32,
+            model: old.map(|old| old.model).unwrap_or_default(),
+        }
+    });
+    t.text = render_text(&t.paragraphs, t.speakers.as_ref());
+}
+
+/// Everything a speaker edit can change, kept to undo it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpeakerState {
+    pub speakers: Option<TranscriptSpeakers>,
+    pub paragraphs: Vec<TranscriptSegment>,
+    pub segments: Vec<TranscriptSegment>,
+    pub text: String,
+}
+
+impl SpeakerState {
+    pub fn of(t: &FileTranscript) -> Self {
+        Self {
+            speakers: t.speakers.clone(),
+            paragraphs: t.paragraphs.clone(),
+            segments: t.segments.clone(),
+            text: t.text.clone(),
+        }
+    }
+
+    pub fn apply_to(&self, t: &mut FileTranscript) {
+        t.speakers = self.speakers.clone();
+        t.paragraphs = self.paragraphs.clone();
+        t.segments = self.segments.clone();
+        t.text = self.text.clone();
+    }
 }
 
 #[cfg(test)]
@@ -1045,6 +1262,7 @@ mod tests {
             ]
         );
         assert_eq!(t.text, "Um.\n\nSpeaker 1: Hello.\n\nSpeaker 2: Hi.");
+        assert_turns_consistent(&t);
     }
 
     #[test]
@@ -1110,6 +1328,7 @@ mod tests {
         apply(&mut t, &[turn(0, 4_000, 1)]);
         assert_eq!(t.paragraphs, vec![labelled(0, 4_000, "你好。很好。", 1)]);
         assert_eq!(t.text, "Speaker 1: 你好。很好。");
+        assert_turns_consistent(&t);
     }
 
     #[test]
@@ -1145,6 +1364,7 @@ mod tests {
         let starts: Vec<u64> = t.paragraphs.iter().map(|p| p.start_ms).collect();
         assert_eq!(starts, [0, 60_000, 120_000]);
         assert!(t.paragraphs.iter().all(|p| p.speaker == Some(1)));
+        assert_turns_consistent(&t);
 
         // Without any sentence end, it breaks at twice the limit.
         let segments = (0..15u64)
@@ -1154,6 +1374,7 @@ mod tests {
         apply(&mut t, &[turn(0, 150_000, 1)]);
         let starts: Vec<u64> = t.paragraphs.iter().map(|p| p.start_ms).collect();
         assert_eq!(starts, [0, 120_000]);
+        assert_turns_consistent(&t);
     }
 
     #[test]
@@ -1351,6 +1572,7 @@ mod tests {
             assert_eq!(paragraph.text, format!("Turn {i} begins. Turn {i} ends."));
             assert_eq!(paragraph.start_ms, ms(TRUTH[i].0));
         }
+        assert_turns_consistent(&t);
     }
 
     #[test]
@@ -1359,5 +1581,436 @@ mod tests {
         assert!(!MergeOptions::for_transcript(&t).no_space);
         t.language = Some("ja".to_string());
         assert!(MergeOptions::for_transcript(&t).no_space);
+    }
+
+    // ---- Speaker fixes ------------------------------------------------------
+
+    /// A labelled transcript of `segments`, its turns built by the current rule.
+    fn labelled_transcript(segments: Vec<TranscriptSegment>) -> FileTranscript {
+        let mut t = transcript(TimingGrain::Segment, segments);
+        t.speakers = Some(TranscriptSpeakers {
+            speakers: Vec::new(),
+            approximate: false,
+            unassigned_segments: 0,
+            model: "test-diarizer".to_string(),
+        });
+        relabel_turns(&mut t);
+        t
+    }
+
+    fn ids(t: &FileTranscript) -> Vec<u32> {
+        t.speakers
+            .as_ref()
+            .map(|s| s.speakers.iter().map(|speaker| speaker.id).collect())
+            .unwrap_or_default()
+    }
+
+    fn names(t: &FileTranscript) -> Vec<(u32, Option<String>)> {
+        t.speakers
+            .as_ref()
+            .map(|s| {
+                s.speakers
+                    .iter()
+                    .map(|speaker| (speaker.id, speaker.name.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn set_name(t: &mut FileTranscript, id: u32, name: &str) {
+        rename_speaker(t, id, Some(name)).expect("rename");
+    }
+
+    /// The turns of `t` are exactly what its segments give: `turn_ranges`
+    /// agrees with the stored paragraphs both ways.
+    fn assert_turns_consistent(t: &FileTranscript) {
+        let opts = MergeOptions::for_transcript(t);
+        assert_eq!(speaker_paragraphs(&t.segments, &opts), t.paragraphs);
+        assert_eq!(
+            paragraph_ranges(t),
+            Some(turn_ranges(&t.segments, &opts)),
+            "{t:?}"
+        );
+    }
+
+    /// Speakers 1, 2, 3, 2 in four one-sentence turns.
+    fn four_turns() -> FileTranscript {
+        labelled_transcript(vec![
+            labelled(0, 2_000, "One.", 1),
+            labelled(2_000, 4_000, "Two.", 2),
+            labelled(4_000, 6_000, "Three.", 3),
+            labelled(6_000, 8_000, "Four.", 2),
+        ])
+    }
+
+    #[test]
+    fn merge_moves_segments_and_rebuilds_turns() {
+        let mut t = four_turns();
+        assert_eq!(t.paragraphs.len(), 4);
+
+        merge_speakers(&mut t, 3, 2).expect("merge");
+        assert_eq!(
+            speakers_of(&t.segments),
+            [Some(1), Some(2), Some(2), Some(2)]
+        );
+        assert_eq!(
+            t.paragraphs,
+            vec![
+                labelled(0, 2_000, "One.", 1),
+                labelled(2_000, 8_000, "Two. Three. Four.", 2),
+            ]
+        );
+        assert_eq!(ids(&t), [1, 2]);
+        assert_eq!(t.text, "Speaker 1: One.\n\nSpeaker 2: Two. Three. Four.");
+        assert_turns_consistent(&t);
+
+        // Ids are never renumbered: merging 2 into 3 keeps 3.
+        let mut t = four_turns();
+        merge_speakers(&mut t, 2, 3).expect("merge");
+        assert_eq!(ids(&t), [1, 3]);
+        assert_eq!(t.text, "Speaker 1: One.\n\nSpeaker 3: Two. Three. Four.");
+    }
+
+    #[test]
+    fn merge_names() {
+        // An unnamed target takes the merged speaker's name.
+        let mut t = four_turns();
+        set_name(&mut t, 3, "Ann");
+        merge_speakers(&mut t, 3, 2).expect("merge");
+        assert_eq!(names(&t), [(1, None), (2, Some("Ann".to_string()))]);
+        assert_eq!(t.text, "Speaker 1: One.\n\nAnn: Two. Three. Four.");
+
+        // A named target keeps its name.
+        let mut t = four_turns();
+        set_name(&mut t, 2, "Bob");
+        set_name(&mut t, 3, "Ann");
+        merge_speakers(&mut t, 3, 2).expect("merge");
+        assert_eq!(names(&t), [(1, None), (2, Some("Bob".to_string()))]);
+
+        // The list follows first appearance; approximate and the unassigned
+        // count stay.
+        let mut t = labelled_transcript(vec![
+            labelled(0, 2_000, "One.", 1),
+            labelled(2_000, 4_000, "Two.", 2),
+            seg(4_000, 5_000, "Hmm."),
+            labelled(6_000, 8_000, "Three.", 3),
+        ]);
+        if let Some(speakers) = t.speakers.as_mut() {
+            speakers.approximate = true;
+        }
+        assert_eq!(t.speakers.as_ref().map(|s| s.unassigned_segments), Some(1));
+        merge_speakers(&mut t, 1, 3).expect("merge");
+        assert_eq!(ids(&t), [3, 2]);
+        let speakers = t.speakers.as_ref().expect("speakers");
+        assert!(speakers.approximate);
+        assert_eq!(speakers.unassigned_segments, 1);
+        assert_eq!(speakers.model, "test-diarizer");
+        assert_eq!(speakers_of(&t.segments), [Some(3), Some(2), None, Some(3)]);
+    }
+
+    #[test]
+    fn merge_errors() {
+        let plain = transcript(TimingGrain::Segment, vec![seg(0, 1_000, "Hi.")]);
+        let mut t = plain.clone();
+        assert!(merge_speakers(&mut t, 1, 2).is_err());
+        assert_eq!(t, plain);
+
+        let original = four_turns();
+        for (from, into) in [(2, 2), (9, 2), (2, 9)] {
+            let mut t = original.clone();
+            assert!(
+                merge_speakers(&mut t, from, into).is_err(),
+                "{from}->{into}"
+            );
+            assert_eq!(t, original);
+        }
+
+        // Turns that don't match the segments are not rebuilt from them.
+        let mut t = original.clone();
+        t.paragraphs[1].text = "Changed.".to_string();
+        let changed = t.clone();
+        assert!(merge_speakers(&mut t, 3, 2).is_err());
+        assert_eq!(t, changed);
+    }
+
+    #[test]
+    fn reassign_turn_cases() {
+        let one_two_one = || {
+            labelled_transcript(vec![
+                labelled(0, 2_000, "One.", 1),
+                labelled(2_000, 4_000, "Two.", 2),
+                labelled(4_000, 6_000, "Three.", 1),
+            ])
+        };
+
+        // To an existing speaker: the turns join, and the emptied speaker
+        // is removed with their name.
+        let mut t = one_two_one();
+        set_name(&mut t, 2, "Bob");
+        assert_eq!(reassign_turn(&mut t, 1, 2_000, Some(2), Some(1)), Ok(1));
+        assert_eq!(
+            t.paragraphs,
+            vec![labelled(0, 6_000, "One. Two. Three.", 1)]
+        );
+        assert_eq!(names(&t), [(1, None)]);
+        assert_eq!(t.text, "Speaker 1: One. Two. Three.");
+
+        // To a new speaker: the highest id + 1, unnamed.
+        let mut t = one_two_one();
+        assert_eq!(reassign_turn(&mut t, 2, 4_000, Some(1), None), Ok(3));
+        assert_eq!(ids(&t), [1, 2, 3]);
+        assert_eq!(speakers_of(&t.paragraphs), [Some(1), Some(2), Some(3)]);
+        assert_turns_consistent(&t);
+
+        // The unlabelled first turn can be given a speaker; it then joins
+        // the next turn of that speaker.
+        let mut t = labelled_transcript(vec![
+            seg(0, 1_000, "Um."),
+            labelled(5_000, 7_000, "Hello.", 1),
+            labelled(7_000, 8_000, "Hi.", 2),
+        ]);
+        assert_eq!(t.speakers.as_ref().map(|s| s.unassigned_segments), Some(1));
+        assert_eq!(reassign_turn(&mut t, 0, 0, None, Some(1)), Ok(1));
+        assert_eq!(
+            t.paragraphs,
+            vec![
+                labelled(0, 7_000, "Um. Hello.", 1),
+                labelled(7_000, 8_000, "Hi.", 2),
+            ]
+        );
+        assert_eq!(t.speakers.as_ref().map(|s| s.unassigned_segments), Some(0));
+
+        // What the caller saw is no longer there.
+        let original = one_two_one();
+        let stale: [(usize, u64, Option<u32>, Option<u32>); 6] = [
+            (1, 2_500, Some(2), Some(1)), // another start
+            (1, 2_000, Some(1), Some(2)), // another speaker
+            (1, 2_000, None, Some(1)),    // not unlabelled
+            (7, 2_000, Some(2), Some(1)), // no such turn
+            (1, 2_000, Some(2), Some(2)), // the same speaker
+            (1, 2_000, Some(2), Some(9)), // no such speaker
+        ];
+        for (paragraph, start_ms, from, to) in stale {
+            let mut t = original.clone();
+            assert!(
+                reassign_turn(&mut t, paragraph, start_ms, from, to).is_err(),
+                "{paragraph} {start_ms} {from:?} {to:?}"
+            );
+            assert_eq!(t, original);
+        }
+        let mut plain = transcript(TimingGrain::Segment, vec![seg(0, 1_000, "Hi.")]);
+        assert!(reassign_turn(&mut plain, 0, 0, None, None).is_err());
+    }
+
+    #[test]
+    fn reassign_on_legacy_paragraphs() {
+        // Stored before c7dfc85: the unlabelled first segment was folded
+        // into speaker 1's paragraph.
+        let speakers = TranscriptSpeakers {
+            speakers: vec![
+                TranscriptSpeaker { id: 1, name: None },
+                TranscriptSpeaker { id: 2, name: None },
+            ],
+            approximate: false,
+            unassigned_segments: 1,
+            model: "test-diarizer".to_string(),
+        };
+        let paragraphs = vec![
+            labelled(0, 7_000, "Um. Hello.", 1),
+            labelled(7_000, 8_000, "Hi.", 2),
+        ];
+        let mut t = FileTranscript {
+            text: render_text(&paragraphs, Some(&speakers)),
+            paragraphs,
+            speakers: Some(speakers),
+            ..transcript(
+                TimingGrain::Segment,
+                vec![
+                    seg(0, 1_000, "Um."),
+                    labelled(5_000, 7_000, "Hello.", 1),
+                    labelled(7_000, 8_000, "Hi.", 2),
+                ],
+            )
+        };
+        assert_eq!(paragraph_ranges(&t), Some(vec![0..2, 2..3]));
+
+        assert_eq!(reassign_turn(&mut t, 1, 7_000, Some(2), Some(1)), Ok(1));
+        // Normalized to the current rule: "Um." is its own, unlabelled turn.
+        assert_eq!(
+            t.paragraphs,
+            vec![
+                seg(0, 1_000, "Um."),
+                labelled(5_000, 8_000, "Hello. Hi.", 1),
+            ]
+        );
+        assert_eq!(t.text, "Um.\n\nSpeaker 1: Hello. Hi.");
+        assert_turns_consistent(&t);
+    }
+
+    #[test]
+    fn paragraph_ranges_fail_closed() {
+        let t = four_turns();
+        assert_eq!(paragraph_ranges(&t), Some(vec![0..1, 1..2, 2..3, 3..4]));
+
+        let mut changed = t.clone();
+        changed.paragraphs[2].text = "Three!".to_string();
+        assert_eq!(paragraph_ranges(&changed), None);
+
+        let mut longer = t.clone();
+        longer.paragraphs[2].text = "Three. More.".to_string();
+        assert_eq!(paragraph_ranges(&longer), None);
+
+        let mut moved = t.clone();
+        moved.paragraphs[1].start_ms = 2_100;
+        assert_eq!(paragraph_ranges(&moved), None);
+
+        let mut left_over = t.clone();
+        left_over.paragraphs.pop();
+        assert_eq!(paragraph_ranges(&left_over), None);
+
+        let mut no_segments = t.clone();
+        no_segments.segments.clear();
+        assert_eq!(paragraph_ranges(&no_segments), None);
+
+        // Joined without spaces in a language written without them.
+        let mut zh = labelled_transcript(vec![
+            labelled(0, 2_000, "你好。", 1),
+            labelled(2_000, 4_000, "很好。", 1),
+        ]);
+        zh.language = Some("zh".to_string());
+        zh.paragraphs = vec![labelled(0, 4_000, "你好。很好。", 1)];
+        assert_eq!(
+            paragraph_ranges(&zh),
+            Some(vec![Range { start: 0, end: 2 }])
+        );
+        zh.language = Some("en".to_string());
+        assert_eq!(paragraph_ranges(&zh), None);
+    }
+
+    #[test]
+    fn relabel_rebuilds_list_from_segments() {
+        let mut t = four_turns();
+        set_name(&mut t, 2, "Bob");
+        // Speaker 4 is on a segment but not in the list; 3 is listed but
+        // has no segment left.
+        t.segments[2].speaker = Some(4);
+        relabel_turns(&mut t);
+        assert_eq!(
+            names(&t),
+            [(1, None), (2, Some("Bob".to_string())), (4, None)]
+        );
+        assert_eq!(
+            speakers_of(&t.paragraphs),
+            [Some(1), Some(2), Some(4), Some(2)]
+        );
+
+        // No labelled segment left: no labels.
+        for segment in &mut t.segments {
+            segment.speaker = None;
+        }
+        relabel_turns(&mut t);
+        assert_eq!(t.speakers, None);
+        assert_eq!(t.text, "One. Two. Three. Four.");
+    }
+
+    #[test]
+    fn turn_ranges_match_speaker_paragraphs() {
+        // Speaker changes, an unlabelled first segment, and monologue breaks.
+        let opts = MergeOptions::for_transcript(&transcript(TimingGrain::Segment, Vec::new()));
+        let long = opts.max_paragraph_ms;
+        let segments = vec![
+            seg(0, 500, "Um."),
+            labelled(500, long + 500, "Long story.", 1),
+            seg(long + 500, long + 1_500, "Hmm."),
+            labelled(long + 5_000, long + 6_000, "Anyway.", 1),
+            labelled(long + 6_000, long + 7_000, "And more.", 1),
+            labelled(long + 7_000, long + 8_000, "Yes.", 2),
+        ];
+        assert_eq!(
+            turn_ranges(&segments, &opts),
+            vec![0..1, 1..2, 2..3, 3..5, 5..6]
+        );
+        let t = labelled_transcript(segments);
+        assert_turns_consistent(&t);
+
+        let segments = (0..15u64)
+            .map(|i| {
+                let text = if i % 2 == 0 { "and then" } else { "it ended." };
+                labelled(i * 10_000, (i + 1) * 10_000, text, 1)
+            })
+            .collect();
+        let t = labelled_transcript(segments);
+        assert_eq!(t.paragraphs.len(), 3);
+        assert_turns_consistent(&t);
+    }
+
+    /// Sortformer's turns of `realistic_fixture`, and its labelled transcript.
+    fn realistic_turns_and_transcript() -> (Vec<SpeakerTurn>, FileTranscript) {
+        let ms = |s: f64| (s * 1000.0).round() as u64;
+        let turns: Vec<SpeakerTurn> = [
+            (0.00, 7.76, 1),
+            (8.56, 17.60, 4),
+            (18.32, 25.04, 1),
+            (25.84, 33.36, 4),
+            (34.08, 41.28, 1),
+            (42.00, 50.48, 4),
+            (51.28, 58.08, 1),
+            (58.80, 65.12, 4),
+        ]
+        .iter()
+        .map(|&(a, b, speaker)| turn(ms(a), ms(b), speaker))
+        .collect();
+        let mut segments = Vec::new();
+        for (i, turn) in turns.iter().enumerate() {
+            let mid = (turn.start_ms + turn.end_ms) / 2;
+            segments.push(seg(turn.start_ms, mid, &format!("Turn {i} begins.")));
+            segments.push(seg(mid, turn.end_ms, &format!("Turn {i} ends.")));
+        }
+        let mut t = transcript(TimingGrain::Segment, segments);
+        apply(&mut t, &turns);
+        (turns, t)
+    }
+
+    #[test]
+    fn realistic_turns_are_consistent() {
+        let (_, t) = realistic_turns_and_transcript();
+        assert_eq!(t.paragraphs.len(), 8);
+        assert_turns_consistent(&t);
+    }
+
+    #[test]
+    fn relabel_reproduces_labels() {
+        let (turns, labelled_once) = realistic_turns_and_transcript();
+        let mut t = labelled_once.clone();
+        merge_speakers(&mut t, 2, 1).expect("merge");
+        rename_speaker(&mut t, 1, Some("Ann")).expect("rename");
+
+        clear_speakers(&mut t);
+        assert_eq!(t.speakers, None);
+        assert!(t.segments.iter().all(|s| s.speaker.is_none()));
+        assert!(!t.text.contains("Ann"));
+        apply(&mut t, &turns);
+        assert_eq!(
+            speakers_of(&t.segments),
+            speakers_of(&labelled_once.segments)
+        );
+        assert_eq!(t.paragraphs, labelled_once.paragraphs);
+        assert_eq!(t.text, labelled_once.text);
+    }
+
+    #[test]
+    fn speaker_state_round_trip() {
+        let original = four_turns();
+        let before = SpeakerState::of(&original);
+        let mut t = original.clone();
+        merge_speakers(&mut t, 3, 2).expect("merge");
+        let after = SpeakerState::of(&t);
+        assert_ne!(before, after);
+
+        before.apply_to(&mut t);
+        assert_eq!(t, original);
+        assert_eq!(SpeakerState::of(&t), before);
+        after.apply_to(&mut t);
+        assert_eq!(SpeakerState::of(&t), after);
     }
 }

@@ -13,6 +13,7 @@ import type {
   TranscriptSpeakers,
 } from "@/bindings";
 import {
+  activeLabelJobForHistory,
   awaitingSpeakers,
   defaultExportName,
   downloadPercent,
@@ -22,12 +23,15 @@ import {
   formatClock,
   formatDuration,
   isFinishedStatus,
+  isLabelJob,
+  isLabelTarget,
   isLoopbackUrl,
   isolateLtr,
   isRunningStatus,
   isSupportedPath,
   isValidServerUrl,
   jobSpeakerView,
+  labelJobFor,
   lemonadeErrorKey,
   menuKeyAction,
   mergeLiveSegments,
@@ -170,6 +174,8 @@ const expectedErrorKeys: Record<FileJobErrorCode, string> = {
   server_unauthorized: "serverUnauthorized",
   server_model_missing: "serverModelMissing",
   internal: "internal",
+  source_changed: "sourceChanged",
+  speaker_labels_failed: "speakerLabelsFailed",
 };
 for (const [code, key] of Object.entries(expectedErrorKeys)) {
   assert.equal(errorKey(code as FileJobErrorCode), key);
@@ -406,6 +412,75 @@ assert.equal(
   null,
 );
 assert.equal(jobSpeakerView(speakerJob("failed", { state: "running" })), null);
+// A cancelled or failed job whose partial transcript was labelled later.
+assert.deepEqual(
+  jobSpeakerView(speakerJob("cancelled", { state: "done", speakers: 3 })),
+  { kind: "done", speakers: 3 },
+);
+assert.deepEqual(
+  jobSpeakerView(speakerJob("failed", { state: "done", speakers: 2 })),
+  { kind: "done", speakers: 2 },
+);
+assert.equal(
+  jobSpeakerView(speakerJob("queued", { state: "done", speakers: 2 })),
+  null,
+);
+
+// Speaker-label jobs: found by the transcript they label.
+const snapshot = (
+  job_id: number,
+  status: FileJobSnapshot["status"],
+  labels_for: FileJobSnapshot["labels_for"],
+): FileJobSnapshot => ({
+  job_id,
+  path: "/audio/talk.m4a",
+  file_name: "talk.m4a",
+  status,
+  duration_ms: 60_000,
+  processed_ms: 0,
+  chunks_done: 0,
+  decoder: null,
+  model_id: null,
+  engine: "handy",
+  speakers: labels_for === null ? null : { state: "pending" },
+  error: null,
+  has_transcript: false,
+  transcript_status: null,
+  history_id: null,
+  enqueued_at: job_id,
+  labels_for,
+});
+const jobs: Record<number, FileJobSnapshot> = Object.fromEntries(
+  [
+    snapshot(1, "completed", null),
+    snapshot(2, "failed", { kind: "job", job_id: 1 }),
+    snapshot(3, "queued", { kind: "job", job_id: 1 }),
+    snapshot(4, "completed", { kind: "history", history_id: 9 }),
+    snapshot(5, "transcribing", { kind: "history", history_id: 7 }),
+    snapshot(6, "cancelled", { kind: "job", job_id: 8 }),
+  ].map((job) => [job.job_id, job]),
+);
+assert.equal(isLabelJob(jobs[1]), false);
+assert.equal(isLabelJob(jobs[2]), true);
+// The newest wins; transcription jobs never match.
+assert.equal(labelJobFor(jobs, { kind: "job", job_id: 1 }, null)?.job_id, 3);
+assert.equal(
+  labelJobFor(jobs, { kind: "history", history_id: 9 }, 9)?.job_id,
+  4,
+);
+// A job saved to History is labelled as its entry.
+assert.equal(labelJobFor(jobs, { kind: "job", job_id: 12 }, 9)?.job_id, 4);
+assert.equal(labelJobFor(jobs, { kind: "job", job_id: 12 }, null), null);
+assert.equal(labelJobFor(jobs, { kind: "job", job_id: 4 }, undefined), null);
+assert.equal(labelJobFor({}, { kind: "history", history_id: 9 }, 9), null);
+// History rows: only an unfinished job for that entry.
+assert.equal(activeLabelJobForHistory(jobs, 7)?.job_id, 5);
+assert.equal(activeLabelJobForHistory(jobs, 9), null);
+assert.equal(activeLabelJobForHistory(jobs, 1), null);
+// Jobs an unfinished label job targets stay listed.
+assert.equal(isLabelTarget(jobs, 1), true);
+assert.equal(isLabelTarget(jobs, 8), false);
+assert.equal(isLabelTarget(jobs, 2), false);
 
 // awaitingSpeakers: transcribing, all audio processed, labels still coming.
 const progressJob = {

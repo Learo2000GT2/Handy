@@ -426,6 +426,7 @@ impl SpeakerLabels {
                 decode: decode_options.clone(),
                 model_path: model_path.to_path_buf(),
                 estimated_duration_ms,
+                limit_ms: None,
             };
             let handle = diarize::start_diarization(request, token.clone(), hold);
             on_event(PipelineEvent::Speakers(SpeakerJobState::Running));
@@ -896,7 +897,8 @@ fn chunk_plan(requested_max_ms: Option<u32>, limits: ChunkLimits) -> (u32, u32) 
     (max_chunk_ms, limits.search_window_ms.min(max_chunk_ms / 2))
 }
 
-fn decode_error_code(error: &DecodeError) -> Option<FileJobErrorCode> {
+/// The job error code of a decode (or probe) error; None for a cancel.
+pub(crate) fn decode_error_code(error: &DecodeError) -> Option<FileJobErrorCode> {
     match error {
         DecodeError::NotFound(_) => Some(FileJobErrorCode::NotFound),
         DecodeError::Unsupported(_) => Some(FileJobErrorCode::UnsupportedFormat),
@@ -906,7 +908,10 @@ fn decode_error_code(error: &DecodeError) -> Option<FileJobErrorCode> {
     }
 }
 
-fn decode_failure(error: DecodeError, partial: Option<Box<PipelineOutput>>) -> PipelineError {
+pub(crate) fn decode_failure(
+    error: DecodeError,
+    partial: Option<Box<PipelineOutput>>,
+) -> PipelineError {
     match decode_error_code(&error) {
         Some(code) => PipelineError::Failed {
             code,

@@ -596,6 +596,10 @@ pub fn run(cli_args: CliArgs) {
             commands::speakers::cancel_speaker_model_download,
             commands::speakers::delete_speaker_model,
             commands::speakers::rename_transcript_speaker,
+            commands::speakers::merge_transcript_speakers,
+            commands::speakers::reassign_transcript_turn,
+            commands::speakers::undo_transcript_speaker_edit,
+            commands::speakers::label_transcript_speakers,
             helpers::clamshell::is_laptop,
         ])
         .events(collect_events![

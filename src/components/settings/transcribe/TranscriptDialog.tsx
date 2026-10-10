@@ -8,14 +8,20 @@ import {
   type TranscriptSource,
 } from "@/bindings";
 import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
-import { isRunningStatus, mergeLiveSegments } from "@/lib/utils/transcript";
+import {
+  isFinishedStatus,
+  isRunningStatus,
+  labelJobFor,
+  mergeLiveSegments,
+} from "@/lib/utils/transcript";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { copyToClipboard } from "../history/clipboard";
 import { ExportMenu } from "./ExportMenu";
+import { SpeakerLabelPrompt } from "./SpeakerLabelPrompt";
 import { SpeakerPanel } from "./SpeakerPanel";
-import { TranscriptSegments } from "./TranscriptSegments";
+import { TranscriptSegments, type TurnRef } from "./TranscriptSegments";
 
 interface TranscriptDialogProps {
   /** The transcript to show; null keeps the dialog closed. */
@@ -38,9 +44,14 @@ const sourceKey = (source: TranscriptSource | null): string | null => {
     : `history:${source.history_id}`;
 };
 
+const errorText = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 /**
  * Timestamped transcript of a file job or a History entry, with copy and
- * export. While the job runs, new chunks are appended as they arrive.
+ * export. While the job runs, new chunks are appended as they arrive. A
+ * finished transcript can be given speaker labels, and labels can be fixed:
+ * rename, merge, change the speaker of a passage, undo, label again.
  */
 export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
   source,
@@ -65,10 +76,34 @@ export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
   const transcript = current?.transcript ?? null;
   const error = current?.error ?? null;
 
+  // A speaker-label job for this transcript, queued, running or the last
+  // one to finish.
+  const historyId = transcript?.history_id ?? null;
+  const labelJob = useFileTranscriptionStore((state) =>
+    source === null ? null : labelJobFor(state.jobs, source, historyId),
+  );
+  const labelling = labelJob !== null && !isFinishedStatus(labelJob.status);
+  const labelTranscriptSpeakers = useFileTranscriptionStore(
+    (state) => state.labelTranscriptSpeakers,
+  );
+  const speakerModel = useFileTranscriptionStore((state) => state.speakerModel);
+
+  // A speaker edit is being saved.
+  const [saving, setSaving] = useState(false);
+  // An edit made since the transcript was (re)loaded can be undone.
+  const [canUndo, setCanUndo] = useState(false);
+  // A new speaker whose rename form opens at once.
+  const [autoRename, setAutoRename] = useState<number | null>(null);
+  // Label Again was asked for while the speaker model is missing.
+  const [relabelRequested, setRelabelRequested] = useState(false);
+
   // Load when opened, and again once a running job finishes so the final
-  // transcript replaces the live one.
+  // transcript replaces the live one, and once a label job starts or ends
+  // so its labels show.
   useEffect(() => {
     if (!source || key === null) return;
+    setCanUndo(false);
+    setAutoRename(null);
 
     let cancelled = false;
     const finish = (next: Omit<LoadedTranscript, "key">) => {
@@ -104,7 +139,11 @@ export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
       cancelled = true;
     };
     // `key` identifies `source`, whose object may be recreated on each render.
-  }, [key, live]);
+  }, [key, live, labelling]);
+
+  useEffect(() => {
+    setRelabelRequested(false);
+  }, [key]);
 
   // Live segments are kept until the job is removed, so merging them also
   // bridges the moment between a job finishing and its final transcript.
@@ -124,12 +163,93 @@ export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
       ? transcript.paragraphs
       : null;
 
-  const handleRenamed = (renamed: FileTranscript) => {
+  const showTranscript = (next: FileTranscript) => {
     setLoaded((previous) =>
       previous !== null && previous.key === key
-        ? { ...previous, transcript: renamed }
+        ? { ...previous, transcript: next }
         : previous,
     );
+  };
+
+  // A rename, merge or passage change was saved.
+  const handleChanged = (changed: FileTranscript) => {
+    showTranscript(changed);
+    setCanUndo(true);
+  };
+
+  const handleUndo = async () => {
+    if (!source) return;
+    let error: string | null = null;
+    try {
+      const result = await commands.undoTranscriptSpeakerEdit(source);
+      if (result.status === "ok") {
+        showTranscript(result.data);
+      } else {
+        error = result.error;
+      }
+    } catch (caught) {
+      error = errorText(caught);
+    }
+    // One level: whether it worked or not, there is nothing left to undo.
+    setCanUndo(false);
+    if (error !== null) {
+      toast.error(t("settings.transcribeFiles.speakers.undoError", { error }));
+    }
+  };
+
+  const handleLabel = async (replace: boolean, path?: string) => {
+    if (!source) return;
+    if (replace && path === undefined && speakerModel?.downloaded === false) {
+      // Label Again shows the model download instead.
+      setRelabelRequested(true);
+      return;
+    }
+    setRelabelRequested(false);
+    await labelTranscriptSpeakers(source, replace, path);
+  };
+
+  const handleChangeSpeaker = async (
+    turn: TurnRef,
+    to: number | null,
+  ): Promise<boolean> => {
+    if (!source || saving) return false;
+    const before = new Set(
+      transcript?.speakers?.speakers.map((speaker) => speaker.id) ?? [],
+    );
+    setAutoRename(null);
+    setSaving(true);
+    let error: string | null = null;
+    try {
+      const result = await commands.reassignTranscriptTurn(
+        source,
+        turn.index,
+        turn.startMs,
+        turn.fromSpeaker,
+        to,
+      );
+      if (result.status === "ok") {
+        handleChanged(result.data);
+        if (to === null) {
+          const added = result.data.speakers?.speakers.find(
+            (speaker) => !before.has(speaker.id),
+          );
+          setAutoRename(added?.id ?? null);
+        }
+      } else {
+        error = result.error;
+      }
+    } catch (caught) {
+      error = errorText(caught);
+    } finally {
+      setSaving(false);
+    }
+    if (error !== null) {
+      toast.error(
+        t("settings.transcribeFiles.speakers.changeSpeakerError", { error }),
+      );
+      return false;
+    }
+    return true;
   };
 
   const handleCopy = async () => {
@@ -140,6 +260,45 @@ export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
       toast.error(t("settings.transcribeFiles.copyError"));
     }
   };
+
+  // Speaker labels can be made or fixed once the transcript is final.
+  const canLabel =
+    source !== null &&
+    transcript !== null &&
+    hasText &&
+    (transcript.paragraphs.length > 0 || transcript.segments.length > 0);
+  let labelSection: React.ReactNode = null;
+  if (canLabel && transcript !== null && source !== null) {
+    const prompt = (
+      <SpeakerLabelPrompt
+        transcript={transcript}
+        labelJob={labelJob}
+        relabelRequested={relabelRequested}
+        onLabel={handleLabel}
+      />
+    );
+    labelSection =
+      speakers === null ? (
+        prompt
+      ) : (
+        <>
+          {prompt}
+          <SpeakerPanel
+            key={key}
+            source={source}
+            speakers={speakers}
+            onChanged={handleChanged}
+            busy={labelling}
+            saving={saving}
+            onSavingChange={setSaving}
+            canUndo={canUndo && !labelling}
+            onUndo={handleUndo}
+            onRelabel={() => void handleLabel(true)}
+            autoRename={autoRename}
+          />
+        </>
+      );
+  }
 
   let body: React.ReactNode;
   if (error !== null) {
@@ -170,14 +329,7 @@ export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
               : t("settings.transcribeFiles.transcript.partialNoReason")}
           </Alert>
         )}
-        {speakers && source && (
-          <SpeakerPanel
-            key={key}
-            source={source}
-            speakers={speakers}
-            onRenamed={handleRenamed}
-          />
-        )}
+        {labelSection}
         {transcript?.timing === "chunk" && (turns ?? segments).length > 0 && (
           <p className="text-xs text-text/60">
             {t("settings.transcribeFiles.transcript.approximateTimes")}
@@ -194,7 +346,13 @@ export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
           </p>
         )}
         {turns !== null && speakers !== null ? (
-          <TranscriptSegments segments={turns} speakers={speakers} />
+          <TranscriptSegments
+            segments={turns}
+            speakers={speakers}
+            onChangeSpeaker={handleChangeSpeaker}
+            disabled={labelling}
+            saving={saving}
+          />
         ) : segments.length > 0 ? (
           <TranscriptSegments segments={segments} follow={live} />
         ) : (

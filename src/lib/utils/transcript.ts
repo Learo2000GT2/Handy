@@ -16,6 +16,7 @@ import type {
   SupportedAudioFormats,
   TranscriptFormat,
   TranscriptSegment,
+  TranscriptSource,
   TranscriptSpeakers,
 } from "@/bindings";
 
@@ -161,6 +162,8 @@ const ERROR_KEYS = {
   server_unauthorized: "serverUnauthorized",
   server_model_missing: "serverModelMissing",
   internal: "internal",
+  source_changed: "sourceChanged",
+  speaker_labels_failed: "speakerLabelsFailed",
 } as const satisfies Record<FileJobErrorCode, string>;
 
 /** Keys under `settings.transcribeFiles.errors` for each job error code. */
@@ -269,13 +272,17 @@ export type JobSpeakerView =
 
 /**
  * The speaker label line of a job row, or null for none: labels were not
- * requested, the job has not started, or it was cancelled or failed (its
- * transcript is not labelled either way).
+ * requested, the job has not started, or it was cancelled or failed without
+ * a labelled transcript. A finished job whose transcript was labelled later
+ * (by a speaker-label job) shows its count whatever its status.
  */
 export const jobSpeakerView = (
   job: Pick<FileJobSnapshot, "status" | "speakers">,
 ): JobSpeakerView | null => {
   const state = job.speakers;
+  if (state?.state === "done" && isFinishedStatus(job.status)) {
+    return { kind: "done", speakers: state.speakers };
+  }
   const running = isRunningStatus(job.status);
   if (state === null || (!running && job.status !== "completed")) {
     return null;
@@ -292,6 +299,67 @@ export const jobSpeakerView = (
       return { kind: "skipped", reason: state.reason };
   }
 };
+
+/** The job labels the speakers of a transcript rather than transcribing a file. */
+export const isLabelJob = (job: Pick<FileJobSnapshot, "labels_for">): boolean =>
+  job.labels_for !== null;
+
+const sameSource = (a: TranscriptSource, b: TranscriptSource): boolean =>
+  a.kind === "job"
+    ? b.kind === "job" && a.job_id === b.job_id
+    : b.kind === "history" && a.history_id === b.history_id;
+
+/**
+ * The newest speaker-label job for the transcript shown from `source`, or
+ * null. A job saved to History is labelled as its entry, so a label job for
+ * History entry `historyId` counts too.
+ */
+export const labelJobFor = (
+  jobs: Record<number, FileJobSnapshot>,
+  source: TranscriptSource,
+  historyId: number | null | undefined,
+): FileJobSnapshot | null => {
+  const entry: TranscriptSource | null =
+    historyId == null ? null : { kind: "history", history_id: historyId };
+  let newest: FileJobSnapshot | null = null;
+  for (const job of Object.values(jobs)) {
+    const target = job.labels_for;
+    if (target === null) continue;
+    if (!sameSource(target, source) && !(entry && sameSource(target, entry))) {
+      continue;
+    }
+    // Job ids grow with every enqueue.
+    if (newest === null || job.job_id > newest.job_id) newest = job;
+  }
+  return newest;
+};
+
+/** The queued or running speaker-label job for History entry `historyId`. */
+export const activeLabelJobForHistory = (
+  jobs: Record<number, FileJobSnapshot>,
+  historyId: number,
+): FileJobSnapshot | null =>
+  Object.values(jobs).find(
+    (job) =>
+      job.labels_for?.kind === "history" &&
+      job.labels_for.history_id === historyId &&
+      !isFinishedStatus(job.status),
+  ) ?? null;
+
+/**
+ * An unfinished speaker-label job targets job `jobId`'s transcript, so the
+ * job must stay listed (the backend refuses to remove it).
+ */
+export const isLabelTarget = (
+  jobs: Record<number, FileJobSnapshot>,
+  jobId: number,
+): boolean =>
+  Object.values(jobs).some(
+    (job) =>
+      job.labels_for?.kind === "job" &&
+      job.labels_for.job_id === jobId &&
+      !isFinishedStatus(job.status),
+  );
 
 /**
  * All the audio is transcribed and the job only waits for its speaker labels,

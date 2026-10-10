@@ -29,6 +29,7 @@ import {
   errorKey,
   formatDuration,
   isFinishedStatus,
+  isLabelJob,
   isolateLtr,
   isRunningStatus,
   jobSpeakerView,
@@ -100,7 +101,8 @@ interface FileJobRowProps {
   job: FileJobSnapshot;
   /** Completed, but every part of the file was silent. */
   noSpeech: boolean;
-  onView: (job: FileJobSnapshot) => void;
+  /** Opens the transcript `source` (a label job's: the one it labelled). */
+  onView: (source: TranscriptSource, fileName: string) => void;
 }
 
 export const FileJobRow: React.FC<FileJobRowProps> = ({
@@ -138,19 +140,43 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
   }, [onFirstChunk]);
 
   const source: TranscriptSource = { kind: "job", job_id: job.job_id };
+  // A speaker-label job's row acts on the transcript it labelled.
+  const labelJob = isLabelJob(job);
+  const viewSource = job.labels_for ?? source;
   const status = statusKey(job);
   const running = isRunningStatus(job.status);
   const finished = isFinishedStatus(job.status);
-  const hasResult = finished && job.has_transcript && !noSpeech;
+  const hasResult = labelJob
+    ? job.status === "completed" && job.speakers?.state === "done"
+    : finished && job.has_transcript && !noSpeech;
   const { icon: StatusIcon, className: statusIconClass } = STATUS_ICONS[status];
 
   const duration =
     job.duration_ms !== null && job.duration_ms > 0 ? job.duration_ms : null;
-  const speakerWait = awaitingSpeakers(job);
-  // While the job only waits for its labels, the progress text says so.
-  const speakerView = noSpeech || speakerWait ? null : jobSpeakerView(job);
+  const speakerWait = !labelJob && awaitingSpeakers(job);
+  // While the job only waits for its labels (or only makes labels), the
+  // status says so.
+  const speakerView =
+    noSpeech || speakerWait || (labelJob && running)
+      ? null
+      : jobSpeakerView(job);
+  let statusText = t(`settings.transcribeFiles.status.${status}`);
+  if (labelJob && running) {
+    statusText =
+      job.status === "waiting"
+        ? t("settings.transcribeFiles.status.waiting")
+        : t("settings.transcribeFiles.speakers.state.running");
+  }
   let progressText: string | null = null;
-  if (speakerWait) {
+  if (labelJob) {
+    // Shown once the first window is done.
+    if (running && duration !== null && job.processed_ms > 0) {
+      progressText = t("settings.transcribeFiles.progress", {
+        processed: isolateLtr(formatDuration(job.processed_ms)),
+        total: isolateLtr(formatDuration(duration)),
+      });
+    }
+  } else if (speakerWait) {
     progressText = t("settings.transcribeFiles.speakers.state.running");
   } else if (running && duration !== null) {
     progressText = t("settings.transcribeFiles.progress", {
@@ -165,7 +191,7 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
 
   const handleCopy = async () => {
     try {
-      const result = await commands.getFileTranscript(source);
+      const result = await commands.getFileTranscript(viewSource);
       if (result.status === "error") {
         toast.error(
           t("settings.transcribeFiles.errors.loadTranscript", {
@@ -209,15 +235,21 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
             {job.file_name}
           </p>
           <p className="text-xs text-text/60 flex flex-wrap gap-x-2">
-            <span>{t(`settings.transcribeFiles.status.${status}`)}</span>
+            <span>{statusText}</span>
             {progressText && (
               <span className="tabular-nums">{progressText}</span>
             )}
             {speakerView && <SpeakerStatus view={speakerView} />}
-            <span className="text-text/50" title={job.model_id ?? undefined}>
-              {t(`settings.transcribeFiles.engine.${job.engine}`)}
-            </span>
-            {job.history_id !== null && (
+            {labelJob ? (
+              <span className="text-text/50">
+                {t("settings.transcribeFiles.speakers.jobKind")}
+              </span>
+            ) : (
+              <span className="text-text/50" title={job.model_id ?? undefined}>
+                {t(`settings.transcribeFiles.engine.${job.engine}`)}
+              </span>
+            )}
+            {!labelJob && job.history_id !== null && (
               <span className="text-text/50">
                 {t("settings.transcribeFiles.savedToHistory")}
               </span>
@@ -225,9 +257,9 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
           </p>
         </div>
         <div className="flex items-center shrink-0">
-          {(running || hasResult) && (
+          {((running && !labelJob) || hasResult) && (
             <IconButton
-              onClick={() => onView(job)}
+              onClick={() => onView(viewSource, job.file_name)}
               title={t("settings.transcribeFiles.actions.view")}
             >
               <Eye width={16} height={16} />
@@ -246,7 +278,7 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
                 )}
               </IconButton>
               <ExportMenu
-                source={source}
+                source={viewSource}
                 sourceName={job.file_name}
                 variant="icon"
               />
@@ -280,10 +312,12 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
 
       {running && (
         <progress
-          className={`${PROGRESS_CLASSES} ${duration === null || speakerWait ? "animate-pulse" : ""}`}
+          className={`${PROGRESS_CLASSES} ${duration === null || speakerWait || (labelJob && job.processed_ms === 0) ? "animate-pulse" : ""}`}
           max={duration ?? undefined}
           value={
-            duration === null ? undefined : Math.min(job.processed_ms, duration)
+            duration === null || (labelJob && job.processed_ms === 0)
+              ? undefined
+              : Math.min(job.processed_ms, duration)
           }
           aria-label={job.file_name}
           aria-valuetext={progressText ?? undefined}

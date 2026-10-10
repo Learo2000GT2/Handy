@@ -7,6 +7,7 @@ import {
   Copy,
   FileText,
   FolderOpen,
+  Loader2,
   RotateCcw,
   Star,
   Trash2,
@@ -20,8 +21,10 @@ import {
   type HistoryUpdatePayload,
 } from "@/bindings";
 import { useOsType } from "@/hooks/useOsType";
+import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
 import { formatDateTime } from "@/utils/dateFormat";
 import {
+  activeLabelJobForHistory,
   formatDuration,
   isolateLtr,
   previewText,
@@ -140,8 +143,20 @@ export const HistorySettings: React.FC = () => {
       if (payload.action === "added") {
         setEntries((prev) => [payload.entry, ...prev]);
       } else if (payload.action === "updated") {
+        const updated = payload.entry;
         setEntries((prev) =>
-          prev.map((e) => (e.id === payload.entry.id ? payload.entry : e)),
+          prev.map((e) => {
+            if (e.id !== updated.id) return e;
+            // An update doesn't check the source file; what the page
+            // found stays true unless the entry now points elsewhere.
+            if (e.file && updated.file?.source_path === e.file.source_path) {
+              return {
+                ...updated,
+                file: { ...updated.file, source_exists: e.file.source_exists },
+              };
+            }
+            return updated;
+          }),
         );
       }
       // "deleted" and "toggled" are handled by optimistic updates only,
@@ -327,6 +342,10 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
   const { t, i18n } = useTranslation();
   const [showCopied, setShowCopied] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  // Speaker labels are being made for this entry.
+  const labelling = useFileTranscriptionStore(
+    (state) => activeLabelJobForHistory(state.jobs, entry.id) !== null,
+  );
 
   const hasTranscription = entry.transcription_text.trim().length > 0;
 
@@ -409,12 +428,22 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
                   {t("settings.history.incomplete")}
                 </span>
               )}
-              {file.speaker_count > 0 && (
-                <span className="rounded-full bg-mid-gray/20 px-2 text-text/70">
-                  {t("settings.history.speakerCount", {
-                    number: file.speaker_count,
-                  })}
+              {labelling ? (
+                <span className="rounded-full bg-mid-gray/20 px-2 text-text/70 flex items-center gap-1">
+                  <Loader2
+                    className="w-3 h-3 animate-spin"
+                    aria-hidden="true"
+                  />
+                  {t("settings.transcribeFiles.speakers.state.running")}
                 </span>
+              ) : (
+                file.speaker_count > 0 && (
+                  <span className="rounded-full bg-mid-gray/20 px-2 text-text/70">
+                    {t("settings.history.speakerCount", {
+                      number: file.speaker_count,
+                    })}
+                  </span>
+                )
               )}
             </p>
           </div>
