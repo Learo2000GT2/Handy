@@ -629,6 +629,7 @@
         "button": "Экспорт…",
         "dialogTitle": "Экспорт транскрипции",
         "formats": {
+          "docx": "Документ Word (.docx)",
           "txt": "Обычный текст (.txt)",
           "md": "Markdown (.md)",
           "srt": "Субтитры SubRip (.srt)",

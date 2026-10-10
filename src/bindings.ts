@@ -1555,7 +1555,7 @@ export type TimingGrain =
  */
 "segment"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
-export type TranscriptFormat = "txt" | "md" | "srt" | "vtt" | "json"
+export type TranscriptFormat = "txt" | "md" | "srt" | "vtt" | "json" | "docx"
 /**
  * One timed piece of transcript text. Milliseconds from the start of the
  * source file; `end_ms > start_ms`; `text` is trimmed and non-empty.

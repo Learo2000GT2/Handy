@@ -629,6 +629,7 @@
         "button": "Exporteren…",
         "dialogTitle": "Transcriptie exporteren",
         "formats": {
+          "docx": "Word-document (.docx)",
           "txt": "Platte tekst (.txt)",
           "md": "Markdown (.md)",
           "srt": "SubRip-ondertitels (.srt)",

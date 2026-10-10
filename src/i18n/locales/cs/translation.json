@@ -629,6 +629,7 @@
         "button": "Exportovat…",
         "dialogTitle": "Exportovat přepis",
         "formats": {
+          "docx": "Dokument Word (.docx)",
           "txt": "Prostý text (.txt)",
           "md": "Markdown (.md)",
           "srt": "Titulky SubRip (.srt)",

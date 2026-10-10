@@ -629,6 +629,7 @@
         "button": "Exportar…",
         "dialogTitle": "Exportar Transcrição",
         "formats": {
+          "docx": "Documento do Word (.docx)",
           "txt": "Texto simples (.txt)",
           "md": "Markdown (.md)",
           "srt": "Legendas SubRip (.srt)",

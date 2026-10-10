@@ -629,6 +629,7 @@
         "button": "Xuất…",
         "dialogTitle": "Xuất tệp bản chép lời",
         "formats": {
+          "docx": "Tài liệu Word (.docx)",
           "txt": "Văn bản thuần (.txt)",
           "md": "Markdown (.md)",
           "srt": "Phụ đề SubRip (.srt)",

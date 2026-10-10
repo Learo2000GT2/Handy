@@ -629,6 +629,7 @@
         "button": "Exportera…",
         "dialogTitle": "Exportera transkription",
         "formats": {
+          "docx": "Word-dokument (.docx)",
           "txt": "Oformaterad text (.txt)",
           "md": "Markdown (.md)",
           "srt": "SubRip-undertexter (.srt)",

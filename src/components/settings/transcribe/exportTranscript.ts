@@ -13,6 +13,7 @@ import { defaultExportName } from "@/lib/utils/transcript";
 export type ExportFormat = Exclude<TranscriptFormat, "json">;
 
 export const EXPORT_FORMATS: readonly ExportFormat[] = [
+  "docx",
   "txt",
   "md",
   "srt",

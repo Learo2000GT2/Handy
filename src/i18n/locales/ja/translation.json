@@ -629,6 +629,7 @@
         "button": "エクスポート…",
         "dialogTitle": "文字起こしをエクスポート",
         "formats": {
+          "docx": "Word 文書 (.docx)",
           "txt": "プレーンテキスト (.txt)",
           "md": "Markdown (.md)",
           "srt": "SubRip 字幕 (.srt)",

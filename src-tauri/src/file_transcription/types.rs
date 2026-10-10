@@ -182,6 +182,9 @@ pub enum TranscriptFormat {
     Srt,
     Vtt,
     Json,
+    // A Word document: written to a file, never printed. (No doc comment,
+    // so the binding stays a one-line union.)
+    Docx,
 }
 
 impl TranscriptFormat {
@@ -192,10 +195,11 @@ impl TranscriptFormat {
             Self::Srt => "srt",
             Self::Vtt => "vtt",
             Self::Json => "json",
+            Self::Docx => "docx",
         }
     }
 
-    /// Case-insensitive; accepts txt|text|md|markdown|srt|vtt|webvtt|json.
+    /// Case-insensitive; accepts txt|text|md|markdown|srt|vtt|webvtt|json|docx.
     pub fn from_path(path: &Path) -> Option<Self> {
         let ext = path.extension()?.to_str()?.to_ascii_lowercase();
         match ext.as_str() {
@@ -204,6 +208,7 @@ impl TranscriptFormat {
             "srt" => Some(Self::Srt),
             "vtt" | "webvtt" => Some(Self::Vtt),
             "json" => Some(Self::Json),
+            "docx" => Some(Self::Docx),
             _ => None,
         }
     }

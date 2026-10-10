@@ -629,6 +629,7 @@
         "button": "एक्सपोर्ट करें…",
         "dialogTitle": "ट्रांसक्रिप्ट एक्सपोर्ट करें",
         "formats": {
+          "docx": "Word दस्तावेज़ (.docx)",
           "txt": "सादा टेक्स्ट (.txt)",
           "md": "Markdown (.md)",
           "srt": "SubRip सबटाइटल (.srt)",

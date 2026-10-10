@@ -121,6 +121,7 @@ handy --start-hidden --no-tray
 ```bash
 handy -f interview.m4a                           # Print metrics and the transcript
 handy -f interview.m4a -o interview.srt          # Write subtitles (format from the extension)
+handy -f interview.m4a -o interview.docx         # Word document with timestamps and speaker names
 handy -f lecture.mp4 --format md > lecture.md    # Print only the transcript, as Markdown
 handy -f memo.opus --ffmpeg /usr/bin/ffmpeg      # Read Opus, WebM, WMA, … with this ffmpeg
 handy -f call.wav --model turbo --json           # Pick a model; machine-readable output
@@ -131,7 +132,7 @@ handy --list-models                              # Model ids for --model (✓ = 
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-f`, `--transcribe-file FILE` | Transcribe an audio or video file and exit. WAV, AIFF, MP3, FLAC, Ogg Vorbis, M4A/AAC and MP4/MOV are read natively; Opus, WebM, WMA, AMR, DSS and other formats need ffmpeg installed |
 | `-o`, `--output PATH`          | Write the transcript to `PATH` instead of printing it                                                                                                                                  |
-| `--format FORMAT`              | `txt`, `md` (or `markdown`), `srt`, `vtt` or `json`. Default: the `--output` file extension, else `txt`                                                                                |
+| `--format FORMAT`              | `txt`, `md` (or `markdown`), `srt`, `vtt`, `json` or `docx` (Word document; needs `--output`). Default: the `--output` file extension, else `txt`                                      |
 | `--chunk-secs SECS`            | Longest piece of audio sent to the model at once: `0` for the whole file in one call, otherwise at least 5. Default: the model's limit (at most 28)                                    |
 | `--ffmpeg PATH`                | ffmpeg binary to use. Default: `$HANDY_FFMPEG`, then `PATH` and common install folders                                                                                                 |
 | `--model ID`                   | Model to use (default: the model selected in the app). It must already be downloaded                                                                                                   |

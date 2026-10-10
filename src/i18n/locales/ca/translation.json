@@ -629,6 +629,7 @@
         "button": "Exporta…",
         "dialogTitle": "Exporta la transcripció",
         "formats": {
+          "docx": "Document de Word (.docx)",
           "txt": "Text sense format (.txt)",
           "md": "Markdown (.md)",
           "srt": "Subtítols SubRip (.srt)",

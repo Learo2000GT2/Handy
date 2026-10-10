@@ -629,6 +629,7 @@
         "button": "Dışa Aktar…",
         "dialogTitle": "Transkripti Dışa Aktar",
         "formats": {
+          "docx": "Word belgesi (.docx)",
           "txt": "Düz metin (.txt)",
           "md": "Markdown (.md)",
           "srt": "SubRip altyazısı (.srt)",

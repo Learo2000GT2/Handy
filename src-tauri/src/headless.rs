@@ -498,14 +498,23 @@ fn transcribe_file(app: &AppHandle, args: &CliArgs, path: &Path) -> i32 {
                 eprintln!("{}", metrics_line(&report));
             }
             // Rendered output already ends with a newline (or is empty).
-            print!("{}", export::render(transcript, *format));
+            match export::render(transcript, *format) {
+                Some(text) => print!("{text}"),
+                // output_plan refuses formats that are not text.
+                None => {
+                    eprintln!("error: {}", DOCX_ON_STDOUT);
+                    return 1;
+                }
+            }
         }
         Destination::File {
             path: output_path,
             format,
             json,
         } => {
-            if let Err(e) = export::write_atomic(output_path, &export::render(transcript, *format))
+            let options = export::ExportOptions::local(transcript.created_at);
+            if let Err(e) = export::render_file(transcript, *format, &options)
+                .and_then(|bytes| export::write_atomic(output_path, bytes))
             {
                 eprintln!("error: cannot write {}: {}", output_path.display(), e);
                 return 1;
@@ -647,6 +656,7 @@ enum Destination {
 
 const JSON_WITH_FORMAT_ON_STDOUT: &str =
     "--format prints the transcript to stdout; add --output to combine it with --json";
+const DOCX_ON_STDOUT: &str = "--format docx writes a Word file, not text; add --output FILE.docx";
 
 /// Checks the flag combination and decides where the transcript goes. An
 /// `Err` is a usage error (exit 2).
@@ -673,6 +683,7 @@ fn output_plan(args: &CliArgs) -> Result<OutputPlan, String> {
                 .unwrap_or(TranscriptFormat::Txt),
             json: args.json,
         },
+        (None, Some(TranscriptFormat::Docx)) => return Err(DOCX_ON_STDOUT.to_string()),
         (None, Some(_)) if args.json => return Err(JSON_WITH_FORMAT_ON_STDOUT.to_string()),
         (None, Some(format)) => Destination::Stdout(format),
         (None, None) if args.json => Destination::Json,
@@ -973,7 +984,12 @@ mod tests {
             (&["-o", "out.JSON"], file("out.JSON", Json, false)),
             (&["-o", "out.markdown"], file("out.markdown", Md, false)),
             (&["-o", "out"], file("out", Txt, false)),
-            (&["-o", "out.docx"], file("out.docx", Txt, false)),
+            (&["-o", "out.docx"], file("out.docx", Docx, false)),
+            (&["-o", "out.docx", "--json"], file("out.docx", Docx, true)),
+            (
+                &["-o", "notes.txt", "--format", "docx"],
+                file("notes.txt", Docx, false),
+            ),
             (
                 &["-o", "out.srt", "--format", "vtt"],
                 file("out.srt", Vtt, false),
@@ -1000,6 +1016,17 @@ mod tests {
             err,
             "--format prints the transcript to stdout; add --output to combine it with --json"
         );
+    }
+
+    #[test]
+    fn output_plan_rejects_docx_on_stdout() {
+        for flags in [&["--format", "docx"][..], &["--format", "docx", "--json"]] {
+            assert_eq!(
+                plan(flags).map(|p| p.destination),
+                Err(DOCX_ON_STDOUT.to_string()),
+                "{flags:?}"
+            );
+        }
     }
 
     #[test]
@@ -1061,6 +1088,30 @@ mod tests {
         assert!(err.starts_with("cannot write /proc/talk.srt: "), "{err}");
         // Devices are written to, not replaced, so they pass.
         assert!(check_output_path(Path::new("/dev/null"), &input).is_ok());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn check_output_path_catches_a_target_open_in_another_program() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("talk.wav");
+        std::fs::write(&input, b"RIFF").unwrap();
+        let target = dir.path().join("talk.docx");
+        std::fs::write(&target, b"PK").unwrap();
+
+        // Open the way Word keeps a document: shared for reading only.
+        let open = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&target)
+            .unwrap();
+        let err = check_output_path(&target, &input).unwrap_err();
+        assert!(err.starts_with("cannot write "), "{err}");
+        drop(open);
+
+        assert!(check_output_path(&target, &input).is_ok());
+        assert_eq!(std::fs::read(&target).unwrap(), b"PK");
     }
 
     #[test]

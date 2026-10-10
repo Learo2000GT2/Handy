@@ -629,6 +629,7 @@
         "button": "匯出…",
         "dialogTitle": "匯出轉錄",
         "formats": {
+          "docx": "Word 文件 (.docx)",
           "txt": "純文字 (.txt)",
           "md": "Markdown (.md)",
           "srt": "SubRip 字幕 (.srt)",

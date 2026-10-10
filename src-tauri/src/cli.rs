@@ -74,7 +74,8 @@ pub struct CliArgs {
     #[arg(short = 'o', long, value_name = "PATH", requires = "transcribe_file")]
     pub output: Option<PathBuf>,
 
-    /// Transcript format for --output or stdout: txt, md, srt, vtt or json.
+    /// Transcript format for --output or stdout: txt, md, srt, vtt, json or
+    /// docx (docx needs --output).
     #[arg(long, value_enum, value_name = "FORMAT", requires = "transcribe_file")]
     pub format: Option<TranscriptFormat>,
 
@@ -174,11 +175,12 @@ mod tests {
             ("srt", TranscriptFormat::Srt),
             ("vtt", TranscriptFormat::Vtt),
             ("json", TranscriptFormat::Json),
+            ("docx", TranscriptFormat::Docx),
         ] {
             let args = parse(&["-f", "a.wav", "--format", name]).unwrap();
             assert_eq!(args.format, Some(format), "{name}");
         }
-        assert!(parse(&["-f", "a.wav", "--format", "docx"]).is_err());
+        assert!(parse(&["-f", "a.wav", "--format", "pdf"]).is_err());
     }
 
     #[test]
@@ -273,7 +275,9 @@ mod tests {
             ("subs.VTT", Some(TranscriptFormat::Vtt)),
             ("subs.webvtt", Some(TranscriptFormat::Vtt)),
             ("out.json", Some(TranscriptFormat::Json)),
-            ("out.docx", None),
+            ("out.docx", Some(TranscriptFormat::Docx)),
+            ("out.DOCX", Some(TranscriptFormat::Docx)),
+            ("out.doc", None),
             ("out", None),
             ("dir.srt/out", None),
         ];

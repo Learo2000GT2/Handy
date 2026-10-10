@@ -28,7 +28,7 @@ interface ExportMenuProps {
   placement?: "top" | "bottom";
 }
 
-/** Menu button offering TXT, Markdown, SRT and VTT exports. */
+/** Menu button offering Word, TXT, Markdown, SRT and VTT exports. */
 export const ExportMenu: React.FC<ExportMenuProps> = ({
   source,
   sourceName,

@@ -6,7 +6,7 @@ use crate::file_transcription::types::{
 };
 use crate::file_transcription::FileTranscriptionManager;
 use crate::managers::history::HistoryManager;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::State;
 
@@ -88,10 +88,16 @@ pub async fn export_file_transcript(
 ) -> Result<String, String> {
     let transcript = resolve_transcript(&manager, &history, source).await?;
     let path = export_path(&path, format)?;
+    refuse_source_as_target(&path, &transcript.source_path)?;
 
     let target = path.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        export::write_atomic(&target, &export::render(&transcript, format))
+        let bytes = export::render_file(
+            &transcript,
+            format,
+            &export::ExportOptions::local(transcript.created_at),
+        )?;
+        export::write_atomic(&target, bytes)
     })
     .await
     .map_err(|e| format!("Failed to export transcript: {}", e))?
@@ -118,6 +124,22 @@ async fn resolve_transcript(
                 .ok_or_else(|| "Not a file transcription".to_string())
         }
     }
+}
+
+/// Refuses an export onto the recording it was transcribed from: the save
+/// dialog lets the user pick any file, and replacing the original would
+/// lose it.
+fn refuse_source_as_target(target: &Path, source_path: &str) -> Result<(), String> {
+    if let (Ok(target), Ok(source)) = (target.canonicalize(), Path::new(source_path).canonicalize())
+    {
+        if target == source {
+            return Err(
+                "The export would replace the recording it was transcribed from. Choose another name."
+                    .to_string(),
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Validates an export destination chosen in the save dialog.
@@ -229,5 +251,57 @@ mod tests {
             ),
             Ok(dir_path.join("interview.vtt"))
         );
+    }
+
+    #[test]
+    fn export_path_adds_docx_and_never_replaces_an_unnamed_docx() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let dir_path = dir.path();
+
+        assert_eq!(
+            export_path(
+                &dir_path.join("interview").to_string_lossy(),
+                TranscriptFormat::Docx
+            ),
+            Ok(dir_path.join("interview.docx"))
+        );
+
+        std::fs::write(dir_path.join("interview.docx"), b"PK").expect("write file");
+        let err = export_path(
+            &dir_path.join("interview").to_string_lossy(),
+            TranscriptFormat::Docx,
+        )
+        .expect_err("would replace interview.docx unasked");
+        assert!(err.contains("interview.docx already exists"), "{err}");
+        assert_eq!(
+            std::fs::read(dir_path.join("interview.docx")).expect("read file"),
+            b"PK"
+        );
+    }
+
+    #[test]
+    fn exports_never_replace_the_source_recording() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let source = dir.path().join("interview.m4a");
+        std::fs::write(&source, b"audio").expect("write file");
+        let source_path = source.to_string_lossy();
+
+        let err = refuse_source_as_target(&source, &source_path).expect_err("the source");
+        assert_eq!(
+            err,
+            "The export would replace the recording it was transcribed from. Choose another name."
+        );
+        // The same file under another spelling.
+        let indirect = dir.path().join(".").join("interview.m4a");
+        assert!(refuse_source_as_target(&indirect, &source_path).is_err());
+
+        // Another file, or one that does not exist yet, is fine.
+        assert!(refuse_source_as_target(&dir.path().join("interview.docx"), &source_path).is_ok());
+        let other = dir.path().join("notes.txt");
+        std::fs::write(&other, "notes").expect("write file");
+        assert!(refuse_source_as_target(&other, &source_path).is_ok());
+        // A source that is gone cannot be replaced.
+        assert!(refuse_source_as_target(&other, "/no/such/recording.m4a").is_ok());
+        assert_eq!(std::fs::read(&source).expect("read file"), b"audio");
     }
 }

@@ -629,6 +629,7 @@
         "button": "Ekspor…",
         "dialogTitle": "Ekspor Transkripsi",
         "formats": {
+          "docx": "Dokumen Word (.docx)",
           "txt": "Teks biasa (.txt)",
           "md": "Markdown (.md)",
           "srt": "Subtitle SubRip (.srt)",

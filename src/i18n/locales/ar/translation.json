@@ -606,6 +606,7 @@
         "button": "تصدير…",
         "dialogTitle": "تصدير التفريغ",
         "formats": {
+          "docx": "مستند Word (.docx)",
           "txt": "نص عادي (.txt)",
           "md": "Markdown (.md)",
           "srt": "ترجمات SubRip (.srt)",

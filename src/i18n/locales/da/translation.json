@@ -629,6 +629,7 @@
         "button": "Eksportér…",
         "dialogTitle": "Eksportér transskription",
         "formats": {
+          "docx": "Word-dokument (.docx)",
           "txt": "Almindelig tekst (.txt)",
           "md": "Markdown (.md)",
           "srt": "SubRip-undertekster (.srt)",

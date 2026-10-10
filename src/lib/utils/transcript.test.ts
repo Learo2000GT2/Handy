@@ -115,6 +115,10 @@ assert.equal(
   defaultExportName("interview.final.m4a", "srt"),
   "interview.final.srt",
 );
+assert.equal(
+  defaultExportName("interview.final.m4a", "docx"),
+  "interview.final.docx",
+);
 assert.equal(defaultExportName("Meeting.MOV", "txt"), "Meeting.txt");
 assert.equal(defaultExportName("no-extension", "md"), "no-extension.md");
 assert.equal(

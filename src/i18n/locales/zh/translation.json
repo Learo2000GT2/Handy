@@ -629,6 +629,7 @@
         "button": "导出…",
         "dialogTitle": "导出转录",
         "formats": {
+          "docx": "Word 文档 (.docx)",
           "txt": "纯文本 (.txt)",
           "md": "Markdown (.md)",
           "srt": "SubRip 字幕 (.srt)",

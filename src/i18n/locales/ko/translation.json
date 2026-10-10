@@ -629,6 +629,7 @@
         "button": "내보내기…",
         "dialogTitle": "전사 내용 내보내기",
         "formats": {
+          "docx": "Word 문서 (.docx)",
           "txt": "일반 텍스트 (.txt)",
           "md": "Markdown (.md)",
           "srt": "SubRip 자막 (.srt)",

@@ -1,15 +1,18 @@
-//! Transcript rendering (TXT, Markdown, SRT, WebVTT, JSON), the subtitle cue
-//! builder and atomic file writes. The single source of truth for export
-//! formats: the GUI export command and the headless CLI both render here.
+//! Transcript rendering (TXT, Markdown, SRT, WebVTT, JSON, Word), the
+//! subtitle cue builder and atomic file writes. The single source of truth
+//! for export formats: the GUI export command and the headless CLI both
+//! render here.
 //!
-//! Every renderer emits UTF-8 without a BOM and `\n` line endings; a
-//! non-empty output ends with exactly one `\n`.
+//! Every text renderer emits UTF-8 without a BOM and `\n` line endings; a
+//! non-empty output ends with exactly one `\n`. DOCX is a ZIP package,
+//! built in `docx.rs`.
 
+use crate::file_transcription::docx;
 use crate::file_transcription::speakers::speaker_label;
 use crate::file_transcription::types::{
     is_no_space_language, FileTranscript, TranscriptFormat, TranscriptSegment, TranscriptStatus,
 };
-use chrono::DateTime;
+use chrono::{DateTime, Local};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::ops::Range;
@@ -25,13 +28,47 @@ const MAX_CUE_MS: u64 = 7_000;
 /// Length given to a segment whose end is not after its start.
 const FALLBACK_SEGMENT_MS: u64 = 1_000;
 
-pub fn render(t: &FileTranscript, format: TranscriptFormat) -> String {
+/// What an export may depend on besides the transcript.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ExportOptions {
+    /// Local time minus UTC at `created_at`, in seconds; only the DOCX
+    /// "Transcribed" line uses it.
+    pub utc_offset_secs: i32,
+}
+
+impl ExportOptions {
+    /// This machine's UTC offset at `created_at` (0 when out of range).
+    pub fn local(created_at: i64) -> Self {
+        let utc_offset_secs = DateTime::from_timestamp(created_at, 0)
+            .map(|utc| utc.with_timezone(&Local).offset().local_minus_utc())
+            .unwrap_or(0);
+        Self { utc_offset_secs }
+    }
+}
+
+/// The transcript in a text format; None for DOCX, which is not text (see
+/// `render_file`).
+pub fn render(t: &FileTranscript, format: TranscriptFormat) -> Option<String> {
     match format {
-        TranscriptFormat::Txt => render_txt(t),
-        TranscriptFormat::Md => render_markdown(t),
-        TranscriptFormat::Srt => render_srt(t),
-        TranscriptFormat::Vtt => render_vtt(t),
-        TranscriptFormat::Json => render_json(t),
+        TranscriptFormat::Txt => Some(render_txt(t)),
+        TranscriptFormat::Md => Some(render_markdown(t)),
+        TranscriptFormat::Srt => Some(render_srt(t)),
+        TranscriptFormat::Vtt => Some(render_vtt(t)),
+        TranscriptFormat::Json => Some(render_json(t)),
+        TranscriptFormat::Docx => None,
+    }
+}
+
+/// The contents of an export file in any format: the text formats' UTF-8,
+/// or a Word document.
+pub fn render_file(
+    t: &FileTranscript,
+    format: TranscriptFormat,
+    options: &ExportOptions,
+) -> io::Result<Vec<u8>> {
+    match render(t, format) {
+        Some(text) => Ok(text.into_bytes()),
+        None => docx::render_docx(t, options),
     }
 }
 
@@ -375,16 +412,16 @@ const MAX_SYMLINK_HOPS: usize = 40;
 /// permissions (on Unix). A target that exists but is neither a regular file
 /// nor a folder (a pipe, a terminal, `/dev/stdout`) cannot be replaced, so
 /// it is written to directly.
-pub fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
+pub fn write_atomic(path: &Path, contents: impl AsRef<[u8]>) -> io::Result<()> {
     if is_special_file(path) {
         let mut file = OpenOptions::new().write(true).truncate(true).open(path)?;
-        file.write_all(contents.as_bytes())?;
+        file.write_all(contents.as_ref())?;
         return file.flush();
     }
     let path = resolve_symlinks(path)?;
     let temp_path = temp_path_for(&path)?;
 
-    let result = write_and_replace(&temp_path, &path, contents.as_bytes());
+    let result = write_and_replace(&temp_path, &path, contents.as_ref());
     if result.is_err() {
         let _ = fs::remove_file(&temp_path);
     }
@@ -395,9 +432,24 @@ pub fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
 /// would because its folder is missing or cannot take the temporary file.
 /// A special file (see `write_atomic`) is not opened here: opening a pipe
 /// can block, or end it for its reader.
+///
+/// On Windows, an existing file that another program holds open without
+/// sharing it for writing (Word keeps its documents so) cannot be replaced
+/// either; that is caught by opening it for appending, which writes nothing.
 pub fn check_writable(path: &Path) -> io::Result<()> {
     if is_special_file(path) {
         return Ok(());
+    }
+    #[cfg(windows)]
+    if fs::metadata(path).is_ok_and(|metadata| metadata.is_file()) {
+        if let Err(e) = OpenOptions::new().append(true).open(path) {
+            // ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION. Anything else
+            // (a read-only file, say) is left to the replace, which may
+            // still manage.
+            if matches!(e.raw_os_error(), Some(32 | 33)) {
+                return Err(e);
+            }
+        }
     }
     let temp_path = temp_path_for(&resolve_symlinks(path)?)?;
     File::create(&temp_path)?;
@@ -821,12 +873,12 @@ fn push_in_order(cues: &mut Vec<Cue>, mut cue: Cue) {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::file_transcription::speakers::render_text;
     use crate::file_transcription::types::{TimingGrain, TranscriptSpeaker, TranscriptSpeakers};
 
-    fn seg(start_ms: u64, end_ms: u64, text: &str) -> TranscriptSegment {
+    pub(crate) fn seg(start_ms: u64, end_ms: u64, text: &str) -> TranscriptSegment {
         TranscriptSegment::new(start_ms, end_ms, text)
     }
 
@@ -841,7 +893,7 @@ mod tests {
 
     /// Each renderer reads either the paragraphs (TXT, Markdown) or the
     /// segments (SRT, VTT), so the two lists are independent here.
-    fn sample() -> FileTranscript {
+    pub(crate) fn sample() -> FileTranscript {
         FileTranscript {
             source_path: "/recordings/interview.m4a".to_string(),
             source_name: "interview.m4a".to_string(),
@@ -877,7 +929,7 @@ mod tests {
         }
     }
 
-    fn empty() -> FileTranscript {
+    pub(crate) fn empty() -> FileTranscript {
         FileTranscript {
             status: TranscriptStatus::Completed,
             status_detail: None,
@@ -886,6 +938,11 @@ mod tests {
             segments: Vec::new(),
             ..sample()
         }
+    }
+
+    /// A text format's output.
+    fn text(t: &FileTranscript, format: TranscriptFormat) -> String {
+        render(t, format).expect("text format")
     }
 
     /// Cues must be ordered, non-empty, non-overlapping and at most 7 s long.
@@ -917,7 +974,7 @@ mod tests {
     #[test]
     fn txt_golden() {
         assert_eq!(
-            render(&sample(), TranscriptFormat::Txt),
+            text(&sample(), TranscriptFormat::Txt),
             "Hello and welcome to the show. Today we talk about transcription.\n\n\
              Second paragraph text.\n"
         );
@@ -940,7 +997,7 @@ mod tests {
 
 **[00:00:27]** Second paragraph text.
 ";
-        assert_eq!(render(&sample(), TranscriptFormat::Md), expected);
+        assert_eq!(text(&sample(), TranscriptFormat::Md), expected);
     }
 
     #[test]
@@ -1020,7 +1077,7 @@ Hello and welcome to the show.
 Today we talk about transcription and why
 chunking matters.
 ";
-        assert_eq!(render(&sample(), TranscriptFormat::Srt), expected);
+        assert_eq!(text(&sample(), TranscriptFormat::Srt), expected);
         assert_eq!(render_srt(&empty()), "");
     }
 
@@ -1035,7 +1092,7 @@ Hello and welcome to the show.
 Today we talk about transcription and why
 chunking matters.
 ";
-        assert_eq!(render(&sample(), TranscriptFormat::Vtt), expected);
+        assert_eq!(text(&sample(), TranscriptFormat::Vtt), expected);
         assert_eq!(render_vtt(&empty()), "WEBVTT\n");
     }
 
@@ -1108,13 +1165,18 @@ chunking matters.
   "history_id": null
 }
 "#;
-        let json = render(&sample(), TranscriptFormat::Json);
+        let json = text(&sample(), TranscriptFormat::Json);
         assert_eq!(json, expected);
         let parsed: FileTranscript = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, sample());
     }
 
-    fn labelled_seg(start_ms: u64, end_ms: u64, text: &str, speaker: u32) -> TranscriptSegment {
+    pub(crate) fn labelled_seg(
+        start_ms: u64,
+        end_ms: u64,
+        text: &str,
+        speaker: u32,
+    ) -> TranscriptSegment {
         TranscriptSegment {
             speaker: Some(speaker),
             ..seg(start_ms, end_ms, text)
@@ -1122,7 +1184,7 @@ chunking matters.
     }
 
     /// Two speakers, the first one named.
-    fn labelled_sample() -> FileTranscript {
+    pub(crate) fn labelled_sample() -> FileTranscript {
         let speakers = TranscriptSpeakers {
             speakers: vec![
                 TranscriptSpeaker {
@@ -1164,7 +1226,7 @@ chunking matters.
     fn txt_md_srt_vtt_json_with_speakers_golden() {
         let t = labelled_sample();
         assert_eq!(
-            render(&t, TranscriptFormat::Txt),
+            text(&t, TranscriptFormat::Txt),
             "Doug: Thanks for coming in today. How long are you usually standing?\n\n\
              Speaker 2: Almost the whole shift.\n"
         );
@@ -1183,7 +1245,7 @@ chunking matters.
 
 **[00:00:08] Speaker 2:** Almost the whole shift.
 ";
-        assert_eq!(render(&t, TranscriptFormat::Md), markdown);
+        assert_eq!(text(&t, TranscriptFormat::Md), markdown);
 
         let srt = "1
 00:00:00,000 --> 00:00:03,200
@@ -1197,7 +1259,7 @@ How long are you usually standing?
 00:00:08,400 --> 00:00:10,100
 Speaker 2: Almost the whole shift.
 ";
-        assert_eq!(render(&t, TranscriptFormat::Srt), srt);
+        assert_eq!(text(&t, TranscriptFormat::Srt), srt);
 
         let vtt = "WEBVTT
 
@@ -1210,9 +1272,9 @@ Speaker 2: Almost the whole shift.
 00:00:08.400 --> 00:00:10.100
 <v Speaker 2>Speaker 2: Almost the whole shift.
 ";
-        assert_eq!(render(&t, TranscriptFormat::Vtt), vtt);
+        assert_eq!(text(&t, TranscriptFormat::Vtt), vtt);
 
-        let json = render(&t, TranscriptFormat::Json);
+        let json = text(&t, TranscriptFormat::Json);
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(value["segments"][0]["speaker"], 1);
         assert_eq!(value["paragraphs"][1]["speaker"], 2);
@@ -1234,7 +1296,7 @@ Speaker 2: Almost the whole shift.
             speakers.speakers[0].name = Some("A<b>&c".to_string());
             speakers.speakers[1].name = Some(" Two\nLines ".to_string());
         }
-        let vtt = render(&t, TranscriptFormat::Vtt);
+        let vtt = text(&t, TranscriptFormat::Vtt);
         assert!(
             vtt.contains("\n<v A&lt;b&gt;&amp;c>A&lt;b&gt;&amp;c: Thanks for coming in today.\n"),
             "{vtt}"
@@ -1244,7 +1306,7 @@ Speaker 2: Almost the whole shift.
             "{vtt}"
         );
         // Markdown escapes the name like any text.
-        assert!(render(&t, TranscriptFormat::Md).contains("**[00:00:00] A\\<b\\>&c:**"));
+        assert!(text(&t, TranscriptFormat::Md).contains("**[00:00:00] A\\<b\\>&c:**"));
     }
 
     #[test]
@@ -1284,21 +1346,39 @@ Speaker 2: Almost the whole shift.
         t.segments[2].speaker = None;
         t.text = render_text(&t.paragraphs, t.speakers.as_ref());
         assert_eq!(
-            render(&t, TranscriptFormat::Txt),
+            text(&t, TranscriptFormat::Txt),
             "Doug: Thanks for coming in today. How long are you usually standing?\n\n\
              Almost the whole shift.\n"
         );
-        assert!(render(&t, TranscriptFormat::Md)
-            .ends_with("\n**[00:00:08]** Almost the whole shift.\n"));
-        assert!(render(&t, TranscriptFormat::Srt)
+        assert!(
+            text(&t, TranscriptFormat::Md).ends_with("\n**[00:00:08]** Almost the whole shift.\n")
+        );
+        assert!(text(&t, TranscriptFormat::Srt)
             .ends_with("00:00:08,400 --> 00:00:10,100\nAlmost the whole shift.\n"));
-        assert!(render(&t, TranscriptFormat::Vtt)
+        assert!(text(&t, TranscriptFormat::Vtt)
             .ends_with("00:00:08.400 --> 00:00:10.100\nAlmost the whole shift.\n"));
     }
 
     #[test]
+    fn docx_is_not_text_and_text_files_are_the_rendered_text() {
+        use TranscriptFormat::*;
+        assert_eq!(render(&sample(), Docx), None);
+        for t in [sample(), labelled_sample(), empty()] {
+            for format in [Txt, Md, Srt, Vtt, Json] {
+                assert_eq!(
+                    render_file(&t, format, &ExportOptions::default()).unwrap(),
+                    text(&t, format).into_bytes(),
+                    "{format:?}"
+                );
+            }
+            let docx = render_file(&t, Docx, &ExportOptions::default()).unwrap();
+            assert!(docx.starts_with(b"PK\x03\x04"));
+        }
+    }
+
+    #[test]
     fn json_without_speakers_has_no_new_keys() {
-        let json = render(&sample(), TranscriptFormat::Json);
+        let json = text(&sample(), TranscriptFormat::Json);
         assert!(!json.contains("speaker"), "{json}");
         let cues = build_cues(&sample().segments, Some("en"));
         assert!(cues.iter().all(|cue| cue.speaker.is_none()));
@@ -1519,6 +1599,10 @@ Speaker 2: Almost the whole shift.
         );
         assert_eq!(default_export_file_name("memo", Txt), "memo.txt");
         assert_eq!(
+            default_export_file_name("interview.final.m4a", Docx),
+            "interview.final.docx"
+        );
+        assert_eq!(
             default_export_file_name("a<b>c:d\"e|f?g*h.wav", Md),
             "a_b_c_d_e_f_g_h.md"
         );
@@ -1554,6 +1638,17 @@ Speaker 2: Almost the whole shift.
         write_atomic(&path, "second\n").unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), "second\n");
         assert_eq!(dir_entries(dir.path()), vec!["transcript.srt"]);
+    }
+
+    #[test]
+    fn write_atomic_writes_binary_contents() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("transcript.docx");
+        fs::write(&path, "an older export\n").unwrap();
+
+        write_atomic(&path, b"PK\x03\x04\xff").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"PK\x03\x04\xff");
+        assert_eq!(dir_entries(dir.path()), vec!["transcript.docx"]);
     }
 
     #[test]

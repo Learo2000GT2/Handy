@@ -629,6 +629,7 @@
         "button": "Esporta…",
         "dialogTitle": "Esporta trascrizione",
         "formats": {
+          "docx": "Documento Word (.docx)",
           "txt": "Testo semplice (.txt)",
           "md": "Markdown (.md)",
           "srt": "Sottotitoli SubRip (.srt)",

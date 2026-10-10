@@ -629,6 +629,7 @@
         "button": "ייצוא…",
         "dialogTitle": "ייצוא תמלול",
         "formats": {
+          "docx": "מסמך Word (.docx)",
           "txt": "טקסט פשוט (.txt)",
           "md": "Markdown (.md)",
           "srt": "כתוביות SubRip (.srt)",

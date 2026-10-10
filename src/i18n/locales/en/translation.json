@@ -629,6 +629,7 @@
         "button": "Export…",
         "dialogTitle": "Export Transcript",
         "formats": {
+          "docx": "Word document (.docx)",
           "txt": "Plain text (.txt)",
           "md": "Markdown (.md)",
           "srt": "SubRip subtitles (.srt)",

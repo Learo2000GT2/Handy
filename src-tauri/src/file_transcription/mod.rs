@@ -3,6 +3,7 @@
 pub mod chunker;
 pub mod decode;
 pub mod diarize;
+pub mod docx;
 pub mod engine;
 pub mod export;
 pub mod ffmpeg;
