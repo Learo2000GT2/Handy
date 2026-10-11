@@ -882,6 +882,21 @@ pub fn change_whats_new_last_seen_version_setting(
 pub fn update_custom_words(app: AppHandle, words: Vec<String>) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.custom_words = words;
+    // Removing a word also retires the alternate spellings listed for it.
+    settings::prune_custom_word_variants(&mut settings);
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_custom_word_variants(
+    app: AppHandle,
+    variants: std::collections::HashMap<String, Vec<String>>,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.custom_word_variants = variants;
+    settings::prune_custom_word_variants(&mut settings);
     settings::write_settings(&app, settings);
     Ok(())
 }

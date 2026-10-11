@@ -439,6 +439,11 @@ pub struct AppSettings {
     pub log_level: LogLevel,
     #[serde(default)]
     pub custom_words: Vec<String>,
+    /// Alternate spellings a model may write for a custom word, keyed by that
+    /// word (`"Stacey"` -> `["Stacy", "Stacie"]`). Every listed spelling is
+    /// rewritten to its word, exactly and for every model.
+    #[serde(default)]
+    pub custom_word_variants: HashMap<String, Vec<String>>,
     #[serde(default)]
     pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
@@ -955,6 +960,7 @@ pub fn get_default_settings() -> AppSettings {
         debug_mode: false,
         log_level: default_log_level(),
         custom_words: Vec::new(),
+        custom_word_variants: HashMap::new(),
         model_unload_timeout: ModelUnloadTimeout::default(),
         word_correction_threshold: default_word_correction_threshold(),
         history_limit: default_history_limit(),
@@ -1087,6 +1093,15 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
 /// (e.g. an enum variant written by a newer or older version) fall back to
 /// their default. This means one bad field can never reset the rest of the
 /// user's configuration (#1619).
+/// Drops alternate spellings whose custom word is gone, and words left with
+/// no spellings, so the stored map only ever describes current custom words.
+pub fn prune_custom_word_variants(settings: &mut AppSettings) {
+    let custom_words = &settings.custom_words;
+    settings
+        .custom_word_variants
+        .retain(|word, spellings| !spellings.is_empty() && custom_words.contains(word));
+}
+
 fn salvage_settings(stored: &serde_json::Value) -> AppSettings {
     let Some(stored_map) = stored.as_object() else {
         warn!("Stored settings are not a JSON object; falling back to defaults");
@@ -1493,6 +1508,59 @@ mod tests {
         assert_eq!(salvaged.paste_delay_ms, default_paste_delay_ms());
         assert_eq!(salvaged.sound_theme, default_sound_theme());
         assert_eq!(salvaged.custom_words, vec!["handy".to_string()]);
+    }
+
+    #[test]
+    fn custom_word_variants_default_to_empty_and_salvage_wrong_type() {
+        // Settings files written before alternate spellings existed carry no
+        // such key and must keep loading unchanged.
+        let mut stored = default_settings_json();
+        stored
+            .as_object_mut()
+            .unwrap()
+            .remove("custom_word_variants");
+        let settings: AppSettings = serde_json::from_value(stored.clone()).unwrap();
+        assert!(settings.custom_word_variants.is_empty());
+
+        let map = stored.as_object_mut().unwrap();
+        map.insert("custom_words".into(), serde_json::json!(["Stacey"]));
+        map.insert("custom_word_variants".into(), serde_json::json!(["Stacy"]));
+        assert!(serde_json::from_value::<AppSettings>(stored.clone()).is_err());
+
+        let salvaged = salvage_settings(&stored);
+        assert!(salvaged.custom_word_variants.is_empty());
+        assert_eq!(salvaged.custom_words, vec!["Stacey".to_string()]);
+
+        let map = stored.as_object_mut().unwrap();
+        map.insert(
+            "custom_word_variants".into(),
+            serde_json::json!({ "Stacey": ["Stacy", "Stacie"] }),
+        );
+        let settings: AppSettings = serde_json::from_value(stored).unwrap();
+        assert_eq!(
+            settings.custom_word_variants["Stacey"],
+            vec!["Stacy".to_string(), "Stacie".to_string()]
+        );
+    }
+
+    #[test]
+    fn prune_custom_word_variants_drops_orphans_and_empty_lists() {
+        let mut settings = AppSettings {
+            custom_words: vec!["Stacey".to_string(), "Nguyen".to_string()],
+            custom_word_variants: HashMap::from([
+                ("Stacey".to_string(), vec!["Stacy".to_string()]),
+                ("Nguyen".to_string(), Vec::new()),
+                ("Removed".to_string(), vec!["Gone".to_string()]),
+            ]),
+            ..Default::default()
+        };
+
+        prune_custom_word_variants(&mut settings);
+
+        assert_eq!(
+            settings.custom_word_variants,
+            HashMap::from([("Stacey".to_string(), vec!["Stacy".to_string()])])
+        );
     }
 
     #[test]

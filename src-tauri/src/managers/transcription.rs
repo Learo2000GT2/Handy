@@ -1,6 +1,6 @@
 use crate::audio_toolkit::{
-    apply_custom_words, detect_output_language, normalize_transcription_output,
-    remove_filler_words, OutputLanguageEvidence,
+    apply_custom_word_variants, apply_custom_words, detect_output_language,
+    normalize_transcription_output, remove_filler_words, OutputLanguageEvidence,
 };
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
 use crate::engine_supervisor::{
@@ -1208,7 +1208,8 @@ impl TranscriptionManager {
         // words were already handed to the model as an initial prompt (whisper
         // family). We don't pass a prompt to non-whisper models (it requires the
         // whisper-kind run extension), so they still get fuzzy correction here,
-        // same as the ONNX engines.
+        // same as the ONNX engines. Listed alternate spellings are exact and
+        // are rewritten for every model either way.
         let filtered_result = post_process_transcription_text(
             run.text,
             &settings,
@@ -1799,14 +1800,23 @@ fn post_process_transcription_text(
             _ => raw,
         };
 
+        // Listed alternate spellings are an explicit instruction, so they are
+        // honoured for every model: a decode prompt only biases the decoder
+        // and still leaves "Stacy" where the user wants "Stacey".
+        let corrected = apply_custom_word_variants(
+            &raw,
+            &settings.custom_words,
+            &settings.custom_word_variants,
+        );
+
         let corrected = if !settings.custom_words.is_empty() && !custom_words_already_prompted {
             apply_custom_words(
-                &raw,
+                &corrected,
                 &settings.custom_words,
                 settings.word_correction_threshold,
             )
         } else {
-            raw
+            corrected
         };
 
         let without_fillers = remove_filler_words(
@@ -2143,6 +2153,43 @@ mod tests {
 
     fn languages(codes: &[&str]) -> Vec<String> {
         codes.iter().map(|code| (*code).to_string()).collect()
+    }
+
+    #[test]
+    fn listed_spellings_are_rewritten_even_when_custom_words_were_prompted() {
+        let settings = AppSettings {
+            custom_words: vec!["Stacey".to_string()],
+            custom_word_variants: std::collections::HashMap::from([(
+                "Stacey".to_string(),
+                vec!["Stacy".to_string()],
+            )]),
+            filler_word_removal_enabled: false,
+            ..Default::default()
+        };
+        let evidence = OutputLanguageEvidence::UserSelected("en".to_string());
+
+        // Whisper already saw "Stacey" as its decode prompt, so the fuzzy pass
+        // is skipped, but the listed spelling must still be rewritten while
+        // the unlisted "Stacie" is left to the model.
+        let prompted = post_process_transcription_text(
+            "I met Stacy and Stacie.".to_string(),
+            &settings,
+            true,
+            &evidence,
+            &languages(&["en"]),
+        );
+        assert_eq!(prompted, "I met Stacey and Stacie.");
+
+        // Engines that take no prompt also run the fuzzy pass, which pulls the
+        // unlisted "Stacie" to "Stacey" on its own.
+        let unprompted = post_process_transcription_text(
+            "I met Stacy and Stacie.".to_string(),
+            &settings,
+            false,
+            &evidence,
+            &languages(&["en"]),
+        );
+        assert_eq!(unprompted, "I met Stacey and Stacey.");
     }
 
     #[test]
