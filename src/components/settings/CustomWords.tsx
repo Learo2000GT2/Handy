@@ -23,10 +23,13 @@ const normalizeCustomWord = (word: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-// Spellings are never sent to the model, so unlike custom words they keep
-// their quotes and apostrophes ("Dunkin' Donuts" must match as written).
+// Spellings keep their apostrophes ("Dunkin' Donuts", "nothin'"), which are
+// part of the words. Quotes and angle brackets never are.
 const normalizeSpelling = (spelling: string) =>
-  spelling.replace(/\s+/g, " ").trim();
+  spelling
+    .replace(/[<>"\u201C\u201D\u00AB\u00BB]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const WORD_CHAR = /[\p{Alphabetic}\p{N}]/u;
 const EDGE_PUNCTUATION = /^[^\p{Alphabetic}\p{N}]+|[^\p{Alphabetic}\p{N}]+$/gu;
@@ -55,6 +58,17 @@ const phraseKey = (text: string) =>
     })
     .join(" ")
     .replace(EDGE_PUNCTUATION, "");
+
+// Mirrors build_variant_lookup: a spelling must start and end on a word, or
+// it can never match as typed ("& Co").
+const isUsableSpelling = (spelling: string) => {
+  const words = spelling.split(" ");
+  return (
+    phraseKey(spelling) !== "" &&
+    WORD_CHAR.test(words[0]) &&
+    WORD_CHAR.test(words[words.length - 1])
+  );
+};
 
 // Own entries only: a word such as "constructor" must not read
 // Object.prototype members.
@@ -162,7 +176,9 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
       if (!activeWord || isSaving) return;
       const spelling = normalizedSpelling;
       const key = phraseKey(spelling);
-      if (!key || spelling.length > MAX_ENTRY_LENGTH) return;
+      if (!isUsableSpelling(spelling) || spelling.length > MAX_ENTRY_LENGTH) {
+        return;
+      }
 
       if (spelling.split(" ").length > MAX_SPELLING_WORDS) {
         toast.error(
@@ -351,7 +367,7 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
               <Button
                 onClick={handleAddSpelling}
                 disabled={
-                  !phraseKey(normalizedSpelling) ||
+                  !isUsableSpelling(normalizedSpelling) ||
                   normalizedSpelling.length > MAX_ENTRY_LENGTH ||
                   isSaving
                 }

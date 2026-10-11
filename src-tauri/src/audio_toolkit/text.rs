@@ -267,11 +267,18 @@ enum LookupTarget<'a> {
         /// The spelling is written in capitals ("KC", "OK"), so capitals in
         /// the text are its normal form rather than shouting.
         in_capitals: bool,
-        /// Punctuation typed around the spelling ("'90s", "Ave."). It belongs
-        /// to the spelling, not to the sentence.
-        leading: &'a str,
-        trailing: &'a str,
+        /// An apostrophe typed at the start or end of the spelling ("'90s",
+        /// "nothin'") is part of it, so the text's apostrophe there goes too.
+        leading_apostrophe: bool,
+        trailing_apostrophe: bool,
+        /// The spelling is a title abbreviation ("Dr.", "St."), whose period
+        /// does not end a sentence before a name.
+        title: bool,
     },
+}
+
+fn is_apostrophe(c: char) -> bool {
+    matches!(c, '\'' | '\u{2018}' | '\u{2019}')
 }
 
 /// Phrase key -> what it stands for, plus the longest entry in words so the
@@ -312,8 +319,15 @@ fn build_variant_lookup<'a>(
             if key.is_empty() || words.len() > MAX_VARIANT_WORDS {
                 continue;
             }
+            // A spelling must start and end on a word to ever match ("& Co"
+            // never does: the "&" token would be left behind).
+            let has_word = |token: &&str| token.chars().any(char::is_alphanumeric);
+            if !words.first().is_some_and(has_word) || !words.last().is_some_and(has_word) {
+                continue;
+            }
             // An existing entry is a custom word or an earlier spelling;
             // either way it wins.
+            let title = TITLE_ABBREVIATIONS.contains(&key.as_str());
             if let Entry::Vacant(slot) = lookup.entry(key) {
                 let (leading, _) = extract_punctuation(words[0]);
                 let (_, trailing) = extract_punctuation(words[words.len() - 1]);
@@ -322,8 +336,9 @@ fn build_variant_lookup<'a>(
                 slot.insert(LookupTarget::Spelling {
                     word: word.as_str(),
                     in_capitals,
-                    leading,
-                    trailing,
+                    leading_apostrophe: leading.chars().next_back().is_some_and(is_apostrophe),
+                    trailing_apostrophe: trailing.chars().next().is_some_and(is_apostrophe),
+                    title,
                 });
                 max_words = max_words.max(words.len());
                 has_spelling = true;
@@ -461,8 +476,9 @@ fn rewrite_variant_spans(
                     LookupTarget::Spelling {
                         word,
                         in_capitals,
-                        leading,
-                        trailing,
+                        leading_apostrophe,
+                        trailing_apostrophe,
+                        title,
                     },
                     possessive,
                 ),
@@ -471,18 +487,45 @@ fn rewrite_variant_spans(
                 let (mut prefix, _) = extract_punctuation(phrase[0]);
                 let (_, mut suffix) = extract_punctuation(phrase[n - 1]);
 
-                // Punctuation typed as part of the spelling goes with it,
-                // unless a trailing period also ends the sentence.
-                if !leading.is_empty() {
-                    prefix = prefix.strip_suffix(leading).unwrap_or(prefix);
+                // An apostrophe typed at the edge of the spelling goes with
+                // it. Quotes and brackets always stay with the sentence.
+                if leading_apostrophe {
+                    if let Some(c) = prefix.chars().next_back().filter(|c| is_apostrophe(*c)) {
+                        prefix = &prefix[..prefix.len() - c.len_utf8()];
+                    }
                 }
-                let next_opens_sentence = words.get(i + n).is_none_or(|next| {
-                    next.chars()
-                        .find(|c| c.is_alphanumeric())
-                        .is_some_and(char::is_uppercase)
-                });
-                if !trailing.is_empty() && possessive.is_empty() && !next_opens_sentence {
-                    suffix = suffix.strip_prefix(trailing).unwrap_or(suffix);
+                if trailing_apostrophe && possessive.is_empty() {
+                    if let Some(c) = suffix.chars().next().filter(|c| is_apostrophe(*c)) {
+                        suffix = &suffix[c.len_utf8()..];
+                    }
+                }
+
+                // A period right after the match that cannot end the sentence
+                // is the abbreviation's own ("Ave., Seattle", "Ave. and",
+                // "Dr. Smith", "K.C. Jones") and goes with it.
+                if possessive.is_empty() && suffix.starts_with('.') && !suffix.starts_with("..") {
+                    let rest = &suffix[1..];
+                    let last = phrase[n - 1];
+                    let initials = last.trim_end_matches('.').contains('.');
+                    let continues = if rest.starts_with([',', ';', ':', '?', '!']) {
+                        true
+                    } else if !rest.is_empty() {
+                        // A closing quote or bracket: the period ends the
+                        // quoted sentence.
+                        false
+                    } else {
+                        match words
+                            .get(i + n)
+                            .and_then(|next| next.chars().find(|c| c.is_alphanumeric()))
+                        {
+                            None => false,
+                            Some(c) if c.is_uppercase() => title || initials,
+                            Some(_) => true,
+                        }
+                    };
+                    if continues {
+                        suffix = rest;
+                    }
                 }
 
                 let previous = result.last().map(|(token, _)| token.as_str());
@@ -493,6 +536,12 @@ fn rewrite_variant_spans(
                     in_capitals,
                     previous_ends_sentence(previous),
                 );
+                // "KC'S" written as "Casey" takes "'s", not "'S".
+                let possessive = if corrected.chars().any(char::is_lowercase) {
+                    possessive.to_lowercase()
+                } else {
+                    possessive.to_string()
+                };
                 let written = format!("{corrected}{possessive}");
 
                 // A custom word that ends or starts with punctuation ("Acme
@@ -556,7 +605,7 @@ fn match_variant<'w, 'a>(
 
 /// Title abbreviations whose period does not end a sentence.
 const TITLE_ABBREVIATIONS: &[&str] = &[
-    "mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "mt", "vs",
+    "mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "mt", "ft", "vs",
 ];
 
 /// Whether a word written after `previous` opens a sentence: there is no
@@ -579,7 +628,8 @@ fn previous_ends_sentence(previous: Option<&str>) -> bool {
         .filter(|c| c.is_alphanumeric())
         .collect::<String>()
         .to_lowercase();
-    word.chars().count() > 1 && !TITLE_ABBREVIATIONS.contains(&word.as_str())
+    let initial = word.chars().count() == 1 && word.chars().all(char::is_alphabetic);
+    !initial && !TITLE_ABBREVIATIONS.contains(&word.as_str())
 }
 
 /// Casing for a custom word written in place of `phrase`. The custom word is
@@ -1633,12 +1683,13 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_custom_word_variants_keeps_punctuation_typed_with_the_spelling() {
-        let custom_words = words(&["Avenue", "Casey", "nineties"]);
+    fn test_apply_custom_word_variants_keeps_abbreviation_periods_with_the_spelling() {
+        let custom_words = words(&["Avenue", "Casey", "Doctor", "Mount"]);
         let variants = variants(&[
             ("Avenue", &["Ave."]),
-            ("Casey", &["K.C."]),
-            ("nineties", &["'90s"]),
+            ("Casey", &["KC"]),
+            ("Doctor", &["Dr."]),
+            ("Mount", &["Mt."]),
         ]);
         let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
 
@@ -1646,16 +1697,86 @@ mod tests {
             rewrite("Turn on Main Ave. and go."),
             "Turn on Main Avenue and go."
         );
+        assert_eq!(
+            rewrite("Ship to 12 Main Ave., Seattle."),
+            "Ship to 12 Main Avenue, Seattle."
+        );
+        assert_eq!(
+            rewrite("Is it on Main Ave.? Yes."),
+            "Is it on Main Avenue? Yes."
+        );
         assert_eq!(rewrite("Ask K.C. about it."), "Ask Casey about it.");
-        // The period also ends the sentence here, so it stays.
+        assert_eq!(rewrite("Ask K.C. Jones."), "Ask Casey Jones.");
+        assert_eq!(
+            rewrite("I saw Dr. Smith today."),
+            "I saw Doctor Smith today."
+        );
+        assert_eq!(
+            rewrite("We climbed Mt. Rainier."),
+            "We climbed Mount Rainier."
+        );
+        // Here the period also ends the sentence, so it stays.
         assert_eq!(
             rewrite("Turn on Main Ave. Then go."),
             "Turn on Main Avenue. Then go."
         );
         assert_eq!(rewrite("It is on Main Ave."), "It is on Main Avenue.");
         assert_eq!(
-            rewrite("Back in the '90s, we met."),
+            rewrite("He said \"Main Ave.\" twice."),
+            "He said \"Main Avenue.\" twice."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_treats_edge_apostrophes_as_part_of_the_spelling() {
+        let custom_words = words(&["nothing", "nineties", "going", "Stacey"]);
+        let variants = variants(&[
+            ("nothing", &["nothin'"]),
+            ("nineties", &["'90s"]),
+            ("going", &["goin'"]),
+            ("Stacey", &["Stacy"]),
+        ]);
+        let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
+
+        assert_eq!(rewrite("I got nothin'."), "I got nothing.");
+        assert_eq!(
+            rewrite("There's nothin' I can do."),
+            "There's nothing I can do."
+        );
+        assert_eq!(rewrite("I got nothin\u{2019} left"), "I got nothing left");
+        assert_eq!(
+            rewrite("Back in the \u{2019}90s, we met."),
             "Back in the nineties, we met."
+        );
+        assert_eq!(
+            rewrite("Where are you goin'? Home."),
+            "Where are you going? Home."
+        );
+        // Quotes around a spelling that has none stay with the sentence.
+        assert_eq!(rewrite("'Stacy,' she said."), "'Stacey,' she said.");
+        assert_eq!(rewrite("\"Stacy!\" he yelled."), "\"Stacey!\" he yelled.");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_small_casing_and_validity_cases() {
+        let custom_words = words(&["danah boyd", "Casey", "& Company"]);
+        let variants = variants(&[
+            ("danah boyd", &["Dana Boyd"]),
+            ("Casey", &["KC"]),
+            ("& Company", &["& Co"]),
+        ]);
+        let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
+
+        // A number is not an initial, so its period ends the sentence.
+        assert_eq!(
+            rewrite("We meet at 3. Dana Boyd will host."),
+            "We meet at 3. Danah boyd will host."
+        );
+        assert_eq!(rewrite("TELL KC'S MOM."), "TELL Casey's MOM.");
+        // A spelling that starts on punctuation can never match as typed.
+        assert_eq!(
+            rewrite("Smith & Co is here. Ask Co."),
+            "Smith & Co is here. Ask Co."
         );
     }
 
