@@ -52,9 +52,10 @@ const phraseKey = (text: string) =>
         .filter((c) => WORD_CHAR.test(c))
         .join("")
         .toLowerCase();
-      return (
-        chars.slice(0, first).join("") + core + chars.slice(last + 1).join("")
-      );
+      // Straight and curly apostrophes read the same.
+      const fold = (edge: string[]) =>
+        edge.join("").replace(/[\u2018\u2019]/g, "'");
+      return fold(chars.slice(0, first)) + core + fold(chars.slice(last + 1));
     })
     .join(" ")
     .replace(EDGE_PUNCTUATION, "");

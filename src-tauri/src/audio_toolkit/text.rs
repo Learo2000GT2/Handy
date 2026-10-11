@@ -248,7 +248,10 @@ fn phrase_key<S: AsRef<str>>(words: &[S]) -> String {
                 // No letters or digits: a token such as "&" or "-".
                 word.to_string()
             } else {
-                format!("{prefix}{}{suffix}", build_match_key(word))
+                // Straight and curly apostrophes read the same ("Dunkin’
+                // Donuts" matches a listed "Dunkin' Donuts").
+                let fold = |edge: &str| edge.replace(['\u{2018}', '\u{2019}'], "'");
+                format!("{}{}{}", fold(prefix), build_match_key(word), fold(suffix))
             }
         })
         .collect::<Vec<_>>()
@@ -271,8 +274,9 @@ enum LookupTarget<'a> {
         /// "nothin'") is part of it, so the text's apostrophe there goes too.
         leading_apostrophe: bool,
         trailing_apostrophe: bool,
-        /// The spelling is a title abbreviation ("Dr.", "St."), whose period
-        /// does not end a sentence before a name.
+        /// The custom word is a title that always comes before a name
+        /// ("Doctor" for "Dr."), so the period after the spelling never ends
+        /// a sentence. "Dr." listed for "Drive" is not one.
         title: bool,
     },
 }
@@ -327,7 +331,7 @@ fn build_variant_lookup<'a>(
             }
             // An existing entry is a custom word or an earlier spelling;
             // either way it wins.
-            let title = TITLE_ABBREVIATIONS.contains(&key.as_str());
+            let title = PRENOMINAL_TITLES.contains(&build_match_key(word).as_str());
             if let Entry::Vacant(slot) = lookup.entry(key) {
                 let (leading, _) = extract_punctuation(words[0]);
                 let (_, trailing) = extract_punctuation(words[words.len() - 1]);
@@ -514,13 +518,22 @@ fn rewrite_variant_spans(
                         // quoted sentence.
                         false
                     } else {
-                        match words
-                            .get(i + n)
-                            .and_then(|next| next.chars().find(|c| c.is_alphanumeric()))
-                        {
+                        match words.get(i + n) {
                             None => false,
-                            Some(c) if c.is_uppercase() => title || initials,
-                            Some(_) => true,
+                            Some(next) => match next.chars().find(|c| c.is_alphanumeric()) {
+                                None => false,
+                                // Before a capital the period may end the
+                                // sentence. A title never does; initials do
+                                // not before a name ("K.C. Jones") but do
+                                // before a sentence opener ("L.A. It was").
+                                Some(c) if c.is_uppercase() => {
+                                    title
+                                        || (initials
+                                            && !SENTENCE_OPENERS
+                                                .contains(&build_match_key(next).as_str()))
+                                }
+                                Some(_) => true,
+                            },
                         }
                     };
                     if continues {
@@ -605,7 +618,27 @@ fn match_variant<'w, 'a>(
 
 /// Title abbreviations whose period does not end a sentence.
 const TITLE_ABBREVIATIONS: &[&str] = &[
-    "mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "mt", "ft", "vs",
+    "mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "mt", "vs",
+];
+
+/// Written forms of titles that always come before a name, so a period after
+/// their abbreviation never ends a sentence ("Dr. Smith" -> "Doctor Smith").
+const PRENOMINAL_TITLES: &[&str] = &[
+    "mister",
+    "missus",
+    "doctor",
+    "professor",
+    "saint",
+    "mount",
+    "fort",
+];
+
+/// Common English words that open a sentence. Before one of these, a period
+/// after initials ("L.A.", "U.S.") is read as the end of the sentence.
+const SENTENCE_OPENERS: &[&str] = &[
+    "i", "it", "its", "the", "a", "an", "we", "he", "she", "they", "you", "this", "that", "these",
+    "those", "there", "then", "but", "and", "so", "if", "when", "after", "before", "my", "our",
+    "his", "her", "their", "your", "what", "why", "how", "where", "who", "yes", "no", "now",
 ];
 
 /// Whether a word written after `previous` opens a sentence: there is no
@@ -1725,6 +1758,57 @@ mod tests {
             rewrite("He said \"Main Ave.\" twice."),
             "He said \"Main Avenue.\" twice."
         );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_keeps_sentence_periods_after_non_titles() {
+        let custom_words = words(&["Los Angeles", "Junior", "Street", "Drive", "Saint"]);
+        let variants = variants(&[
+            ("Los Angeles", &["L.A."]),
+            ("Junior", &["Jr."]),
+            ("Street", &["St."]),
+            ("Drive", &["Dr."]),
+            ("Saint", &["Ste."]),
+        ]);
+        let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
+
+        assert_eq!(
+            rewrite("I flew to L.A. It was hot."),
+            "I flew to Los Angeles. It was hot."
+        );
+        assert_eq!(
+            rewrite("I met Sammy Davis Jr. He sang."),
+            "I met Sammy Davis Junior. He sang."
+        );
+        assert_eq!(
+            rewrite("I live on Main St. It is quiet."),
+            "I live on Main Street. It is quiet."
+        );
+        assert_eq!(
+            rewrite("Turn onto Oak Dr. Then park."),
+            "Turn onto Oak Drive. Then park."
+        );
+        assert_eq!(
+            rewrite("We flew to Ste. Louis today."),
+            "We flew to Saint Louis today."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_folds_apostrophes_between_words() {
+        let custom_words = words(&["Dunkin", "rock and roll"]);
+        let variants = variants(&[
+            ("Dunkin", &["Dunkin' Donuts"]),
+            ("rock and roll", &["rock \u{2019}n\u{2019} roll"]),
+        ]);
+        let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
+
+        assert_eq!(
+            rewrite("Grab Dunkin\u{2019} Donuts today."),
+            "Grab Dunkin today."
+        );
+        assert_eq!(rewrite("Grab Dunkin' Donuts today."), "Grab Dunkin today.");
+        assert_eq!(rewrite("We love rock 'n' roll."), "We love rock and roll.");
     }
 
     #[test]
