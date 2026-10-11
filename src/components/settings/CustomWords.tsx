@@ -304,7 +304,6 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
                       else chipToggles.current.delete(word);
                     }}
                     onClick={() => handleToggleWord(word)}
-                    disabled={isSaving}
                     aria-expanded={isActive}
                     aria-label={t(
                       "settings.advanced.customWords.editSpellings",
@@ -315,7 +314,7 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
                     title={t("settings.advanced.customWords.editSpellings", {
                       word,
                     })}
-                    className="ps-2 pe-1 py-1 rounded-s-lg cursor-pointer hover:bg-background-ui/30 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="ps-2 pe-1 py-1 rounded-s-lg cursor-pointer hover:bg-background-ui/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-logo-primary"
                   >
                     <span>{word}</span>
                     {spellings.length > 0 && (
@@ -331,7 +330,7 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
                     aria-label={t("settings.advanced.customWords.remove", {
                       word,
                     })}
-                    className="ps-1 pe-2 py-1 self-stretch inline-flex items-center rounded-e-lg cursor-pointer hover:bg-background-ui/30 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="ps-1 pe-2 py-1 self-stretch inline-flex items-center rounded-e-lg cursor-pointer hover:bg-background-ui/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-logo-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <RemoveIcon />
                   </button>
@@ -351,6 +350,9 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
             </p>
             <div className="flex items-center gap-2">
               <Input
+                // A new input per word, so autoFocus also runs when the user
+                // switches from one word's spellings to another's.
+                key={activeWord}
                 type="text"
                 className="max-w-40"
                 value={newSpelling}
