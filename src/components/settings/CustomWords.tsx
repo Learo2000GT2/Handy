@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useSettings } from "../../hooks/useSettings";
@@ -23,10 +23,38 @@ const normalizeCustomWord = (word: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-// Mirrors build_match_key in src-tauri/src/audio_toolkit/text.rs: spellings
-// are compared without case or punctuation.
-const matchKey = (text: string) =>
-  text.replace(/[^\p{L}\p{N}]/gu, "").toLowerCase();
+const WORD_CHAR = /[\p{Alphabetic}\p{N}]/u;
+const EDGE_PUNCTUATION = /^[^\p{Alphabetic}\p{N}]+|[^\p{Alphabetic}\p{N}]+$/gu;
+
+// Mirrors phrase_key in src-tauri/src/audio_toolkit/text.rs: case and
+// punctuation inside or around words are ignored, punctuation between words
+// is kept, and words stay separate ("Charge Bee" is not "ChargeBee").
+const phraseKey = (text: string) =>
+  text
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => {
+      const chars = Array.from(word);
+      const first = chars.findIndex((c) => WORD_CHAR.test(c));
+      if (first === -1) return word;
+      let last = chars.length - 1;
+      while (!WORD_CHAR.test(chars[last])) last -= 1;
+      const core = chars
+        .slice(first, last + 1)
+        .filter((c) => WORD_CHAR.test(c))
+        .join("")
+        .toLowerCase();
+      return (
+        chars.slice(0, first).join("") + core + chars.slice(last + 1).join("")
+      );
+    })
+    .join(" ")
+    .replace(EDGE_PUNCTUATION, "");
+
+// Own entries only: a word such as "constructor" must not read
+// Object.prototype members.
+const hasWord = (map: SpellingMap, word: string) =>
+  Object.prototype.hasOwnProperty.call(map, word);
 
 const withoutWord = (map: SpellingMap, word: string): SpellingMap =>
   Object.fromEntries(Object.entries(map).filter(([key]) => key !== word));
@@ -54,6 +82,7 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
     const [newWord, setNewWord] = useState("");
     const [selectedWord, setSelectedWord] = useState<string | null>(null);
     const [newSpelling, setNewSpelling] = useState("");
+    const chipToggles = useRef(new Map<string, HTMLButtonElement>());
     const customWords = getSetting("custom_words") || [];
     const spellingMap: SpellingMap = getSetting("custom_word_variants") || {};
     const normalizedWord = normalizeCustomWord(newWord);
@@ -63,13 +92,14 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
     const activeWord =
       selectedWord && customWords.includes(selectedWord) ? selectedWord : null;
 
-    const spellingsFor = (word: string) => spellingMap[word] ?? [];
+    const spellingsFor = (word: string) =>
+      (hasWord(spellingMap, word) ? spellingMap[word] : undefined) ?? [];
 
     // The custom word whose spelling list already holds `text`, if any.
     const spellingOwner = (text: string) => {
-      const key = matchKey(text);
+      const key = phraseKey(text);
       return customWords.find((word) =>
-        spellingsFor(word).some((spelling) => matchKey(spelling) === key),
+        spellingsFor(word).some((spelling) => phraseKey(spelling) === key),
       );
     };
 
@@ -108,7 +138,7 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
         customWords.filter((word) => word !== wordToRemove),
       );
       // The backend retires the word's spellings with it; mirror that here.
-      if (wordToRemove in spellingMap) {
+      if (hasWord(spellingMap, wordToRemove)) {
         await updateSetting(
           "custom_word_variants",
           withoutWord(spellingMap, wordToRemove),
@@ -124,7 +154,7 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
     const handleAddSpelling = () => {
       if (!activeWord) return;
       const spelling = normalizedSpelling;
-      const key = matchKey(spelling);
+      const key = phraseKey(spelling);
       if (!key || spelling.length > MAX_ENTRY_LENGTH) return;
 
       if (spelling.split(" ").length > MAX_SPELLING_WORDS) {
@@ -137,7 +167,7 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
       }
       // A spelling that reads as a custom word is never rewritten, so it
       // would have no effect.
-      if (customWords.some((word) => matchKey(word) === key)) {
+      if (customWords.some((word) => phraseKey(word) === key)) {
         toast.error(
           t("settings.advanced.customWords.spellingIsCustomWord", {
             spelling,
@@ -186,8 +216,11 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
       if (e.key === "Enter") {
         e.preventDefault();
         handleAddSpelling();
-      } else if (e.key === "Escape") {
+      } else if (e.key === "Escape" && activeWord) {
         e.preventDefault();
+        // Hand focus back to the chip that opened the editor before the
+        // editor (and the focused input) unmounts.
+        chipToggles.current.get(activeWord)?.focus();
         setSelectedWord(null);
         setNewSpelling("");
       }
@@ -242,6 +275,10 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
                 >
                   <button
                     type="button"
+                    ref={(element) => {
+                      if (element) chipToggles.current.set(word, element);
+                      else chipToggles.current.delete(word);
+                    }}
                     onClick={() => handleToggleWord(word)}
                     disabled={isSaving}
                     aria-expanded={isActive}
@@ -308,7 +345,7 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
               <Button
                 onClick={handleAddSpelling}
                 disabled={
-                  !matchKey(normalizedSpelling) ||
+                  !phraseKey(normalizedSpelling) ||
                   normalizedSpelling.length > MAX_ENTRY_LENGTH ||
                   isSaving
                 }

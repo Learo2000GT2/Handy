@@ -1088,11 +1088,6 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
     settings
 }
 
-/// Rebuilds settings from a store value that failed to deserialize as a whole.
-/// Every stored field that is individually valid is kept; only broken values
-/// (e.g. an enum variant written by a newer or older version) fall back to
-/// their default. This means one bad field can never reset the rest of the
-/// user's configuration (#1619).
 /// Drops alternate spellings whose custom word is gone, and words left with
 /// no spellings, so the stored map only ever describes current custom words.
 pub fn prune_custom_word_variants(settings: &mut AppSettings) {
@@ -1102,6 +1097,11 @@ pub fn prune_custom_word_variants(settings: &mut AppSettings) {
         .retain(|word, spellings| !spellings.is_empty() && custom_words.contains(word));
 }
 
+/// Rebuilds settings from a store value that failed to deserialize as a whole.
+/// Every stored field that is individually valid is kept; only broken values
+/// (e.g. an enum variant written by a newer or older version) fall back to
+/// their default. This means one bad field can never reset the rest of the
+/// user's configuration (#1619).
 fn salvage_settings(stored: &serde_json::Value) -> AppSettings {
     let Some(stored_map) = stored.as_object() else {
         warn!("Stored settings are not a JSON object; falling back to defaults");

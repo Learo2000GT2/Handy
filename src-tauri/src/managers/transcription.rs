@@ -1,6 +1,6 @@
 use crate::audio_toolkit::{
-    apply_custom_word_variants, apply_custom_words, detect_output_language,
-    normalize_transcription_output, remove_filler_words, OutputLanguageEvidence,
+    apply_custom_word_corrections, detect_output_language, normalize_transcription_output,
+    remove_filler_words, OutputLanguageEvidence,
 };
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
 use crate::engine_supervisor::{
@@ -1801,23 +1801,16 @@ fn post_process_transcription_text(
         };
 
         // Listed alternate spellings are an explicit instruction, so they are
-        // honoured for every model: a decode prompt only biases the decoder
-        // and still leaves "Stacy" where the user wants "Stacey".
-        let corrected = apply_custom_word_variants(
+        // rewritten for every model: a decode prompt only biases the decoder
+        // and still leaves "Stacy" where the user wants "Stacey". Fuzzy
+        // correction runs only when the words were not already prompted.
+        let corrected = apply_custom_word_corrections(
             &raw,
             &settings.custom_words,
             &settings.custom_word_variants,
+            settings.word_correction_threshold,
+            !custom_words_already_prompted,
         );
-
-        let corrected = if !settings.custom_words.is_empty() && !custom_words_already_prompted {
-            apply_custom_words(
-                &corrected,
-                &settings.custom_words,
-                settings.word_correction_threshold,
-            )
-        } else {
-            corrected
-        };
 
         let without_fillers = remove_filler_words(
             &corrected,
@@ -2190,6 +2183,33 @@ mod tests {
             &languages(&["en"]),
         );
         assert_eq!(unprompted, "I met Stacey and Stacey.");
+    }
+
+    #[test]
+    fn rewritten_spellings_survive_fuzzy_correction_on_unprompted_engines() {
+        let settings = AppSettings {
+            custom_words: vec!["Stacey".to_string(), "Kubernetes".to_string()],
+            custom_word_variants: std::collections::HashMap::from([
+                ("Stacey".to_string(), vec!["Stacy".to_string()]),
+                ("Kubernetes".to_string(), vec!["cooper netties".to_string()]),
+            ]),
+            ..Default::default()
+        };
+        let evidence = OutputLanguageEvidence::UserSelected("en".to_string());
+
+        let result = post_process_transcription_text(
+            "Um, I met a Stacy today and took Stacy's laptop to deploy to cooper netties."
+                .to_string(),
+            &settings,
+            false,
+            &evidence,
+            &languages(&["en"]),
+        );
+
+        assert_eq!(
+            result,
+            "I met a Stacey today and took Stacey's laptop to deploy to Kubernetes."
+        );
     }
 
     #[test]
