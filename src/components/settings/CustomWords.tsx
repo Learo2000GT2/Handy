@@ -23,6 +23,11 @@ const normalizeCustomWord = (word: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+// Spellings are never sent to the model, so unlike custom words they keep
+// their quotes and apostrophes ("Dunkin' Donuts" must match as written).
+const normalizeSpelling = (spelling: string) =>
+  spelling.replace(/\s+/g, " ").trim();
+
 const WORD_CHAR = /[\p{Alphabetic}\p{N}]/u;
 const EDGE_PUNCTUATION = /^[^\p{Alphabetic}\p{N}]+|[^\p{Alphabetic}\p{N}]+$/gu;
 
@@ -86,7 +91,7 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
     const customWords = getSetting("custom_words") || [];
     const spellingMap: SpellingMap = getSetting("custom_word_variants") || {};
     const normalizedWord = normalizeCustomWord(newWord);
-    const normalizedSpelling = normalizeCustomWord(newSpelling);
+    const normalizedSpelling = normalizeSpelling(newSpelling);
     const isSaving =
       isUpdating("custom_words") || isUpdating("custom_word_variants");
     const activeWord =
@@ -152,7 +157,9 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
     };
 
     const handleAddSpelling = () => {
-      if (!activeWord) return;
+      // The input stays enabled while saving so it keeps focus between
+      // entries; a second Enter during the save is ignored instead.
+      if (!activeWord || isSaving) return;
       const spelling = normalizedSpelling;
       const key = phraseKey(spelling);
       if (!key || spelling.length > MAX_ENTRY_LENGTH) return;
@@ -339,7 +346,6 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
                   "settings.advanced.customWords.spellingPlaceholder",
                 )}
                 variant="compact"
-                disabled={isSaving}
                 autoFocus
               />
               <Button
