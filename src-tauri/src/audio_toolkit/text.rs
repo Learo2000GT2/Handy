@@ -1,7 +1,22 @@
 use natural::phonetics::soundex;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use strsim::levenshtein;
+
+/// Alternate spellings a model may write for a custom word, keyed by the
+/// custom word they should be rewritten to (`"Stacey"` -> `["Stacy", "Stacie"]`).
+///
+/// This is the written-form / spoken-form split of dictation tools such as
+/// Dragon: the key is what the user wants on screen, the values are what the
+/// recognizer tends to produce. A spelling may span words (`"new in"` for
+/// `"Nguyen"`).
+pub type CustomWordVariants = HashMap<String, Vec<String>>;
+
+/// Longest alternate spelling, in whitespace-separated words, that
+/// [`apply_custom_word_variants`] will match.
+const MAX_VARIANT_WORDS: usize = 6;
 
 /// Builds an n-gram string by cleaning and concatenating words
 ///
@@ -217,6 +232,474 @@ pub fn apply_custom_words(text: &str, custom_words: &[String], threshold: f64) -
     }
 
     result.join(" ")
+}
+
+/// Comparison key for a phrase: lowercase, punctuation inside a word dropped
+/// ("T.J" -> "tj", "O'Brian" -> "obrian"), punctuation between words kept
+/// ("St. Clair" -> "st. clair") and punctuation around the phrase ignored.
+/// Words stay separate, so "just in" never reads as "justin".
+fn phrase_key<S: AsRef<str>>(words: &[S]) -> String {
+    let key = words
+        .iter()
+        .map(|word| {
+            let word = word.as_ref();
+            let (prefix, suffix) = extract_punctuation(word);
+            if prefix.len() == word.len() {
+                // No letters or digits: a token such as "&" or "-".
+                word.to_string()
+            } else {
+                // Straight and curly apostrophes read the same ("Dunkin’
+                // Donuts" matches a listed "Dunkin' Donuts").
+                let fold = |edge: &str| edge.replace(['\u{2018}', '\u{2019}'], "'");
+                format!("{}{}{}", fold(prefix), build_match_key(word), fold(suffix))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    key.trim_matches(|c: char| !c.is_alphanumeric()).to_string()
+}
+
+/// What a phrase key in the variant lookup stands for.
+#[derive(Clone, Copy)]
+enum LookupTarget<'a> {
+    /// The text already reads as a custom word and is kept as it is.
+    CustomWord,
+    /// A listed spelling to replace with `word`.
+    Spelling {
+        word: &'a str,
+        /// The spelling is written in capitals ("KC", "OK"), so capitals in
+        /// the text are its normal form rather than shouting.
+        in_capitals: bool,
+        /// An apostrophe typed at the start or end of the spelling ("'90s",
+        /// "nothin'") is part of it, so the text's apostrophe there goes too.
+        leading_apostrophe: bool,
+        trailing_apostrophe: bool,
+        /// The custom word is a title that always comes before a name
+        /// ("Doctor" for "Dr."), so the period after the spelling never ends
+        /// a sentence. "Dr." listed for "Drive" is not one.
+        title: bool,
+    },
+}
+
+fn is_apostrophe(c: char) -> bool {
+    matches!(c, '\'' | '\u{2018}' | '\u{2019}')
+}
+
+/// Phrase key -> what it stands for, plus the longest entry in words so the
+/// caller knows how many window sizes to try. `None` when no usable spelling
+/// is listed.
+///
+/// Custom words are entered first, so text that already reads as one ("Stacy
+/// Miller", "Wendy's") is kept even when a listed spelling ("Stacy",
+/// "Wendy") would match part of it. Only spellings listed under a word that is
+/// still in `custom_words` are used, so removing a custom word also retires
+/// its spellings.
+fn build_variant_lookup<'a>(
+    custom_words: &'a [String],
+    variants: &'a CustomWordVariants,
+) -> Option<(HashMap<String, LookupTarget<'a>>, usize)> {
+    let mut lookup = HashMap::new();
+    let mut max_words = 1;
+
+    for word in custom_words {
+        let words: Vec<&str> = word.split_whitespace().collect();
+        let key = phrase_key(&words);
+        if !key.is_empty() {
+            lookup.entry(key).or_insert(LookupTarget::CustomWord);
+            max_words = max_words.max(words.len());
+        }
+    }
+
+    let mut has_spelling = false;
+    // Walk the custom words in their stored order so a spelling listed under
+    // two words always resolves to the first one, whatever the map order.
+    for word in custom_words {
+        let Some(spellings) = variants.get(word) else {
+            continue;
+        };
+        for spelling in spellings {
+            let words: Vec<&str> = spelling.split_whitespace().collect();
+            let key = phrase_key(&words);
+            if key.is_empty() || words.len() > MAX_VARIANT_WORDS {
+                continue;
+            }
+            // A spelling must start and end on a word to ever match ("& Co"
+            // never does: the "&" token would be left behind).
+            let has_word = |token: &&str| token.chars().any(char::is_alphanumeric);
+            if !words.first().is_some_and(has_word) || !words.last().is_some_and(has_word) {
+                continue;
+            }
+            // An existing entry is a custom word or an earlier spelling;
+            // either way it wins.
+            let title = PRENOMINAL_TITLES.contains(&build_match_key(word).as_str());
+            if let Entry::Vacant(slot) = lookup.entry(key) {
+                let (leading, _) = extract_punctuation(words[0]);
+                let (_, trailing) = extract_punctuation(words[words.len() - 1]);
+                let mut letters = spelling.chars().filter(|c| c.is_alphabetic()).peekable();
+                let in_capitals = letters.peek().is_some() && letters.all(char::is_uppercase);
+                slot.insert(LookupTarget::Spelling {
+                    word: word.as_str(),
+                    in_capitals,
+                    leading_apostrophe: leading.chars().next_back().is_some_and(is_apostrophe),
+                    trailing_apostrophe: trailing.chars().next().is_some_and(is_apostrophe),
+                    title,
+                });
+                max_words = max_words.max(words.len());
+                has_spelling = true;
+            }
+        }
+    }
+
+    has_spelling.then_some((lookup, max_words))
+}
+
+/// Rewrites listed alternate spellings to the custom word they belong to.
+///
+/// Unlike [`apply_custom_words`] this is an exact comparison with no
+/// similarity threshold. Case and the punctuation around a spelling are
+/// ignored, so "Stacy," and "STACY" match a listed "Stacy"; punctuation
+/// between words must match, so "new, in" does not match "new in". An English
+/// possessive keeps its ending ("Stacy's" becomes "Stacey's"). Being exact,
+/// it is safe to run for every model, including whisper models that already
+/// received the custom words as a decode prompt: the prompt only biases the
+/// decoder, and a listed spelling is the user's explicit instruction.
+/// Text that reads as one of `custom_words` is never rewritten, including a
+/// custom word that contains a listed spelling ("Stacy Miller" when "Stacy"
+/// is listed for "Stacey").
+///
+/// Matching works on space-separated words, so it targets languages such as
+/// English and does not reach inside unspaced Chinese or Japanese text.
+///
+/// # Arguments
+/// * `text` - The input text to correct
+/// * `custom_words` - Custom words; spellings listed under other keys are ignored
+/// * `variants` - Alternate spellings keyed by the custom word to write
+///
+/// # Returns
+/// The text with listed spellings rewritten
+pub fn apply_custom_word_variants(
+    text: &str,
+    custom_words: &[String],
+    variants: &CustomWordVariants,
+) -> String {
+    apply_custom_word_corrections(text, custom_words, variants, 0.0, false)
+}
+
+/// Applies [`apply_custom_word_variants`] and then, when `fuzzy` is set,
+/// [`apply_custom_words`] to the text around the rewritten spellings.
+///
+/// The fuzzy pass never sees the words the exact pass wrote. It would
+/// otherwise match them again and, for example, drop a possessive
+/// ("Stacey's" -> "Stacey") or pull a short word in front into the match
+/// ("a Stacey" -> "Stacey").
+///
+/// # Arguments
+/// * `text` - The input text to correct
+/// * `custom_words` - List of custom words to match against
+/// * `variants` - Alternate spellings keyed by the custom word to write
+/// * `threshold` - Fuzzy similarity threshold, see [`apply_custom_words`]
+/// * `fuzzy` - Whether to run the fuzzy pass at all
+///
+/// # Returns
+/// The corrected text
+pub fn apply_custom_word_corrections(
+    text: &str,
+    custom_words: &[String],
+    variants: &CustomWordVariants,
+    threshold: f64,
+    fuzzy: bool,
+) -> String {
+    if custom_words.is_empty() {
+        return text.to_string();
+    }
+
+    let segments = rewrite_variant_spans(text, custom_words, variants);
+    if !segments.iter().any(|(_, rewritten)| *rewritten) {
+        // Nothing listed was found: leave the text exactly as it was.
+        return if fuzzy {
+            apply_custom_words(text, custom_words, threshold)
+        } else {
+            text.to_string()
+        };
+    }
+
+    let mut output: Vec<String> = Vec::with_capacity(segments.len());
+    let mut untouched: Vec<String> = Vec::new();
+    let flush = |untouched: &mut Vec<String>, output: &mut Vec<String>| {
+        if !untouched.is_empty() {
+            let run = untouched.join(" ");
+            output.push(if fuzzy {
+                apply_custom_words(&run, custom_words, threshold)
+            } else {
+                run
+            });
+            untouched.clear();
+        }
+    };
+    for (token, rewritten) in segments {
+        if rewritten {
+            flush(&mut untouched, &mut output);
+            output.push(token);
+        } else {
+            untouched.push(token);
+        }
+    }
+    flush(&mut untouched, &mut output);
+
+    output.join(" ")
+}
+
+/// Splits `text` into whitespace-separated tokens, replacing every listed
+/// spelling with its custom word. Each token comes with whether it was
+/// written by this pass.
+fn rewrite_variant_spans(
+    text: &str,
+    custom_words: &[String],
+    variants: &CustomWordVariants,
+) -> Vec<(String, bool)> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let Some((lookup, max_words)) = build_variant_lookup(custom_words, variants) else {
+        return words.iter().map(|word| (word.to_string(), false)).collect();
+    };
+
+    let mut result: Vec<(String, bool)> = Vec::with_capacity(words.len());
+    let mut i = 0;
+    while i < words.len() {
+        let matched = (1..=max_words.min(words.len() - i))
+            .rev()
+            .find_map(|n| match_variant(&words[i..i + n], &lookup).map(|m| (n, m)));
+
+        match matched {
+            Some((n, (LookupTarget::CustomWord, _))) => {
+                result.extend(words[i..i + n].iter().map(|word| (word.to_string(), false)));
+                i += n;
+            }
+            Some((
+                n,
+                (
+                    LookupTarget::Spelling {
+                        word,
+                        in_capitals,
+                        leading_apostrophe,
+                        trailing_apostrophe,
+                        title,
+                    },
+                    possessive,
+                ),
+            )) => {
+                let phrase = &words[i..i + n];
+                let (mut prefix, _) = extract_punctuation(phrase[0]);
+                let (_, mut suffix) = extract_punctuation(phrase[n - 1]);
+
+                // An apostrophe typed at the edge of the spelling goes with
+                // it. Quotes and brackets always stay with the sentence.
+                if leading_apostrophe {
+                    if let Some(c) = prefix.chars().next_back().filter(|c| is_apostrophe(*c)) {
+                        prefix = &prefix[..prefix.len() - c.len_utf8()];
+                    }
+                }
+                if trailing_apostrophe && possessive.is_empty() {
+                    if let Some(c) = suffix.chars().next().filter(|c| is_apostrophe(*c)) {
+                        suffix = &suffix[c.len_utf8()..];
+                    }
+                }
+
+                // A period right after the match that cannot end the sentence
+                // is the abbreviation's own ("Ave., Seattle", "Ave. and",
+                // "Dr. Smith", "K.C. Jones") and goes with it.
+                if possessive.is_empty() && suffix.starts_with('.') && !suffix.starts_with("..") {
+                    let rest = &suffix[1..];
+                    let last = phrase[n - 1];
+                    let initials = last.trim_end_matches('.').contains('.');
+                    let continues = if rest.starts_with([',', ';', ':', '?', '!']) {
+                        true
+                    } else if !rest.is_empty() {
+                        // A closing quote or bracket: the period ends the
+                        // quoted sentence.
+                        false
+                    } else {
+                        match words.get(i + n) {
+                            None => false,
+                            Some(next) => match next.chars().find(|c| c.is_alphanumeric()) {
+                                None => false,
+                                // Before a capital the period may end the
+                                // sentence. A title never does; initials do
+                                // not before a name ("K.C. Jones") but do
+                                // before a sentence opener ("L.A. It was").
+                                Some(c) if c.is_uppercase() => {
+                                    title
+                                        || (initials
+                                            && !SENTENCE_OPENERS
+                                                .contains(&build_match_key(next).as_str()))
+                                }
+                                Some(_) => true,
+                            },
+                        }
+                    };
+                    if continues {
+                        suffix = rest;
+                    }
+                }
+
+                let previous = result.last().map(|(token, _)| token.as_str());
+                let corrected = written_form_case(
+                    phrase,
+                    possessive,
+                    word,
+                    in_capitals,
+                    previous_ends_sentence(previous),
+                );
+                // "KC'S" written as "Casey" takes "'s", not "'S".
+                let possessive = if corrected.chars().any(char::is_lowercase) {
+                    possessive.to_lowercase()
+                } else {
+                    possessive.to_string()
+                };
+                let written = format!("{corrected}{possessive}");
+
+                // A custom word that ends or starts with punctuation ("Acme
+                // Inc.") already carries the mark the text had there.
+                if let (Some(last), Some(first)) = (written.chars().last(), suffix.chars().next()) {
+                    if last == first && !last.is_alphanumeric() {
+                        suffix = &suffix[first.len_utf8()..];
+                    }
+                }
+                if let (Some(first), Some(last)) = (written.chars().next(), prefix.chars().last()) {
+                    if first == last && !first.is_alphanumeric() {
+                        prefix = &prefix[..prefix.len() - last.len_utf8()];
+                    }
+                }
+
+                result.push((format!("{prefix}{written}{suffix}"), true));
+                i += n;
+            }
+            None => {
+                result.push((words[i].to_string(), false));
+                i += 1;
+            }
+        }
+    }
+
+    result
+}
+
+/// Looks up `phrase`, first as written and then without an English
+/// possessive ending on its last word. Returns what it stands for and the
+/// possessive ending to keep ("" when there is none).
+fn match_variant<'w, 'a>(
+    phrase: &[&'w str],
+    lookup: &HashMap<String, LookupTarget<'a>>,
+) -> Option<(LookupTarget<'a>, &'w str)> {
+    // A match starts and ends on a word, so it never swallows a dash or other
+    // stray punctuation token next to the spelling.
+    let has_word = |word: &&str| word.chars().any(char::is_alphanumeric);
+    if !phrase.first().is_some_and(has_word) || !phrase.last().is_some_and(has_word) {
+        return None;
+    }
+
+    if let Some(target) = lookup.get(&phrase_key(phrase)) {
+        return Some((*target, ""));
+    }
+
+    let (last, leading) = phrase.split_last()?;
+    let (last_prefix, last_suffix) = extract_punctuation(last);
+    let last_core = &last[last_prefix.len()..last.len() - last_suffix.len()];
+    let stem = ["'s", "'S", "\u{2019}s", "\u{2019}S"]
+        .iter()
+        .find_map(|ending| last_core.strip_suffix(ending))
+        .filter(|stem| stem.chars().any(char::is_alphanumeric))?;
+
+    let mut stem_phrase = leading.to_vec();
+    stem_phrase.push(&last[..last_prefix.len() + stem.len()]);
+    lookup
+        .get(&phrase_key(&stem_phrase))
+        .map(|target| (*target, &last_core[stem.len()..]))
+}
+
+/// Title abbreviations whose period does not end a sentence.
+const TITLE_ABBREVIATIONS: &[&str] = &[
+    "mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "mt", "vs",
+];
+
+/// Written forms of titles that always come before a name, so a period after
+/// their abbreviation never ends a sentence ("Dr. Smith" -> "Doctor Smith").
+const PRENOMINAL_TITLES: &[&str] = &[
+    "mister",
+    "missus",
+    "doctor",
+    "professor",
+    "saint",
+    "mount",
+    "fort",
+];
+
+/// Common English words that open a sentence. Before one of these, a period
+/// after initials ("L.A.", "U.S.") is read as the end of the sentence.
+const SENTENCE_OPENERS: &[&str] = &[
+    "i", "it", "its", "the", "a", "an", "we", "he", "she", "they", "you", "this", "that", "these",
+    "those", "there", "then", "but", "and", "so", "if", "when", "after", "before", "my", "our",
+    "his", "her", "their", "your", "what", "why", "how", "where", "who", "yes", "no", "now",
+];
+
+/// Whether a word written after `previous` opens a sentence: there is no
+/// previous token, or it ends with ". ! ? …" (closing quotes and brackets
+/// aside) and is not an abbreviation such as "Dr." or an initial such as "J.".
+fn previous_ends_sentence(previous: Option<&str>) -> bool {
+    let Some(token) = previous else {
+        return true;
+    };
+    let token = token.trim_end_matches(['"', '\'', '\u{201D}', '\u{2019}', ')', ']']);
+    if !token.ends_with(['.', '!', '?', '\u{2026}']) {
+        return false;
+    }
+    if !token.ends_with('.') {
+        return true;
+    }
+    let word: String = token
+        .trim_end_matches('.')
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>()
+        .to_lowercase();
+    let initial = word.chars().count() == 1 && word.chars().all(char::is_alphabetic);
+    !initial && !TITLE_ABBREVIATIONS.contains(&word.as_str())
+}
+
+/// Casing for a custom word written in place of `phrase`. The custom word is
+/// written as the user typed it ("iPhone", "danah boyd"), in capitals when the
+/// phrase was shouted ("STACY" -> "STACEY", but "KC" listed in capitals stays
+/// "Casey"), and with a capital first letter when an all-lowercase custom
+/// word opens a sentence.
+fn written_form_case(
+    phrase: &[&str],
+    possessive: &str,
+    replacement: &str,
+    spelling_in_capitals: bool,
+    at_sentence_start: bool,
+) -> String {
+    let mut letters: Vec<char> = phrase
+        .iter()
+        .flat_map(|word| word.chars())
+        .filter(|c| c.is_alphabetic())
+        .collect();
+    if !possessive.is_empty() {
+        letters.pop(); // the "s" of "'s"
+    }
+
+    // A single capital ("J", "I") is not shouting.
+    if !spelling_in_capitals && letters.len() > 1 && letters.iter().all(|c| c.is_uppercase()) {
+        return replacement.to_uppercase();
+    }
+
+    let starts_capital = letters.first().is_some_and(|c| c.is_uppercase());
+    if at_sentence_start && starts_capital && !replacement.chars().any(char::is_uppercase) {
+        let mut chars = replacement.chars();
+        if let Some(first) = chars.next() {
+            return first.to_uppercase().chain(chars).collect();
+        }
+    }
+
+    replacement.to_string()
 }
 
 /// Preserves the case pattern of the original word when applying a replacement
@@ -880,5 +1363,536 @@ mod tests {
         let custom_words = vec!["你号".to_string()];
         let result = apply_custom_words(text, &custom_words, 1.0);
         assert_eq!(result, text);
+    }
+
+    fn variants(entries: &[(&str, &[&str])]) -> CustomWordVariants {
+        entries
+            .iter()
+            .map(|(word, spellings)| {
+                (
+                    (*word).to_string(),
+                    spellings.iter().map(|s| (*s).to_string()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    fn words(list: &[&str]) -> Vec<String> {
+        list.iter().map(|w| (*w).to_string()).collect()
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_rewrites_listed_spelling() {
+        let custom_words = words(&["Stacey"]);
+        let variants = variants(&[("Stacey", &["Stacy", "Stacie"])]);
+
+        let result =
+            apply_custom_word_variants("I met Stacy and Stacie today", &custom_words, &variants);
+
+        assert_eq!(result, "I met Stacey and Stacey today");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_keeps_punctuation_and_case() {
+        let custom_words = words(&["Stacey"]);
+        let variants = variants(&[("Stacey", &["Stacy"])]);
+
+        let result = apply_custom_word_variants(
+            "Hi Stacy, is STACY here? (stacy)",
+            &custom_words,
+            &variants,
+        );
+
+        // A lowercase hit keeps the custom word's own capitalization.
+        assert_eq!(result, "Hi Stacey, is STACEY here? (Stacey)");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_keeps_possessive_ending() {
+        let custom_words = words(&["Stacey", "Nguyen"]);
+        let variants = variants(&[("Stacey", &["Stacy"]), ("Nguyen", &["new in"])]);
+
+        let result = apply_custom_word_variants(
+            "Stacy's car, STACY'S keys, Stacy\u{2019}s bag and new in's office.",
+            &custom_words,
+            &variants,
+        );
+
+        assert_eq!(
+            result,
+            "Stacey's car, STACEY'S keys, Stacey\u{2019}s bag and Nguyen's office."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_matches_multi_word_spelling() {
+        let custom_words = words(&["Nguyen"]);
+        let variants = variants(&[("Nguyen", &["new in", "win"])]);
+
+        let result = apply_custom_word_variants(
+            "Dr. New in said hello. Thanks, Win. NEW IN agrees.",
+            &custom_words,
+            &variants,
+        );
+
+        assert_eq!(
+            result,
+            "Dr. Nguyen said hello. Thanks, Nguyen. NGUYEN agrees."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_does_not_cross_punctuation() {
+        let custom_words = words(&["Nguyen"]);
+        let variants = variants(&[("Nguyen", &["new in"])]);
+
+        let result =
+            apply_custom_word_variants("something new, in the box", &custom_words, &variants);
+
+        assert_eq!(result, "something new, in the box");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_skips_pure_punctuation_tokens() {
+        let custom_words = words(&["Nguyen"]);
+        let variants = variants(&[("Nguyen", &["new in"])]);
+
+        let result = apply_custom_word_variants("so - new in - yes", &custom_words, &variants);
+
+        assert_eq!(result, "so - Nguyen - yes");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_is_exact_not_fuzzy() {
+        // "when" and "wine" share a Soundex code with "win"; a fuzzy match
+        // would turn ordinary words into the name.
+        let custom_words = words(&["Nguyen"]);
+        let variants = variants(&[("Nguyen", &["win"])]);
+
+        let result =
+            apply_custom_word_variants("when we win we drink wine", &custom_words, &variants);
+
+        assert_eq!(result, "when we Nguyen we drink wine");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_never_overrides_a_custom_word() {
+        // "Stacy" is itself a custom word, so listing it under "Stacey" must
+        // not rewrite it.
+        let custom_words = words(&["Stacey", "Stacy"]);
+        let variants = variants(&[("Stacey", &["Stacy", "Stacie"])]);
+
+        let result = apply_custom_word_variants("Stacy and Stacie", &custom_words, &variants);
+
+        assert_eq!(result, "Stacy and Stacey");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_ignores_spellings_of_removed_words() {
+        let custom_words = words(&["Handy"]);
+        let variants = variants(&[("Nguyen", &["win"])]);
+
+        let result = apply_custom_word_variants("we win", &custom_words, &variants);
+
+        assert_eq!(result, "we win");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_first_custom_word_wins_shared_spelling() {
+        let custom_words = words(&["Zed", "Abby"]);
+        let variants = variants(&[("Abby", &["zee"]), ("Zed", &["zee"])]);
+
+        for _ in 0..20 {
+            let result = apply_custom_word_variants("say zee", &custom_words, &variants);
+            assert_eq!(result, "say Zed");
+        }
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_ignores_empty_and_overlong_spellings() {
+        let custom_words = words(&["Stacey"]);
+        let variants = variants(&[(
+            "Stacey",
+            &[
+                "",
+                "   ",
+                "stacey",
+                "!!!",
+                "one two three four five six seven",
+            ],
+        )]);
+
+        let result = apply_custom_word_variants(
+            "Stacey !!! stacey one two three four five six seven",
+            &custom_words,
+            &variants,
+        );
+
+        assert_eq!(
+            result,
+            "Stacey !!! stacey one two three four five six seven"
+        );
+        assert_eq!(
+            apply_custom_word_variants("unchanged", &custom_words, &CustomWordVariants::new()),
+            "unchanged"
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_matches_longest_spelling_first() {
+        let custom_words = words(&["Mary Ann", "Anne"]);
+        let variants = variants(&[("Mary Ann", &["marry an"]), ("Anne", &["an"])]);
+
+        let result = apply_custom_word_variants("I told marry an and an", &custom_words, &variants);
+
+        assert_eq!(result, "I told Mary Ann and Anne");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_keeps_word_boundaries() {
+        // A one-word spelling must not match two words that spell it when
+        // joined, and a two-word spelling must not match one word.
+        let custom_words = words(&["Justyn", "Nguyen", "Simone", "Karmen"]);
+        let variants = variants(&[
+            ("Justyn", &["Justin"]),
+            ("Nguyen", &["new in"]),
+            ("Simone", &["some one"]),
+            ("Karmen", &["Carmen"]),
+        ]);
+
+        let result = apply_custom_word_variants(
+            "Bring an umbrella just in case, Justin. Someone called some one. The car men left with Carmen.",
+            &custom_words,
+            &variants,
+        );
+
+        assert_eq!(
+            result,
+            "Bring an umbrella just in case, Justyn. Someone called Simone. The car men left with Karmen."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_matches_punctuation_inside_spelling() {
+        let custom_words = words(&["Sinclair", "TJ Maxx", "AT&T"]);
+        let variants = variants(&[
+            ("Sinclair", &["St. Clair"]),
+            ("TJ Maxx", &["T.J. Max"]),
+            ("AT&T", &["AT & T"]),
+        ]);
+
+        let result = apply_custom_word_variants(
+            "I met St. Clair at T.J. Max's door, not St Clair. Call AT & T.",
+            &custom_words,
+            &variants,
+        );
+
+        assert_eq!(
+            result,
+            "I met Sinclair at TJ Maxx's door, not St Clair. Call AT&T."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_writes_the_custom_word_as_typed() {
+        let custom_words = words(&["iPhone", "danah boyd", "Jae", "kubernetes"]);
+        let variants = variants(&[
+            ("iPhone", &["eye phone"]),
+            ("danah boyd", &["Dana Boyd"]),
+            ("Jae", &["J"]),
+            ("kubernetes", &["cooper netties"]),
+        ]);
+
+        let result = apply_custom_word_variants(
+            "Eye phone sales grew. I spoke with Dana Boyd and J today. Cooper netties runs it, and so does COOPER NETTIES.",
+            &custom_words,
+            &variants,
+        );
+
+        assert_eq!(
+            result,
+            "iPhone sales grew. I spoke with danah boyd and Jae today. Kubernetes runs it, and so does KUBERNETES."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_leaves_text_alone_without_a_match() {
+        let custom_words = words(&["Stacey"]);
+        let variants = variants(&[("Stacey", &["Stacy"])]);
+        let text = "first line\nsecond  line";
+
+        assert_eq!(
+            apply_custom_word_variants(text, &custom_words, &variants),
+            text
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_corrections_keeps_fuzzy_pass_off_rewritten_words() {
+        let custom_words = words(&["Stacey", "Kubernetes", "Nguyen"]);
+        let variants = variants(&[
+            ("Stacey", &["Stacy"]),
+            ("Kubernetes", &["cooper netties"]),
+            ("Nguyen", &["win"]),
+        ]);
+        let correct =
+            |text: &str| apply_custom_word_corrections(text, &custom_words, &variants, 0.18, true);
+
+        // The fuzzy pass would read "Stacey's" as "Stacey" and "a Stacey",
+        // "to Kubernetes" or "I Nguyen" as one longer word.
+        assert_eq!(correct("Stacy's car"), "Stacey's car");
+        assert_eq!(correct("I met a Stacy today"), "I met a Stacey today");
+        assert_eq!(
+            correct("deploy to cooper netties now"),
+            "deploy to Kubernetes now"
+        );
+        assert_eq!(correct("Then I win said"), "Then I Nguyen said");
+        // Text around a rewrite still gets fuzzy correction.
+        assert_eq!(correct("Stacy and Kubernetis"), "Stacey and Kubernetes");
+        // Without a listed spelling the fuzzy pass runs exactly as before.
+        assert_eq!(correct("helo Stacie"), "helo Stacey");
+    }
+
+    #[test]
+    fn test_apply_custom_word_corrections_without_fuzzy_only_rewrites_spellings() {
+        let custom_words = words(&["Stacey"]);
+        let variants = variants(&[("Stacey", &["Stacy"])]);
+
+        let result = apply_custom_word_corrections(
+            "Stacy and Stacie",
+            &custom_words,
+            &variants,
+            0.18,
+            false,
+        );
+
+        assert_eq!(result, "Stacey and Stacie");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_keeps_custom_words_that_contain_a_spelling() {
+        let custom_words = words(&[
+            "Stacey",
+            "Stacy Miller",
+            "Jon",
+            "John Deere",
+            "Wendi",
+            "Wendy's",
+        ]);
+        let variants = variants(&[
+            ("Stacey", &["Stacy"]),
+            ("Jon", &["John"]),
+            ("Wendi", &["Wendy"]),
+        ]);
+
+        let result = apply_custom_word_variants(
+            "I emailed Stacy Miller and Stacy. Stacy Miller's John Deere is at Wendy's, John said, and Wendy agreed.",
+            &custom_words,
+            &variants,
+        );
+
+        assert_eq!(
+            result,
+            "I emailed Stacy Miller and Stacey. Stacy Miller's John Deere is at Wendy's, Jon said, and Wendi agreed."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_does_not_shout_spellings_listed_in_capitals() {
+        let custom_words = words(&["Casey", "okay", "Stacey"]);
+        let variants = variants(&[
+            ("Casey", &["KC"]),
+            ("okay", &["OK"]),
+            ("Stacey", &["Stacy"]),
+        ]);
+
+        let result = apply_custom_word_variants(
+            "Ask KC if that is OK with STACY.",
+            &custom_words,
+            &variants,
+        );
+
+        assert_eq!(result, "Ask Casey if that is okay with STACEY.");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_keeps_abbreviation_periods_with_the_spelling() {
+        let custom_words = words(&["Avenue", "Casey", "Doctor", "Mount"]);
+        let variants = variants(&[
+            ("Avenue", &["Ave."]),
+            ("Casey", &["KC"]),
+            ("Doctor", &["Dr."]),
+            ("Mount", &["Mt."]),
+        ]);
+        let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
+
+        assert_eq!(
+            rewrite("Turn on Main Ave. and go."),
+            "Turn on Main Avenue and go."
+        );
+        assert_eq!(
+            rewrite("Ship to 12 Main Ave., Seattle."),
+            "Ship to 12 Main Avenue, Seattle."
+        );
+        assert_eq!(
+            rewrite("Is it on Main Ave.? Yes."),
+            "Is it on Main Avenue? Yes."
+        );
+        assert_eq!(rewrite("Ask K.C. about it."), "Ask Casey about it.");
+        assert_eq!(rewrite("Ask K.C. Jones."), "Ask Casey Jones.");
+        assert_eq!(
+            rewrite("I saw Dr. Smith today."),
+            "I saw Doctor Smith today."
+        );
+        assert_eq!(
+            rewrite("We climbed Mt. Rainier."),
+            "We climbed Mount Rainier."
+        );
+        // Here the period also ends the sentence, so it stays.
+        assert_eq!(
+            rewrite("Turn on Main Ave. Then go."),
+            "Turn on Main Avenue. Then go."
+        );
+        assert_eq!(rewrite("It is on Main Ave."), "It is on Main Avenue.");
+        assert_eq!(
+            rewrite("He said \"Main Ave.\" twice."),
+            "He said \"Main Avenue.\" twice."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_keeps_sentence_periods_after_non_titles() {
+        let custom_words = words(&["Los Angeles", "Junior", "Street", "Drive", "Saint"]);
+        let variants = variants(&[
+            ("Los Angeles", &["L.A."]),
+            ("Junior", &["Jr."]),
+            ("Street", &["St."]),
+            ("Drive", &["Dr."]),
+            ("Saint", &["Ste."]),
+        ]);
+        let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
+
+        assert_eq!(
+            rewrite("I flew to L.A. It was hot."),
+            "I flew to Los Angeles. It was hot."
+        );
+        assert_eq!(
+            rewrite("I met Sammy Davis Jr. He sang."),
+            "I met Sammy Davis Junior. He sang."
+        );
+        assert_eq!(
+            rewrite("I live on Main St. It is quiet."),
+            "I live on Main Street. It is quiet."
+        );
+        assert_eq!(
+            rewrite("Turn onto Oak Dr. Then park."),
+            "Turn onto Oak Drive. Then park."
+        );
+        assert_eq!(
+            rewrite("We flew to Ste. Louis today."),
+            "We flew to Saint Louis today."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_folds_apostrophes_between_words() {
+        let custom_words = words(&["Dunkin", "rock and roll"]);
+        let variants = variants(&[
+            ("Dunkin", &["Dunkin' Donuts"]),
+            ("rock and roll", &["rock \u{2019}n\u{2019} roll"]),
+        ]);
+        let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
+
+        assert_eq!(
+            rewrite("Grab Dunkin\u{2019} Donuts today."),
+            "Grab Dunkin today."
+        );
+        assert_eq!(rewrite("Grab Dunkin' Donuts today."), "Grab Dunkin today.");
+        assert_eq!(rewrite("We love rock 'n' roll."), "We love rock and roll.");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_treats_edge_apostrophes_as_part_of_the_spelling() {
+        let custom_words = words(&["nothing", "nineties", "going", "Stacey"]);
+        let variants = variants(&[
+            ("nothing", &["nothin'"]),
+            ("nineties", &["'90s"]),
+            ("going", &["goin'"]),
+            ("Stacey", &["Stacy"]),
+        ]);
+        let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
+
+        assert_eq!(rewrite("I got nothin'."), "I got nothing.");
+        assert_eq!(
+            rewrite("There's nothin' I can do."),
+            "There's nothing I can do."
+        );
+        assert_eq!(rewrite("I got nothin\u{2019} left"), "I got nothing left");
+        assert_eq!(
+            rewrite("Back in the \u{2019}90s, we met."),
+            "Back in the nineties, we met."
+        );
+        assert_eq!(
+            rewrite("Where are you goin'? Home."),
+            "Where are you going? Home."
+        );
+        // Quotes around a spelling that has none stay with the sentence.
+        assert_eq!(rewrite("'Stacy,' she said."), "'Stacey,' she said.");
+        assert_eq!(rewrite("\"Stacy!\" he yelled."), "\"Stacey!\" he yelled.");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_small_casing_and_validity_cases() {
+        let custom_words = words(&["danah boyd", "Casey", "& Company"]);
+        let variants = variants(&[
+            ("danah boyd", &["Dana Boyd"]),
+            ("Casey", &["KC"]),
+            ("& Company", &["& Co"]),
+        ]);
+        let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
+
+        // A number is not an initial, so its period ends the sentence.
+        assert_eq!(
+            rewrite("We meet at 3. Dana Boyd will host."),
+            "We meet at 3. Danah boyd will host."
+        );
+        assert_eq!(rewrite("TELL KC'S MOM."), "TELL Casey's MOM.");
+        // A spelling that starts on punctuation can never match as typed.
+        assert_eq!(
+            rewrite("Smith & Co is here. Ask Co."),
+            "Smith & Co is here. Ask Co."
+        );
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_does_not_double_the_custom_words_punctuation() {
+        let custom_words = words(&["Acme Inc.", "Yahoo!"]);
+        let variants = variants(&[("Acme Inc.", &["Acme Ink"]), ("Yahoo!", &["Ya hoo"])]);
+
+        let result = apply_custom_word_variants(
+            "I work at Acme Ink. I use Ya hoo! Acme Ink, too.",
+            &custom_words,
+            &variants,
+        );
+
+        assert_eq!(result, "I work at Acme Inc. I use Yahoo! Acme Inc., too.");
+    }
+
+    #[test]
+    fn test_apply_custom_word_variants_detects_sentence_starts_around_quotes_and_titles() {
+        let custom_words = words(&["danah boyd"]);
+        let variants = variants(&[("danah boyd", &["Dana Boyd"])]);
+        let rewrite = |text: &str| apply_custom_word_variants(text, &custom_words, &variants);
+
+        assert_eq!(
+            rewrite("He said \"Hi.\" Dana Boyd left."),
+            "He said \"Hi.\" Danah boyd left."
+        );
+        assert_eq!(
+            rewrite("I met Mr. Dana Boyd today."),
+            "I met Mr. danah boyd today."
+        );
+        assert_eq!(rewrite("Ask J. Dana Boyd."), "Ask J. danah boyd.");
+        assert_eq!(rewrite("Done! Dana Boyd next."), "Done! Danah boyd next.");
     }
 }

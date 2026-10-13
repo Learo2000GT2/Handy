@@ -14,10 +14,11 @@ interface UseSettingsReturn {
   updateChecksLocked: boolean | null;
 
   // Actions
+  /** Resolves false when the change was refused and rolled back. */
   updateSetting: <K extends keyof Settings>(
     key: K,
     value: Settings[K],
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   resetSetting: (key: keyof Settings) => Promise<void>;
   refreshSettings: () => Promise<void>;
   refreshAudioDevices: () => Promise<void>;

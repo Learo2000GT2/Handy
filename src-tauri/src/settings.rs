@@ -337,9 +337,11 @@ pub enum VadBackend {
     Earshot,
 }
 
+// `pub` because `AppSettings` is reachable from the public `file_transcription`
+// module; the map itself stays private to the crate.
 #[derive(Clone, Serialize, Deserialize, Type)]
 #[serde(transparent)]
-pub(crate) struct SecretMap(HashMap<String, String>);
+pub struct SecretMap(HashMap<String, String>);
 
 impl fmt::Debug for SecretMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -362,6 +364,63 @@ impl std::ops::Deref for SecretMap {
 impl std::ops::DerefMut for SecretMap {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+/// Which engine transcribes files. Dictation always uses Handy's selected model.
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default, clap::ValueEnum,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum FileTranscriptionEngine {
+    /// Handy's model for recordings (the dictation model unless one is
+    /// chosen on the Transcribe page).
+    #[default]
+    Handy,
+    /// A local Lemonade Server over HTTP.
+    Lemonade,
+}
+
+pub const DEFAULT_LEMONADE_URL: &str = "http://localhost:13305";
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Type)]
+#[serde(default)]
+pub struct LemonadeSettings {
+    /// As typed by the user; normalized at use (trailing "/", "/v1", "/api/v1" removed).
+    pub base_url: String,
+    /// Lemonade model id, e.g. "Whisper-Base"; "" = none chosen.
+    pub model: String,
+    /// "" = send no Authorization header.
+    pub api_key: String,
+}
+
+impl Default for LemonadeSettings {
+    fn default() -> Self {
+        Self {
+            base_url: DEFAULT_LEMONADE_URL.to_string(),
+            model: String::new(),
+            api_key: String::new(),
+        }
+    }
+}
+
+impl fmt::Debug for LemonadeSettings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LemonadeSettings")
+            .field(
+                "base_url",
+                &crate::file_transcription::lemonade::redact_url(&self.base_url),
+            )
+            .field("model", &self.model)
+            .field(
+                "api_key",
+                &if self.api_key.is_empty() {
+                    ""
+                } else {
+                    "[REDACTED]"
+                },
+            )
+            .finish()
     }
 }
 
@@ -439,6 +498,11 @@ pub struct AppSettings {
     pub log_level: LogLevel,
     #[serde(default)]
     pub custom_words: Vec<String>,
+    /// Alternate spellings a model may write for a custom word, keyed by that
+    /// word (`"Stacey"` -> `["Stacy", "Stacie"]`). Every listed spelling is
+    /// rewritten to its word, exactly and for every model.
+    #[serde(default)]
+    pub custom_word_variants: HashMap<String, Vec<String>>,
     #[serde(default)]
     pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
@@ -530,6 +594,15 @@ pub struct AppSettings {
     /// `overlay_position` (position `none` → style `None`).
     #[serde(default = "default_overlay_style")]
     pub overlay_style: OverlayStyle,
+    /// Engine for file transcription (Transcribe page); dictation is unaffected.
+    #[serde(default)]
+    pub file_transcription_engine: FileTranscriptionEngine,
+    /// Handy model for file transcription (Transcribe page; default of the CLI's --model).
+    /// "" = the dictation model (`selected_model`), today's behaviour. transcribe-cpp models only.
+    #[serde(default)]
+    pub file_transcription_model: String,
+    #[serde(default)]
+    pub lemonade: LemonadeSettings,
 }
 
 fn default_model() -> String {
@@ -918,6 +991,24 @@ pub fn get_default_settings() -> AppSettings {
             current_binding: default_post_process_shortcut.to_string(),
         },
     );
+    // Rarely used elsewhere, so it is unlikely to collide with app shortcuts.
+    #[cfg(target_os = "macos")]
+    let default_add_custom_word_shortcut = "option+shift+w";
+    #[cfg(not(target_os = "macos"))]
+    let default_add_custom_word_shortcut = "ctrl+alt+shift+w";
+
+    bindings.insert(
+        "add_custom_word".to_string(),
+        ShortcutBinding {
+            id: "add_custom_word".to_string(),
+            name: "Add Custom Word".to_string(),
+            description:
+                "Adds the selected word to your custom words, or as a spelling to replace."
+                    .to_string(),
+            default_binding: default_add_custom_word_shortcut.to_string(),
+            current_binding: default_add_custom_word_shortcut.to_string(),
+        },
+    );
     bindings.insert(
         "cancel".to_string(),
         ShortcutBinding {
@@ -955,6 +1046,7 @@ pub fn get_default_settings() -> AppSettings {
         debug_mode: false,
         log_level: default_log_level(),
         custom_words: Vec::new(),
+        custom_word_variants: HashMap::new(),
         model_unload_timeout: ModelUnloadTimeout::default(),
         word_correction_threshold: default_word_correction_threshold(),
         history_limit: default_history_limit(),
@@ -993,6 +1085,9 @@ pub fn get_default_settings() -> AppSettings {
         vad_enabled: default_vad_enabled(),
         vad_backend: VadBackend::default(),
         overlay_style: default_overlay_style(),
+        file_transcription_engine: FileTranscriptionEngine::Handy,
+        file_transcription_model: String::new(),
+        lemonade: LemonadeSettings::default(),
     }
 }
 
@@ -1022,6 +1117,15 @@ impl AppSettings {
         self.post_process_providers
             .iter_mut()
             .find(|provider| provider.id == provider_id)
+    }
+
+    /// The Handy model files are transcribed with: the Transcribe page's model
+    /// for recordings when one is chosen, else the dictation model.
+    pub fn recordings_model(&self) -> &str {
+        match self.file_transcription_model.trim() {
+            "" => &self.selected_model,
+            chosen => chosen,
+        }
     }
 }
 
@@ -1080,6 +1184,15 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
     }
 
     settings
+}
+
+/// Drops alternate spellings whose custom word is gone, and words left with
+/// no spellings, so the stored map only ever describes current custom words.
+pub fn prune_custom_word_variants(settings: &mut AppSettings) {
+    let custom_words = &settings.custom_words;
+    settings
+        .custom_word_variants
+        .retain(|word, spellings| !spellings.is_empty() && custom_words.contains(word));
 }
 
 /// Rebuilds settings from a store value that failed to deserialize as a whole.
@@ -1463,6 +1576,10 @@ mod tests {
             serde_json::json!("parakeet-tdt-0.6b-v3"),
         );
         map.insert("onboarding_completed".into(), serde_json::json!(true));
+        map.insert(
+            "file_transcription_model".into(),
+            serde_json::json!("cohere-transcribe"),
+        );
         // An enum variant this build doesn't know, e.g. written by a newer
         // version before a downgrade.
         map.insert("sound_theme".into(), serde_json::json!("theremin"));
@@ -1477,6 +1594,35 @@ mod tests {
         assert!(salvaged.onboarding_completed);
         assert_eq!(salvaged.bindings["transcribe"].current_binding, "f13");
         assert_eq!(salvaged.sound_theme, default_sound_theme());
+        assert_eq!(salvaged.file_transcription_model, "cohere-transcribe");
+    }
+
+    #[test]
+    fn recordings_model_defaults_to_the_dictation_model() {
+        let defaults = get_default_settings();
+        assert_eq!(defaults.file_transcription_model, "");
+
+        // A store written before the setting existed reads as "Same as dictation".
+        let mut stored = default_settings_json();
+        stored
+            .as_object_mut()
+            .unwrap()
+            .remove("file_transcription_model");
+        let settings: AppSettings = serde_json::from_value(stored).unwrap();
+        assert_eq!(settings.file_transcription_model, "");
+
+        let mut settings = AppSettings {
+            selected_model: "small".to_string(),
+            ..defaults
+        };
+        for same in ["", "  "] {
+            settings.file_transcription_model = same.to_string();
+            assert_eq!(settings.recordings_model(), "small", "{same:?}");
+        }
+        settings.file_transcription_model = "x".to_string();
+        assert_eq!(settings.recordings_model(), "x");
+        settings.file_transcription_model = " x ".to_string();
+        assert_eq!(settings.recordings_model(), "x");
     }
 
     #[test]
@@ -1493,6 +1639,59 @@ mod tests {
         assert_eq!(salvaged.paste_delay_ms, default_paste_delay_ms());
         assert_eq!(salvaged.sound_theme, default_sound_theme());
         assert_eq!(salvaged.custom_words, vec!["handy".to_string()]);
+    }
+
+    #[test]
+    fn custom_word_variants_default_to_empty_and_salvage_wrong_type() {
+        // Settings files written before alternate spellings existed carry no
+        // such key and must keep loading unchanged.
+        let mut stored = default_settings_json();
+        stored
+            .as_object_mut()
+            .unwrap()
+            .remove("custom_word_variants");
+        let settings: AppSettings = serde_json::from_value(stored.clone()).unwrap();
+        assert!(settings.custom_word_variants.is_empty());
+
+        let map = stored.as_object_mut().unwrap();
+        map.insert("custom_words".into(), serde_json::json!(["Stacey"]));
+        map.insert("custom_word_variants".into(), serde_json::json!(["Stacy"]));
+        assert!(serde_json::from_value::<AppSettings>(stored.clone()).is_err());
+
+        let salvaged = salvage_settings(&stored);
+        assert!(salvaged.custom_word_variants.is_empty());
+        assert_eq!(salvaged.custom_words, vec!["Stacey".to_string()]);
+
+        let map = stored.as_object_mut().unwrap();
+        map.insert(
+            "custom_word_variants".into(),
+            serde_json::json!({ "Stacey": ["Stacy", "Stacie"] }),
+        );
+        let settings: AppSettings = serde_json::from_value(stored).unwrap();
+        assert_eq!(
+            settings.custom_word_variants["Stacey"],
+            vec!["Stacy".to_string(), "Stacie".to_string()]
+        );
+    }
+
+    #[test]
+    fn prune_custom_word_variants_drops_orphans_and_empty_lists() {
+        let mut settings = AppSettings {
+            custom_words: vec!["Stacey".to_string(), "Nguyen".to_string()],
+            custom_word_variants: HashMap::from([
+                ("Stacey".to_string(), vec!["Stacy".to_string()]),
+                ("Nguyen".to_string(), Vec::new()),
+                ("Removed".to_string(), vec!["Gone".to_string()]),
+            ]),
+            ..Default::default()
+        };
+
+        prune_custom_word_variants(&mut settings);
+
+        assert_eq!(
+            settings.custom_word_variants,
+            HashMap::from([("Stacey".to_string(), vec!["Stacy".to_string()])])
+        );
     }
 
     #[test]
@@ -1780,6 +1979,29 @@ mod tests {
         assert!(!debug_output.contains("sk-proj-secret-key-12345"));
         assert!(!debug_output.contains("sk-ant-secret-key-67890"));
         assert!(debug_output.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn debug_output_redacts_lemonade_key() {
+        let mut settings = get_default_settings();
+        settings.lemonade.api_key = "lemonade-secret-key-24680".to_string();
+
+        let debug_output = format!("{:?}", settings);
+
+        assert!(!debug_output.contains("lemonade-secret-key-24680"));
+        assert!(debug_output.contains("[REDACTED]"));
+
+        settings.lemonade.api_key.clear();
+        let debug_output = format!("{:?}", settings.lemonade);
+        assert!(!debug_output.contains("[REDACTED]"));
+        assert!(debug_output.contains(DEFAULT_LEMONADE_URL));
+
+        // A password in the address is never printed either.
+        settings.lemonade.base_url = "http://alice:s3cretpw@lemon.lan:13305".to_string();
+        let debug_output = format!("{:?}", settings);
+        assert!(!debug_output.contains("s3cretpw"), "{debug_output}");
+        assert!(!debug_output.contains("alice"), "{debug_output}");
+        assert!(debug_output.contains("http://lemon.lan:13305"));
     }
 
     #[test]

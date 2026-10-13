@@ -116,6 +116,37 @@ Flags can be combined for autostart scenarios:
 handy --start-hidden --no-tray
 ```
 
+**Transcribing files** (runs in its own process without opening a window or the microphone, then exits):
+
+```bash
+handy -f interview.m4a                           # Print metrics and the transcript
+handy -f interview.m4a -o interview.srt          # Write subtitles (format from the extension)
+handy -f interview.m4a -o interview.docx         # Word document with timestamps and speaker names
+handy -f lecture.mp4 --format md > lecture.md    # Print only the transcript, as Markdown
+handy -f memo.opus --ffmpeg /usr/bin/ffmpeg      # Read Opus, WebM, WMA, … with this ffmpeg
+handy -f call.wav --model turbo --json           # Pick a model; machine-readable output
+handy --list-models                              # Model ids for --model (✓ = installed)
+```
+
+| Flag                           | Description                                                                                                                                                                            |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-f`, `--transcribe-file FILE` | Transcribe an audio or video file and exit. WAV, AIFF, MP3, FLAC, Ogg Vorbis, M4A/AAC and MP4/MOV are read natively; Opus, WebM, WMA, AMR, DSS and other formats need ffmpeg installed |
+| `-o`, `--output PATH`          | Write the transcript to `PATH` instead of printing it                                                                                                                                  |
+| `--format FORMAT`              | `txt`, `md` (or `markdown`), `srt`, `vtt`, `json` or `docx` (Word document; needs `--output`). Default: the `--output` file extension, else `txt`                                      |
+| `--chunk-secs SECS`            | Longest piece of audio sent to the model at once: `0` for the whole file in one call, otherwise at least 5. Default: the model's limit (at most 28)                                    |
+| `--ffmpeg PATH`                | ffmpeg binary to use. Default: `$HANDY_FFMPEG`, then `PATH` and common install folders                                                                                                 |
+| `--model ID`                   | Model to use (default: the model selected in the app). It must already be downloaded                                                                                                   |
+| `--device-index N`             | Compute device for transcribe-cpp models, by its `--list-devices` index (default: the accelerator setting)                                                                             |
+| `--repeat N`                   | Transcribe N times and report the fastest run, for benchmarking                                                                                                                        |
+| `--json`                       | Print the metrics and results as one JSON object                                                                                                                                       |
+| `-q`, `--quiet`                | Don't print progress (or, with `--format`, the metrics line) to stderr                                                                                                                 |
+| `--list-models`                | List the model ids and exit (with `--json`: full details)                                                                                                                              |
+| `--list-devices`               | List the transcribe-cpp compute devices and exit                                                                                                                                       |
+
+By default stdout gets two lines, `model=… device=… backend=… audio=…s load=…ms best=…ms rtf=…x` and `text: …`; with `--output` the second line is `output: <path>` instead. `--json` adds the source, decoder, chunk counts, language, status, warnings and timed segments to the same metrics. Progress goes to stderr when it is a terminal. Files are transcribed with your language, translation, custom word and filler word settings, are not saved to History, and never change any setting. The exit code is 0 on success (even when no speech was found), 1 when transcription fails, and 2 for a missing or unsupported file, a format that needs ffmpeg, no model, or invalid flags.
+
+> **Windows tip:** Handy is a windowed app, so a console doesn't show its output. Use `--output`, or redirect it: `handy.exe -f memo.m4a > memo.txt`.
+
 > **macOS tip:** When Handy is installed as an app bundle, invoke the binary directly:
 >
 > ```bash

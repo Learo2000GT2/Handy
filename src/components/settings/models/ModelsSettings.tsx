@@ -12,6 +12,7 @@ import {
 import type { ModelCardStatus } from "@/components/onboarding";
 import { ModelCard } from "@/components/onboarding";
 import { useModelStore } from "@/stores/modelStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 import {
   getLanguageLabel,
   MODEL_CAPABILITY_LANGUAGES,
@@ -147,11 +148,17 @@ export const ModelsSettings: React.FC = () => {
     const model = models.find((m: ModelInfo) => m.id === modelId);
     const modelName = model?.name || modelId;
     const isActive = modelId === currentModel;
+    const isRecordingsModel =
+      (
+        useSettingsStore.getState().settings?.file_transcription_model ?? ""
+      ).trim() === modelId;
 
     const confirmed = await ask(
       isActive
         ? t("settings.models.deleteActiveConfirm", { modelName })
-        : t("settings.models.deleteConfirm", { modelName }),
+        : isRecordingsModel
+          ? t("settings.models.deleteRecordingsConfirm", { modelName })
+          : t("settings.models.deleteConfirm", { modelName }),
       {
         title: t("settings.models.deleteTitle"),
         kind: "warning",
@@ -160,7 +167,11 @@ export const ModelsSettings: React.FC = () => {
 
     if (confirmed) {
       try {
-        await deleteModel(modelId);
+        const deleted = await deleteModel(modelId);
+        // Recordings now use the dictation model: the backend reset it.
+        if (deleted && isRecordingsModel) {
+          await useSettingsStore.getState().refreshSettings();
+        }
       } catch (err) {
         console.error(`Failed to delete model ${modelId}:`, err);
       }

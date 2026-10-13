@@ -7,16 +7,19 @@
     "model": "Model",
     "quit": "Çıkış",
     "cancel": "İptal",
-    "secureInputWarning": "⚠ Kısayollar Secure Input tarafından engelleniyor"
+    "secureInputWarning": "⚠ Kısayollar Secure Input tarafından engelleniyor",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "Genel",
+    "transcribe": "Transkripsiyon",
     "models": "Modeller",
     "advanced": "Gelişmiş",
     "postProcessing": "Son İşlem",
     "history": "Geçmiş",
     "debug": "Hata Ayıklama",
-    "about": "Hakkında"
+    "about": "Hakkında",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "Başlamak için bir transkripsiyon modeli seçin",
@@ -163,6 +166,7 @@
       "description": "Bir transkripsiyon modeli seçin veya ek modeller indirin. Farklı modeller değişen doğruluk ve hız seviyeleri sunar.",
       "deleteConfirm": "{{modelName}} modelini silmek istediğinizden emin misiniz? Kullanmak için tekrar indirmeniz gerekecek.",
       "deleteActiveConfirm": "{{modelName}} aktif modelinizdir. Silmek, yeni bir model seçene kadar transkripsiyonları durduracaktır. Emin misiniz?",
+      "deleteRecordingsConfirm": "{{modelName}} kayıtlar için seçtiğiniz modeldir. Silerseniz kayıtlar sesle yazma modelinizi kullanır. Emin misiniz?",
       "deleteTitle": "Modeli Sil",
       "filters": {
         "allLanguages": "Tüm Diller",
@@ -199,6 +203,10 @@
           "transcribe_with_post_process": {
             "name": "Son İşlem Kısayolu",
             "description": "İsteğe bağlı: Transkripsiyonunuza her zaman yapay zekâ ile son işlem uygulayan özel bir kısayol tuşu."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -378,10 +386,47 @@
       "customWords": {
         "title": "Özel Kelimeler",
         "description": "Desteklenen modellerin adları ve özel terimleri tanımasına yardımcı olun. Bulanık düzeltme şu anda A–Z harflerini ve rakamları kullanan sözcüklerle sınırlıdır.",
-        "placeholder": "Kelime ekle",
         "add": "Ekle",
         "remove": "{{word}} Kaldır",
-        "duplicate": "\"{{word}}\" zaten mevcut"
+        "duplicate": "\"{{word}}\" zaten mevcut",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "Ses Etkinliği Algılama",
@@ -463,6 +508,217 @@
         "createFirst": "İlk son işlem promptunuzu oluşturmak için yukarıdaki “Yeni Prompt Oluştur” seçeneğine tıklayın."
       }
     },
+    "transcribeFiles": {
+      "title": "Dosyaları Transkribe Et",
+      "description": "Mevcut kayıtları bu bilgisayarda metne dönüştürün. Dosyalarınız cihazınızdan asla çıkmaz.",
+      "settingsNote": "Seçili modelinizi ve dil, çeviri, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
+      "settingsNoteLemonade": "Dil, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
+      "settingsNoteOwnModel": "Kayıtlar için seçtiğiniz modeli ve dil, çeviri, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: Lemonade Server'daki {{model}}",
+      "noModel": "Dosyaları transkribe etmek için Modeller sayfasından indirilmiş bir model seçin.",
+      "noLemonadeModel": "Dosyaları transkribe etmek için bir Lemonade modeli seçin.",
+      "noRecordingsModel": "Kayıtlar için seçtiğiniz model indirilmemiş. Yukarıdan başka bir model seçin veya Modeller sayfasından indirin.",
+      "dropzone": {
+        "title": "Ses veya video dosyalarını buraya bırakın",
+        "hint": "Her uzunlukta röportaj, toplantı, ders ve sesli not",
+        "active": "Eklemek için bırakın",
+        "choose": "Dosya Seç…",
+        "skipped": "Ses veya video olmadığı için atlanan dosyalar: {{number}}"
+      },
+      "picker": {
+        "title": "Kayıtları Seç",
+        "filterName": "Ses ve video dosyaları"
+      },
+      "formats": {
+        "native": "Açılabilen biçimler: {{formats}}",
+        "ffmpegAvailable": "Opus, WebM, WMA ve DSS gibi diğer biçimler ffmpeg ile açılır.",
+        "ffmpegMissing": "Opus, WebM, WMA, DSS ve diğer biçimleri de açmak için ffmpeg'i yükleyin."
+      },
+      "saveToHistory": {
+        "label": "Geçmişe Kaydet",
+        "description": "Tamamlanan transkriptler kaydedilir ve otomatik temizlemede korunmaları için yıldızlanır."
+      },
+      "engine": {
+        "title": "Transkripsiyon Motoru",
+        "label": "Kullanılacak Motor",
+        "description": "Sesle yazma her zaman Handy'nin kendi modelini kullanır. Bu seçim yalnızca dosyalar içindir.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Kayıtlar için model",
+        "description": "Kayıtlar, sesle yazmadan daha yavaş ama daha doğru bir model kullanabilir. Bu model ayrı çalışır ve yalnızca dosyalar transkribe edilirken yüklenir; böylece sesle yazma modeliniz hazır kalır. İki modelin de belleğe sığması gerekir.",
+        "same": "Sesle yazmayla aynı ({{model}})",
+        "sameNoModel": "Sesle yazmayla aynı",
+        "switchWarning": "Bu dosya sesle yazma modelinizi kullanıyor; bu yüzden sesle yazma modelini şimdi değiştirmek onu durdurur. İkisini ayrı tutmak için kayıtlar için farklı bir model seçin.",
+        "onCpu": "Grafik belleği iki model için yetmediğinden kayıtlar işlemcide çalışıyor. Ekran kartını kullanmak için kayıtlar için daha küçük bir model seçin."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Sunucu Adresi",
+          "description": "Genellikle http://localhost:13305. Eski Lemonade sürümleri 8000 numaralı bağlantı noktasını kullanıyordu."
+        },
+        "apiKey": {
+          "label": "API Anahtarı",
+          "description": "Yalnızca Lemonade Server'ınız bir anahtar isterse gerekir.",
+          "placeholder": "İsteğe bağlı"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Dosyalarınızı transkribe eden Lemonade modeli, örneğin Whisper-Base.",
+          "placeholder": "Bir Whisper modeli seçin",
+          "notDownloaded": "{{model}} (ilk kullanımda indirilir)",
+          "none": "Bu sunucuda transkripsiyon modeli bulunamadı.",
+          "use": "“{{model}}” kullan"
+        },
+        "test": "Bağlantıyı Test Et",
+        "testing": "Bağlanılıyor…",
+        "connected": "Bağlandı. Kullanılabilir transkripsiyon modelleri: {{number}}",
+        "checkFailed": "Lemonade Server kontrol edilemedi: {{error}}",
+        "saveError": "Lemonade ayarları kaydedilemedi: {{error}}",
+        "firstChunkSlow": "Lemonade modeli indiriyor veya yüklüyor olabilir. İlk seferde bu birkaç dakika sürebilir.",
+        "errors": {
+          "invalidUrl": "http://localhost:13305 gibi bir adres girin.",
+          "unreachable": "{{url}} adresindeki Lemonade Server'a ulaşılamıyor. Çalıştığından emin olun.",
+          "timeout": "Lemonade Server zamanında yanıt vermedi.",
+          "unauthorized": "Lemonade Server API anahtarını kabul etmedi.",
+          "modelNotFound": "Lemonade Server'da bu model yok.",
+          "http": "Lemonade Server bir hata döndürdü.",
+          "badResponse": "Lemonade Server, Handy'nin okuyamadığı bir yanıt gönderdi.",
+          "cancelled": "Bağlantı testi iptal edildi."
+        },
+        "notes": {
+          "noTranslate": "İngilizce'ye Çevir özelliği Lemonade Server ile kullanılamaz. Dosyalar konuşulan dilde transkribe edilir.",
+          "remote": "Bu adres bu bilgisayarda değil. Kayıtlarınız bu adrese gönderilecek."
+        }
+      },
+      "speakers": {
+        "label": "Konuşmacıları Etiketle",
+        "description": "En fazla 4 konuşmacı için kimin ne söylediğini işaretler. Bu bilgisayarda çalışır ve tek seferlik {{size}} MB indirme gerektirir.",
+        "download": "Konuşmacı Modelini İndir ({{size}} MB)",
+        "downloading": "Konuşmacı modeli indiriliyor… %{{percent}}",
+        "verifying": "İndirme kontrol ediliyor…",
+        "cancelDownload": "İndirmeyi İptal Et",
+        "downloadFailed": "Konuşmacı modeli indirilemedi: {{error}}",
+        "installed": "Konuşmacı modeli yüklendi ({{size}} MB)",
+        "remove": "Konuşmacı Modelini Kaldır",
+        "removeError": "Konuşmacı modeli kaldırılamadı: {{error}}",
+        "removeConfirm": "Konuşmacı modeli kaldırılsın mı? Konuşmacıları etiketlemek için modeli yeniden indirmeniz gerekecek ({{size}} MB).",
+        "license": "Konuşmacı modeli NVIDIA tarafından, NVIDIA Open Model License kapsamında sunulur (<page>model sayfası</page>).",
+        "title": "Konuşmacılar",
+        "defaultName": "Konuşmacı {{number}}",
+        "rename": "{{name}} adını değiştir",
+        "nameLabel": "{{name}} için yeni ad",
+        "save": "Kaydet",
+        "cancel": "İptal",
+        "renameError": "Konuşmacının adı değiştirilemedi: {{error}}",
+        "approximate": "Bu model zaman damgası bildirmediği için konuşmacı değişimleri yaklaşıktır.",
+        "unassigned": "Bazı bölümler bir konuşmacıyla eşleştirilemedi.",
+        "none": "Bu transkriptte konuşmacı etiketi yok.",
+        "labelAction": "Konuşmacıları Etiketle",
+        "labelHint": "Konuşmacı etiketleri bu bilgisayarda, orijinal kayıttan ({{file}}) oluşturulur. Uzun kayıtlar birkaç dakika sürer.",
+        "needsModel": "Konuşmacıları etiketlemek için konuşmacı modeli gerekir; bu, {{size}} MB'lık tek seferlik bir indirmedir.",
+        "labelError": "Konuşmacı etiketleri eklenemedi: {{error}}",
+        "findRecording": "Kaydı Bul…",
+        "findRecordingHint": "Taşınan kaydı seçin. Transkribe edilen dosyanın aynısı olmalıdır.",
+        "relabel": "Yeniden Etiketle…",
+        "relabelTitle": "Konuşmacıları Yeniden Etiketle",
+        "relabelConfirm": "Konuşmacılar kayıttan yeniden etiketlensin mi? Adlar, birleştirmeler ve bölüm değişiklikleri kaybolacak.",
+        "mergeInto": "{{name}} konuşmacısını başka bir konuşmacıyla birleştir",
+        "mergePrompt": "{{name}} şununla birleştirilsin:",
+        "mergeTitle": "Konuşmacıları Birleştir",
+        "mergeConfirm": "{{from}}, {{into}} ile birleştirilsin mi? {{from}} konuşmacısının tüm bölümleri {{into}} olarak işaretlenecek. Transkripti kapatana kadar bunu geri alabilirsiniz.",
+        "mergeError": "Konuşmacılar birleştirilemedi: {{error}}",
+        "changeSpeaker": "Bu bölümün konuşmacısını değiştir ({{name}})",
+        "changeSpeakerPrompt": "Bunu kim söyledi?",
+        "newSpeaker": "Yeni Konuşmacı",
+        "unknownSpeaker": "Bilinmeyen konuşmacı",
+        "changeSpeakerError": "Konuşmacı değiştirilemedi: {{error}}",
+        "undo": "Geri Al",
+        "undoError": "Geri alınamadı: {{error}}",
+        "jobKind": "Konuşmacı etiketleri",
+        "state": {
+          "running": "Konuşmacılar belirleniyor…",
+          "done": "Konuşmacılar: {{number}}",
+          "failed": "Konuşmacılar etiketlenemedi",
+          "skipped": {
+            "modelMissing": "Konuşmacı etiketleri atlandı: konuşmacı modeli indirilmemiş.",
+            "noSpeech": "Konuşmacı etiketleri atlandı: konuşma bulunamadı."
+          }
+        }
+      },
+      "queue": {
+        "title": "Dosyalar",
+        "cancelAll": "Tümünü İptal Et",
+        "clearFinished": "Bitenleri Temizle"
+      },
+      "status": {
+        "queued": "Başlamayı bekliyor",
+        "preparing": "Hazırlanıyor…",
+        "waiting": "Sesle yazma sırasında duraklatıldı",
+        "transcribing": "Transkribe ediliyor…",
+        "completed": "Tamamlandı",
+        "partial": "Tamamlandı, eksik bölümler var",
+        "cancelled": "İptal edildi",
+        "failed": "Başarısız"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "{{processed}} transkribe edildi",
+      "noSpeech": "Bu dosyada konuşma bulunamadı.",
+      "actions": {
+        "cancel": "İptal",
+        "remove": "Listeden Kaldır",
+        "view": "Transkripti Görüntüle",
+        "copy": "Transkripti Kopyala",
+        "showFile": "Dosyayı Göster"
+      },
+      "copied": "Transkript panoya kopyalandı.",
+      "copyError": "Transkript kopyalanamadı.",
+      "savedToHistory": "Geçmişe kaydedildi",
+      "errors": {
+        "notFound": "Dosya bulunamıyor veya açılamıyor.",
+        "unsupportedFormat": "Bu dosya türü desteklenmiyor.",
+        "needsFfmpeg": "Bu biçim için ffmpeg gerekir. ffmpeg'i yükleyip tekrar deneyin.",
+        "noModel": "Transkripsiyon modeli seçilmedi.",
+        "modelChanged": "Bu dosya transkribe edilirken model değişti.",
+        "decodeFailed": "Bu dosyadaki ses okunamadı.",
+        "engineFailed": "Transkripsiyon başarısız oldu.",
+        "serverUnreachable": "Lemonade Server'a ulaşılamıyor. Çalıştığından emin olun.",
+        "serverUnauthorized": "Lemonade Server API anahtarını kabul etmedi.",
+        "serverModelMissing": "Lemonade Server'da seçili model yok.",
+        "internal": "Bir şeyler ters gitti.",
+        "sourceChanged": "Bu konumdaki kayıt transkribe edildikten sonra değişti; bu nedenle konuşmacıları bu transkriptle eşleştirilemiyor. Aynı kayıtsa \"Kaydı Bul…\" ile seçin.",
+        "speakerLabelsFailed": "Konuşmacı etiketleme başarısız oldu.",
+        "enqueue": "Dosyalar eklenemedi: {{error}}",
+        "cancel": "İptal edilemedi: {{error}}",
+        "remove": "Listeden kaldırılamadı: {{error}}",
+        "loadTranscript": "Transkript yüklenemedi: {{error}}"
+      },
+      "transcript": {
+        "title": "Transkript: {{file}}",
+        "live": "Transkripsiyon sürdükçe güncelleniyor",
+        "partial": "Bu transkript eksik: {{reason}}",
+        "partialNoReason": "Bu transkript eksik.",
+        "approximateTimes": "Bu model zaman damgası bildirmediği için zamanlar yaklaşıktır.",
+        "empty": "Konuşma bulunamadı.",
+        "segmentsLabel": "Zaman damgalı transkript"
+      },
+      "export": {
+        "button": "Dışa Aktar…",
+        "dialogTitle": "Transkripti Dışa Aktar",
+        "formats": {
+          "docx": "Word belgesi (.docx)",
+          "txt": "Düz metin (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip altyazısı (.srt)",
+          "vtt": "WebVTT altyazısı (.vtt)"
+        },
+        "success": "Transkript dışa aktarıldı.",
+        "showInFolder": "Klasörde Göster",
+        "error": "Dışa aktarma başarısız: {{error}}"
+      }
+    },
     "history": {
       "title": "Geçmiş",
       "openFolder": "Kayıtlar Klasörünü Aç",
@@ -477,7 +733,14 @@
       "retranscribe": "Yeniden transkribe et",
       "retranscribeError": "Yeniden transkripsiyon başarısız oldu. Lütfen tekrar deneyin.",
       "transcribing": "Transkribe ediliyor...",
-      "transcriptionFailed": "Transkripsiyon başarısız oldu. Yeniden deneme simgesini kullanarak tekrar transkribe edebilirsiniz."
+      "transcriptionFailed": "Transkripsiyon başarısız oldu. Yeniden deneme simgesini kullanarak tekrar transkribe edebilirsiniz.",
+      "openTranscript": "Transkripti Aç",
+      "showOriginal": "Orijinal Dosyayı Göster",
+      "originalMissing": "Orijinal dosya taşınmış veya silinmiş.",
+      "fileDuration": "Süre {{duration}}",
+      "incomplete": "Eksik",
+      "speakerCount": "Konuşmacılar: {{number}}",
+      "retranscribeFileUnavailable": "Bu dosyayı yeniden transkribe etmek için Transkripsiyon sayfasını kullanın."
     },
     "debug": {
       "title": "Hata Ayıklama",
@@ -644,6 +907,142 @@
       "whatsNewUpdates": {
         "label": "Yenilikleri Göster",
         "description": "Handy güncellemelerinden sonra sürüm notlarını göster"
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

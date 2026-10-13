@@ -5,7 +5,9 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { arch, platform } from "@tauri-apps/plugin-os";
+import { toast } from "sonner";
 import { ProgressBar } from "../shared";
+import { useMeetingStore } from "../../stores/meetingStore";
 import { useSettings } from "../../hooks/useSettings";
 import { commands } from "../../bindings";
 import {
@@ -121,6 +123,11 @@ const UpdateChecker: React.FC<UpdateCheckerProps> = ({ className = "" }) => {
 
   const installUpdate = async () => {
     if (!updateChecksEnabled) return;
+    // Installing restarts Handy, which would cut a meeting's recording short.
+    if (useMeetingStore.getState().status !== null) {
+      toast.info(t("settings.meetings.updateBlocked"));
+      return;
+    }
 
     const portable = await commands.isPortable();
     if (portable) {

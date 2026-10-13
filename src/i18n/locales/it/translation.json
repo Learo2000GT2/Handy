@@ -7,16 +7,19 @@
     "model": "Modello",
     "quit": "Esci",
     "cancel": "Annulla",
-    "secureInputWarning": "⚠ Scorciatoie bloccate da Secure Input"
+    "secureInputWarning": "⚠ Scorciatoie bloccate da Secure Input",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "Generale",
+    "transcribe": "Trascrivi",
     "models": "Modelli",
     "advanced": "Avanzate",
     "postProcessing": "Post-Elaborazione",
     "history": "Cronologia",
     "debug": "Debug",
-    "about": "Informazioni"
+    "about": "Informazioni",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "Per cominciare, scegli un modello di riconoscimento vocale",
@@ -163,6 +166,7 @@
       "description": "Seleziona un modello di trascrizione o scarica modelli aggiuntivi. Diversi modelli offrono diversi livelli di accuratezza e velocità.",
       "deleteConfirm": "Sei sicuro di voler eliminare {{modelName}}? Dovrai scaricarlo di nuovo per usarlo.",
       "deleteActiveConfirm": "{{modelName}} è il tuo modello attivo. Eliminarlo interromperà le trascrizioni fino a quando non selezionerai un nuovo modello. Sei sicuro?",
+      "deleteRecordingsConfirm": "{{modelName}} è il tuo modello per le registrazioni. Se lo elimini, le registrazioni useranno il modello di dettatura. Sei sicuro?",
       "deleteTitle": "Elimina modello",
       "filters": {
         "allLanguages": "Tutte le lingue",
@@ -199,6 +203,10 @@
           "transcribe_with_post_process": {
             "name": "Tasto di post-elaborazione",
             "description": "Facoltativo: Un tasto di scelta rapida dedicato che applica sempre la post-elaborazione IA alla trascrizione."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -378,10 +386,47 @@
       "customWords": {
         "title": "Parole personalizzate",
         "description": "Aiuta i modelli supportati a riconoscere nomi e termini specialistici. La correzione approssimativa è attualmente limitata alle parole che usano le lettere A–Z e i numeri.",
-        "placeholder": "Aggiungi una parola",
         "add": "Aggiungi",
         "remove": "Rimuovi {{word}}",
-        "duplicate": "\"{{word}}\" esiste già"
+        "duplicate": "\"{{word}}\" esiste già",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "Rilevamento dell'attività vocale",
@@ -463,6 +508,217 @@
         "createFirst": "Clicca 'Crea un nuovo prompt' qui sopra per creare il tuo primo prompt di post-elaborazione."
       }
     },
+    "transcribeFiles": {
+      "title": "Trascrivi file",
+      "description": "Trasforma le registrazioni esistenti in testo su questo computer. I tuoi file non lasciano mai il dispositivo.",
+      "settingsNote": "Usa il modello selezionato e le tue impostazioni di lingua, traduzione, parole personalizzate e parole riempitive.",
+      "settingsNoteLemonade": "Usa le tue impostazioni di lingua, parole personalizzate e parole riempitive.",
+      "settingsNoteOwnModel": "Usa il modello per le registrazioni e le tue impostazioni di lingua, traduzione, parole personalizzate e parole riempitive.",
+      "model": "Modello: {{model}}",
+      "modelLemonade": "Modello: {{model}} su Lemonade Server",
+      "noModel": "Seleziona un modello scaricato nella pagina Modelli per trascrivere i file.",
+      "noLemonadeModel": "Scegli un modello Lemonade per trascrivere i file.",
+      "noRecordingsModel": "Il modello per le registrazioni non è scaricato. Scegline un altro qui sopra o scaricalo nella pagina Modelli.",
+      "dropzone": {
+        "title": "Trascina qui file audio o video",
+        "hint": "Interviste, riunioni, lezioni e memo vocali di qualsiasi durata",
+        "active": "Rilascia per aggiungere",
+        "choose": "Scegli file…",
+        "skipped": "File ignorati perché non audio o video: {{number}}"
+      },
+      "picker": {
+        "title": "Scegli registrazioni",
+        "filterName": "File audio e video"
+      },
+      "formats": {
+        "native": "Apre {{formats}}",
+        "ffmpegAvailable": "Altri formati come Opus, WebM, WMA e DSS vengono aperti con ffmpeg.",
+        "ffmpegMissing": "Installa ffmpeg per aprire anche Opus, WebM, WMA, DSS e altri formati."
+      },
+      "saveToHistory": {
+        "label": "Salva nella cronologia",
+        "description": "Le trascrizioni completate vengono salvate e contrassegnate con la stella, così la pulizia automatica le conserva."
+      },
+      "engine": {
+        "title": "Motore di trascrizione",
+        "label": "Trascrivi con",
+        "description": "La dettatura usa sempre il modello di Handy. Questa scelta vale solo per i file.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Modello per le registrazioni",
+        "description": "Le registrazioni possono usare un modello più lento e più preciso di quello della dettatura. Funziona separatamente e viene caricato solo durante la trascrizione dei file, così il modello di dettatura resta pronto. Entrambi i modelli devono entrare in memoria.",
+        "same": "Uguale alla dettatura ({{model}})",
+        "sameNoModel": "Uguale alla dettatura",
+        "switchWarning": "Questo file usa il modello di dettatura, quindi cambiarlo ora lo interromperà. Per tenerli separati, scegli un modello diverso per le registrazioni.",
+        "onCpu": "Le registrazioni vengono eseguite sul processore perché la memoria grafica non basta per entrambi i modelli. Scegli un modello più piccolo per le registrazioni per usare la scheda grafica."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Indirizzo del server",
+          "description": "Di solito http://localhost:13305. Le versioni precedenti di Lemonade usavano la porta 8000."
+        },
+        "apiKey": {
+          "label": "Chiave API",
+          "description": "Necessaria solo se il tuo Lemonade Server la richiede.",
+          "placeholder": "Facoltativa"
+        },
+        "model": {
+          "label": "Modello",
+          "description": "Il modello Lemonade che trascrive i tuoi file, ad esempio Whisper-Base.",
+          "placeholder": "Scegli un modello Whisper",
+          "notDownloaded": "{{model}} (scaricato al primo utilizzo)",
+          "none": "Nessun modello di trascrizione trovato su questo server.",
+          "use": "Usa “{{model}}”"
+        },
+        "test": "Verifica connessione",
+        "testing": "Connessione in corso…",
+        "connected": "Connesso. Modelli di trascrizione disponibili: {{number}}",
+        "checkFailed": "Impossibile verificare Lemonade Server: {{error}}",
+        "saveError": "Impossibile salvare le impostazioni di Lemonade: {{error}}",
+        "firstChunkSlow": "Lemonade potrebbe essere in fase di download o caricamento del modello. La prima volta può richiedere alcuni minuti.",
+        "errors": {
+          "invalidUrl": "Inserisci un indirizzo come http://localhost:13305.",
+          "unreachable": "Impossibile raggiungere Lemonade Server all'indirizzo {{url}}. Assicurati che sia in esecuzione.",
+          "timeout": "Lemonade Server non ha risposto in tempo.",
+          "unauthorized": "Lemonade Server non ha accettato la chiave API.",
+          "modelNotFound": "Lemonade Server non dispone di questo modello.",
+          "http": "Lemonade Server ha restituito un errore.",
+          "badResponse": "Lemonade Server ha inviato una risposta che Handy non è riuscito a leggere.",
+          "cancelled": "La verifica della connessione è stata annullata."
+        },
+        "notes": {
+          "noTranslate": "L'opzione Traduci in inglese non è disponibile con Lemonade Server. I file vengono trascritti nella lingua parlata.",
+          "remote": "Questo indirizzo non è su questo computer. Le tue registrazioni verranno inviate lì."
+        }
+      },
+      "speakers": {
+        "label": "Etichetta i parlanti",
+        "description": "Indica chi ha detto cosa, fino a 4 parlanti. Funziona su questo computer e richiede un download una tantum di {{size}} MB.",
+        "download": "Scarica il modello dei parlanti ({{size}} MB)",
+        "downloading": "Download del modello dei parlanti… {{percent}}%",
+        "verifying": "Verifica del download…",
+        "cancelDownload": "Annulla download",
+        "downloadFailed": "Impossibile scaricare il modello dei parlanti: {{error}}",
+        "installed": "Modello dei parlanti installato ({{size}} MB)",
+        "remove": "Rimuovi il modello dei parlanti",
+        "removeError": "Impossibile rimuovere il modello dei parlanti: {{error}}",
+        "removeConfirm": "Rimuovere il modello dei parlanti? Dovrai scaricarlo di nuovo ({{size}} MB) per etichettare i parlanti.",
+        "license": "Modello dei parlanti di NVIDIA, con licenza NVIDIA Open Model License (<page>pagina del modello</page>).",
+        "title": "Parlanti",
+        "defaultName": "Parlante {{number}}",
+        "rename": "Rinomina {{name}}",
+        "nameLabel": "Nuovo nome per {{name}}",
+        "save": "Salva",
+        "cancel": "Annulla",
+        "renameError": "Impossibile rinominare il parlante: {{error}}",
+        "approximate": "I cambi di parlante sono approssimativi perché questo modello non fornisce i timestamp.",
+        "unassigned": "Non è stato possibile associare alcuni passaggi a un parlante.",
+        "none": "Questa trascrizione non ha etichette dei parlanti.",
+        "labelAction": "Etichetta i parlanti",
+        "labelHint": "Le etichette dei parlanti vengono create su questo computer a partire dalla registrazione originale, {{file}}. Le registrazioni lunghe richiedono alcuni minuti.",
+        "needsModel": "Per etichettare i parlanti serve il modello dei parlanti, un download una tantum di {{size}} MB.",
+        "labelError": "Impossibile aggiungere le etichette dei parlanti: {{error}}",
+        "findRecording": "Trova registrazione…",
+        "findRecordingHint": "Scegli la registrazione spostata. Deve essere lo stesso file che è stato trascritto.",
+        "relabel": "Etichetta di nuovo…",
+        "relabelTitle": "Etichetta di nuovo i parlanti",
+        "relabelConfirm": "Etichettare di nuovo i parlanti dalla registrazione? Nomi, unioni e modifiche ai passaggi andranno persi.",
+        "mergeInto": "Unisci {{name}} a un altro parlante",
+        "mergePrompt": "Unisci {{name}} a:",
+        "mergeTitle": "Unisci parlanti",
+        "mergeConfirm": "Unire {{from}} a {{into}}? Tutti i passaggi di {{from}} verranno attribuiti a {{into}}. Puoi annullare finché non chiudi la trascrizione.",
+        "mergeError": "Impossibile unire i parlanti: {{error}}",
+        "changeSpeaker": "Cambia il parlante di questo passaggio ({{name}})",
+        "changeSpeakerPrompt": "Chi l'ha detto?",
+        "newSpeaker": "Nuovo parlante",
+        "unknownSpeaker": "Parlante sconosciuto",
+        "changeSpeakerError": "Impossibile cambiare il parlante: {{error}}",
+        "undo": "Annulla modifica",
+        "undoError": "Impossibile annullare la modifica: {{error}}",
+        "jobKind": "Etichette dei parlanti",
+        "state": {
+          "running": "Identificazione dei parlanti…",
+          "done": "Parlanti: {{number}}",
+          "failed": "Impossibile etichettare i parlanti",
+          "skipped": {
+            "modelMissing": "Etichette dei parlanti saltate: il modello dei parlanti non è stato scaricato.",
+            "noSpeech": "Etichette dei parlanti saltate: nessun parlato trovato."
+          }
+        }
+      },
+      "queue": {
+        "title": "File",
+        "cancelAll": "Annulla tutto",
+        "clearFinished": "Rimuovi completati"
+      },
+      "status": {
+        "queued": "In attesa di avvio",
+        "preparing": "Preparazione…",
+        "waiting": "In pausa mentre detti",
+        "transcribing": "Trascrizione in corso…",
+        "completed": "Completato",
+        "partial": "Completato, con lacune",
+        "cancelled": "Annullato",
+        "failed": "Non riuscito"
+      },
+      "progress": "{{processed}} di {{total}}",
+      "progressNoTotal": "Trascritto fino a {{processed}}",
+      "noSpeech": "Nessun parlato trovato in questo file.",
+      "actions": {
+        "cancel": "Annulla",
+        "remove": "Rimuovi dall'elenco",
+        "view": "Visualizza trascrizione",
+        "copy": "Copia trascrizione",
+        "showFile": "Mostra file"
+      },
+      "copied": "Trascrizione copiata negli appunti.",
+      "copyError": "Impossibile copiare la trascrizione.",
+      "savedToHistory": "Salvata nella cronologia",
+      "errors": {
+        "notFound": "Impossibile trovare o aprire il file.",
+        "unsupportedFormat": "Questo tipo di file non è supportato.",
+        "needsFfmpeg": "Questo formato richiede ffmpeg. Installa ffmpeg e riprova.",
+        "noModel": "Nessun modello di trascrizione selezionato.",
+        "modelChanged": "Il modello è cambiato durante la trascrizione di questo file.",
+        "decodeFailed": "Impossibile leggere l'audio di questo file.",
+        "engineFailed": "Trascrizione non riuscita.",
+        "serverUnreachable": "Impossibile raggiungere Lemonade Server. Assicurati che sia in esecuzione.",
+        "serverUnauthorized": "Lemonade Server non ha accettato la chiave API.",
+        "serverModelMissing": "Lemonade Server non dispone del modello selezionato.",
+        "internal": "Si è verificato un errore.",
+        "sourceChanged": "La registrazione in questa posizione è cambiata dopo la trascrizione, quindi i suoi parlanti non possono essere associati a questa trascrizione. Se è la stessa registrazione, sceglila con «Trova registrazione…».",
+        "speakerLabelsFailed": "Etichettatura dei parlanti non riuscita.",
+        "enqueue": "Impossibile aggiungere i file: {{error}}",
+        "cancel": "Impossibile annullare: {{error}}",
+        "remove": "Impossibile rimuovere dall'elenco: {{error}}",
+        "loadTranscript": "Impossibile caricare la trascrizione: {{error}}"
+      },
+      "transcript": {
+        "title": "Trascrizione: {{file}}",
+        "live": "Aggiornamento durante la trascrizione",
+        "partial": "Questa trascrizione è incompleta: {{reason}}",
+        "partialNoReason": "Questa trascrizione è incompleta.",
+        "approximateTimes": "I tempi sono approssimativi perché questo modello non fornisce i timestamp.",
+        "empty": "Nessun parlato trovato.",
+        "segmentsLabel": "Trascrizione con timestamp"
+      },
+      "export": {
+        "button": "Esporta…",
+        "dialogTitle": "Esporta trascrizione",
+        "formats": {
+          "docx": "Documento Word (.docx)",
+          "txt": "Testo semplice (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Sottotitoli SubRip (.srt)",
+          "vtt": "Sottotitoli WebVTT (.vtt)"
+        },
+        "success": "Trascrizione esportata.",
+        "showInFolder": "Mostra nella cartella",
+        "error": "Esportazione non riuscita: {{error}}"
+      }
+    },
     "history": {
       "title": "Cronologia",
       "openFolder": "Apri la cartella delle registrazioni",
@@ -477,7 +733,14 @@
       "retranscribe": "Ri-trascrivere",
       "retranscribeError": "Impossibile ri-trascrivere. Riprova.",
       "transcribing": "Trascrizione in corso...",
-      "transcriptionFailed": "Trascrizione fallita. Puoi ri-trascrivere usando l'icona di ripetizione."
+      "transcriptionFailed": "Trascrizione fallita. Puoi ri-trascrivere usando l'icona di ripetizione.",
+      "openTranscript": "Apri trascrizione",
+      "showOriginal": "Mostra file originale",
+      "originalMissing": "Il file originale è stato spostato o eliminato.",
+      "fileDuration": "Durata {{duration}}",
+      "incomplete": "Incompleta",
+      "speakerCount": "Parlanti: {{number}}",
+      "retranscribeFileUnavailable": "Per trascrivere di nuovo questo file, usa la pagina Trascrivi."
     },
     "debug": {
       "title": "Debug",
@@ -644,6 +907,142 @@
       "whatsNewUpdates": {
         "label": "Mostra novità",
         "description": "Mostra le note di rilascio dopo gli aggiornamenti di Handy"
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

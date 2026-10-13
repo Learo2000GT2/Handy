@@ -1654,6 +1654,11 @@ impl ModelManager {
                 continue;
             };
 
+            // A speaker model (the Sortformer diarizer) is not a dictation model.
+            if filename.to_ascii_lowercase().contains("sortformer") {
+                continue;
+            }
+
             // Skip predefined model files
             if predefined_filenames.contains(&filename) {
                 continue;
@@ -2937,6 +2942,24 @@ mod tests {
         assert!(!models.contains_key("readme"));
         assert!(!models.contains_key("download.bin"));
         assert!(!models.contains_key("some-directory"));
+    }
+
+    #[test]
+    fn test_discover_custom_models_skips_the_speaker_model() {
+        let temp_dir = TempDir::new().unwrap();
+        let models_dir = temp_dir.path();
+        fs::write(
+            models_dir.join("diar_streaming_sortformer_4spk-v2.1-Q8_0.gguf"),
+            b"fake",
+        )
+        .unwrap();
+        fs::write(models_dir.join("SortFormer-copy.bin"), b"fake").unwrap();
+        fs::write(models_dir.join("my-whisper.gguf"), b"fake").unwrap();
+
+        let mut models = HashMap::new();
+        ModelManager::discover_custom_transcribe_models(models_dir, &mut models).unwrap();
+
+        assert_eq!(models.keys().collect::<Vec<_>>(), vec!["my-whisper"]);
     }
 
     #[test]

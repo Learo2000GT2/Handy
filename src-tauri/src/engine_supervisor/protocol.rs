@@ -97,6 +97,10 @@ pub struct DeviceInfo {
     pub device_type: DeviceType,
     pub device_id: Option<String>,
     pub memory_total: u64,
+    /// Free device memory in bytes when the devices were listed, or 0 if
+    /// the backend doesn't report it.
+    #[serde(default)]
+    pub memory_free: u64,
     pub index: Option<usize>,
     /// Stable identity for persisting a device choice; see [`device_key`].
     pub key: String,
@@ -111,6 +115,7 @@ impl DeviceInfo {
             device_type: device.device_type,
             device_id: device.device_id.clone(),
             memory_total: device.memory_total,
+            memory_free: device.memory_free,
             index: device.index,
             key: device_key(&device.kind, device.device_id.as_deref(), &device.name),
         }
@@ -153,6 +158,10 @@ pub struct LoadedInfo {
     pub on_gpu: bool,
     pub capabilities: Capabilities,
     pub supports_initial_prompt: bool,
+    /// The model was asked for on a GPU, but loaded on the CPU because the
+    /// GPU had too little free memory for it (see `LoadSpec::min_gpu_free_bytes`).
+    #[serde(default)]
+    pub gpu_memory_fallback: bool,
 }
 
 /// Encode one frame. Refuses a section the reader would refuse, so an
@@ -294,6 +303,54 @@ mod tests {
         assert!(check_section_len(MAX_SECTION_BYTES).is_ok());
         assert!(check_section_len(MAX_SECTION_BYTES + 1).is_err());
         assert!(MAX_SECTION_BYTES <= u32::MAX as usize);
+    }
+
+    /// Fields added later read as their defaults when the other side
+    /// doesn't send them.
+    #[test]
+    fn added_fields_default_when_missing() {
+        let device: DeviceInfo = serde_json::from_value(serde_json::json!({
+            "name": "Vulkan0",
+            "description": "Radeon",
+            "kind": "vulkan",
+            "device_type": "Gpu",
+            "device_id": null,
+            "memory_total": 8u64 << 30,
+            "index": 1,
+            "key": "k",
+        }))
+        .unwrap();
+        assert_eq!(device.memory_free, 0);
+        assert_eq!(device.memory_total, 8 << 30);
+
+        let mut loaded = serde_json::to_value(LoadedInfo {
+            arch: "whisper".to_string(),
+            variant: "tiny".to_string(),
+            backend: "CPU".to_string(),
+            device: "CPU".to_string(),
+            on_gpu: false,
+            capabilities: Capabilities {
+                native_sample_rate: 16_000,
+                languages: vec!["en".to_string()],
+                translate_target_languages: Vec::new(),
+                max_timestamp_kind: transcribe_cpp::TimestampKind::Segment,
+                supports_language_detect: false,
+                supports_translate: false,
+                supports_streaming: false,
+                supports_spec_decode: false,
+                max_audio_ms: 0,
+            },
+            supports_initial_prompt: true,
+            gpu_memory_fallback: true,
+        })
+        .unwrap();
+        loaded
+            .as_object_mut()
+            .unwrap()
+            .remove("gpu_memory_fallback");
+        let loaded: LoadedInfo = serde_json::from_value(loaded).unwrap();
+        assert!(!loaded.gpu_memory_fallback);
+        assert!(loaded.supports_initial_prompt);
     }
 
     #[test]

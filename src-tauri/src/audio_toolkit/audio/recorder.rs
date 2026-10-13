@@ -103,6 +103,9 @@ pub struct AudioRecorder {
     config_cache: Arc<Mutex<Option<(String, cpal::SupportedStreamConfig)>>>,
     /// Set by cpal when the active input stream can no longer capture.
     stream_error: Arc<AtomicBool>,
+    /// Keep the recording in memory for `stop()` to return. Off for long
+    /// recordings whose audio callback stores the frames itself.
+    retain_samples: bool,
 }
 
 impl AudioRecorder {
@@ -117,7 +120,16 @@ impl AudioRecorder {
             selected_channel: None,
             config_cache: Arc::new(Mutex::new(None)),
             stream_error: Arc::new(AtomicBool::new(false)),
+            retain_samples: true,
         })
+    }
+
+    /// Do not keep the recording in memory: frames only go to the audio
+    /// callback, and `stop()` returns an empty recording. For long
+    /// recordings (meetings) that write their audio to disk as it arrives.
+    pub fn without_retained_samples(mut self) -> Self {
+        self.retain_samples = false;
+        self
     }
 
     /// Attach a single VAD engine, reconfigured per session for the offline vs
@@ -200,6 +212,7 @@ impl AudioRecorder {
         let selected_channel = self.selected_channel;
         let config_cache = Arc::clone(&self.config_cache);
         let stream_error = Arc::clone(&self.stream_error);
+        let retain_samples = self.retain_samples;
 
         let worker = std::thread::spawn(move || {
             let transport = Arc::new(CaptureTransportState::default());
@@ -321,13 +334,14 @@ impl AudioRecorder {
                     // Timestamp for the play()-returned -> first-samples gap the
                     // init handshake can't see (hardware dependent).
                     let stream_running_at = Instant::now();
-                    let processor = CaptureProcessor::new(
+                    let mut processor = CaptureProcessor::new(
                         sample_rate,
                         vad,
                         level_cb,
                         audio_cb,
                         stream_running_at,
                     );
+                    processor.retain_samples = retain_samples;
                     run_consumer(
                         processor,
                         sample_consumer,
@@ -710,6 +724,10 @@ struct CaptureProcessor {
     max_drain_samples: usize,
     first_chunk_logged: bool,
 
+    /// Keep processed frames for `finish_recording` (see
+    /// [`AudioRecorder::without_retained_samples`]).
+    retain_samples: bool,
+
     // ---- recording-scoped: reset by `begin_recording` ------------------- //
     vad_policy: VadPolicy,
     processed_samples: Vec<f32>,
@@ -762,6 +780,7 @@ impl CaptureProcessor {
             frame_resampler,
             max_drain_samples,
             first_chunk_logged: false,
+            retain_samples: true,
             vad_policy: VadPolicy::Offline,
             processed_samples: Vec::new(),
             awaiting_first_captured_chunk: None,
@@ -837,6 +856,11 @@ impl CaptureProcessor {
                 &mut self.processed_samples,
             )
         });
+        if !self.retain_samples {
+            // The audio callback has the frames; don't grow a recording
+            // nobody will collect.
+            self.processed_samples.clear();
+        }
 
         if let Some(started) = self.awaiting_first_captured_chunk.take() {
             log::debug!(
@@ -906,6 +930,9 @@ impl CaptureProcessor {
                 "Active recording completed after dropping {} microphone samples",
                 self.total_dropped_samples
             );
+        }
+        if !self.retain_samples {
+            self.processed_samples.clear();
         }
         std::mem::take(&mut self.processed_samples)
     }

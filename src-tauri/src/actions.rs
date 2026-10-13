@@ -6,7 +6,7 @@ use crate::managers::audio::AudioRecordingManager;
 use crate::managers::history::HistoryManager;
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::StreamWorkKind;
-use crate::managers::transcription::TranscriptionManager;
+use crate::managers::transcription::{DictationHold, TranscriptionManager};
 use crate::settings::{get_settings, AppSettings, OverlayStyle, APPLE_INTELLIGENCE_PROVIDER_ID};
 use crate::shortcut;
 use crate::tray::{set_tray_state, TrayIconState};
@@ -32,11 +32,19 @@ struct RecordingErrorEvent {
 }
 
 /// Drop guard that finishes the transcription pipeline, including immediate
-/// model unloading on early exits.
-struct FinishGuard(AppHandle, Arc<TranscriptionManager>);
+/// model unloading on early exits. Holds the dictation's [`DictationHold`]
+/// (taken in `stop`), which keeps file transcription jobs paused until this
+/// pipeline has finished.
+struct FinishGuard(AppHandle, Arc<TranscriptionManager>, Option<DictationHold>);
 impl Drop for FinishGuard {
     fn drop(&mut self) {
         self.1.maybe_unload_immediately("transcription session");
+        // Releasing the hold does the unload deferred for a file job that
+        // has ended since. Both unloads are done before notifying the
+        // coordinator, so a recording started next always loads afresh.
+        if let Some(hold) = self.2.take() {
+            self.1.release_dictation_hold(hold);
+        }
         if let Some(c) = self.0.try_state::<TranscriptionCoordinator>() {
             c.notify_processing_finished();
         }
@@ -389,6 +397,15 @@ impl ShortcutAction for TranscribeAction {
         let start_time = Instant::now();
         debug!("TranscribeAction::start called for binding: {}", binding_id);
 
+        // A meeting owns the microphone and the engine while it records, and
+        // dictation chimes would end up in its audio. Returning before
+        // anything starts lets the coordinator roll back cleanly.
+        if crate::meeting::is_active() {
+            warn!("Not starting dictation: a meeting is being recorded");
+            let _ = app.emit("dictation-blocked", ());
+            return;
+        }
+
         // Load model in the background
         let tm = app.state::<Arc<TranscriptionManager>>();
         let rm = app.state::<Arc<AudioRecordingManager>>();
@@ -602,9 +619,12 @@ impl ShortcutAction for TranscribeAction {
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
         let post_process = self.post_process;
         let cancel_generation = rm.cancel_generation();
+        // File transcription jobs stay paused from here until the pipeline
+        // below has finished (the guard releases the hold).
+        let hold = tm.hold_for_dictation();
 
         tauri::async_runtime::spawn(async move {
-            let _guard = FinishGuard(ah.clone(), Arc::clone(&tm));
+            let _guard = FinishGuard(ah.clone(), Arc::clone(&tm), Some(hold));
             debug!(
                 "Starting async transcription task for binding: {}",
                 binding_id
@@ -833,6 +853,34 @@ impl ShortcutAction for CancelAction {
     }
 }
 
+// Add Custom Word Action
+//
+// Copies the word the user selected (usually one Handy got wrong) and opens
+// the "Add word" dialog in the main window with it filled in. Runs on release
+// so the user's own shortcut keys are up before the copy keystroke is sent.
+struct AddCustomWordAction;
+
+/// Event the main window listens for to open the "Add word" dialog. The
+/// payload is the selected text, or "" when nothing could be copied.
+pub const ADD_CUSTOM_WORD_EVENT: &str = "add-custom-word-requested";
+
+impl ShortcutAction for AddCustomWordAction {
+    fn start(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {}
+
+    fn stop(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        let app = app.clone();
+        std::thread::spawn(move || {
+            // Let the remaining shortcut keys come up before copying.
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let selection = crate::clipboard::capture_selected_text(&app).unwrap_or_default();
+            crate::show_main_window(&app);
+            if let Err(e) = app.emit(ADD_CUSTOM_WORD_EVENT, selection) {
+                log::error!("Failed to open the add-word dialog: {}", e);
+            }
+        });
+    }
+}
+
 // Test Action
 struct TestAction;
 
@@ -874,6 +922,10 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         Arc::new(CancelAction) as Arc<dyn ShortcutAction>,
     );
     map.insert(
+        "add_custom_word".to_string(),
+        Arc::new(AddCustomWordAction) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
         "test".to_string(),
         Arc::new(TestAction) as Arc<dyn ShortcutAction>,
     );
@@ -892,6 +944,16 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
+
+    #[test]
+    fn every_default_binding_has_an_action() {
+        for id in crate::settings::get_default_settings().bindings.keys() {
+            assert!(super::ACTION_MAP.contains_key(id), "no action for '{id}'");
+        }
+        assert!(crate::settings::get_default_settings()
+            .bindings
+            .contains_key("add_custom_word"));
+    }
 
     #[test]
     fn blank_transcription_is_detected() {

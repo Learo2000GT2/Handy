@@ -7,16 +7,19 @@
     "model": "模型",
     "quit": "結束",
     "cancel": "取消",
-    "secureInputWarning": "⚠ 快捷鍵被 Secure Input 阻擋"
+    "secureInputWarning": "⚠ 快捷鍵被 Secure Input 阻擋",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "一般",
+    "transcribe": "轉錄",
     "models": "模型",
     "advanced": "進階",
     "postProcessing": "後處理",
     "history": "歷史紀錄",
     "debug": "偵錯",
-    "about": "關於"
+    "about": "關於",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "首先，請選擇一種模型",
@@ -179,6 +182,10 @@
           "transcribe_with_post_process": {
             "name": "後處理快捷鍵",
             "description": "可選：專用快捷鍵，使用時一律對轉錄結果套用 AI 後處理"
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -216,6 +223,7 @@
       "availableModels": "可供下載",
       "deleteConfirm": "確定要刪除 {{modelName}} 嗎？刪除後須重新下載才能使用",
       "deleteActiveConfirm": "{{modelName}} 是您目前使用的模型。刪除後將停止轉錄，直到您選擇新的模型。確定要刪除嗎？",
+      "deleteRecordingsConfirm": "{{modelName}} 是您的錄音模型。刪除後，錄音將使用您的聽寫模型。確定要刪除嗎？",
       "deleteTitle": "刪除模型",
       "filters": {
         "allLanguages": "所有語言",
@@ -378,10 +386,47 @@
       "customWords": {
         "title": "自訂詞彙",
         "description": "協助支援的模型辨識名稱和專業術語。目前，模糊修正僅適用於使用 A–Z 字母和數字的詞語。",
-        "placeholder": "新增詞彙",
         "add": "新增",
         "remove": "刪除 {{word}}",
-        "duplicate": "「{{word}}」已存在"
+        "duplicate": "「{{word}}」已存在",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "語音活動偵測",
@@ -463,6 +508,217 @@
         "createFirst": "點選上方的「建立新提示詞」來建立您的第一個後處理提示詞"
       }
     },
+    "transcribeFiles": {
+      "title": "轉錄檔案",
+      "description": "在這台電腦上將現有錄音轉為文字。您的檔案絕不會離開您的裝置。",
+      "settingsNote": "使用您選擇的模型，以及您的語言、翻譯、自訂詞彙和語助詞設定。",
+      "settingsNoteLemonade": "使用您的語言、自訂詞彙和語助詞設定。",
+      "settingsNoteOwnModel": "使用您的錄音模型，以及您的語言、翻譯、自訂詞彙和語助詞設定。",
+      "model": "模型：{{model}}",
+      "modelLemonade": "模型：Lemonade Server 上的 {{model}}",
+      "noModel": "請在「模型」頁面選擇已下載的模型，以便轉錄檔案。",
+      "noLemonadeModel": "請選擇 Lemonade 模型以轉錄檔案。",
+      "noRecordingsModel": "您的錄音模型尚未下載。請在上方選擇其他模型，或在「模型」頁面下載。",
+      "dropzone": {
+        "title": "將音訊或影片檔案拖放到這裡",
+        "hint": "訪談、會議、講座和語音備忘錄，長度不限",
+        "active": "放開以新增",
+        "choose": "選擇檔案…",
+        "skipped": "已略過的非音訊或影片檔案：{{number}}"
+      },
+      "picker": {
+        "title": "選擇錄音",
+        "filterName": "音訊和影片檔案"
+      },
+      "formats": {
+        "native": "支援開啟 {{formats}}",
+        "ffmpegAvailable": "Opus、WebM、WMA 和 DSS 等其他格式會透過 ffmpeg 開啟。",
+        "ffmpegMissing": "安裝 ffmpeg 後也能開啟 Opus、WebM、WMA、DSS 等其他格式。"
+      },
+      "saveToHistory": {
+        "label": "儲存到歷史紀錄",
+        "description": "完成的轉錄會被儲存並加上星號，讓自動清理保留它們。"
+      },
+      "engine": {
+        "title": "轉錄引擎",
+        "label": "轉錄方式",
+        "description": "聽寫一律使用 Handy 本身的模型。此選項僅適用於檔案。",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "錄音模型",
+        "description": "錄音可以使用比聽寫更慢但更準確的模型。它會獨立執行，僅在轉錄檔案時載入，因此您的聽寫模型隨時就緒。兩個模型都必須能放入記憶體。",
+        "same": "與聽寫相同（{{model}}）",
+        "sameNoModel": "與聽寫相同",
+        "switchWarning": "此檔案使用您的聽寫模型，因此現在更換聽寫模型會使其停止。若要將兩者分開，請為錄音選擇其他模型。",
+        "onCpu": "由於顯示記憶體不足以同時容納兩個模型，錄音正在處理器上執行。若要使用顯示卡，請為錄音選擇較小的模型。"
+      },
+      "lemonade": {
+        "url": {
+          "label": "伺服器位址",
+          "description": "通常為 http://localhost:13305。舊版 Lemonade 使用連接埠 8000。"
+        },
+        "apiKey": {
+          "label": "API 金鑰",
+          "description": "僅在您的 Lemonade Server 要求時才需要。",
+          "placeholder": "選填"
+        },
+        "model": {
+          "label": "模型",
+          "description": "用來轉錄檔案的 Lemonade 模型，例如 Whisper-Base。",
+          "placeholder": "選擇 Whisper 模型",
+          "notDownloaded": "{{model}}（首次使用時下載）",
+          "none": "此伺服器上找不到轉錄模型。",
+          "use": "使用「{{model}}」"
+        },
+        "test": "測試連線",
+        "testing": "連線中…",
+        "connected": "已連線。可用的轉錄模型：{{number}}",
+        "checkFailed": "無法檢查 Lemonade Server：{{error}}",
+        "saveError": "無法儲存 Lemonade 設定：{{error}}",
+        "firstChunkSlow": "Lemonade 可能正在下載或載入模型。首次使用可能需要幾分鐘。",
+        "errors": {
+          "invalidUrl": "請輸入類似 http://localhost:13305 的位址。",
+          "unreachable": "無法連線到位於 {{url}} 的 Lemonade Server。請確認它正在執行。",
+          "timeout": "Lemonade Server 未及時回應。",
+          "unauthorized": "Lemonade Server 不接受此 API 金鑰。",
+          "modelNotFound": "Lemonade Server 上沒有此模型。",
+          "http": "Lemonade Server 傳回錯誤。",
+          "badResponse": "Lemonade Server 傳回了 Handy 無法讀取的回應。",
+          "cancelled": "已取消連線測試。"
+        },
+        "notes": {
+          "noTranslate": "使用 Lemonade Server 時無法翻譯為英語。檔案會以所說的語言轉錄。",
+          "remote": "此位址不在這台電腦上。您的錄音將會傳送到該位址。"
+        }
+      },
+      "speakers": {
+        "label": "標示說話者",
+        "description": "標示誰說了什麼，最多支援 4 位說話者。在這台電腦上執行，需一次性下載 {{size}} MB。",
+        "download": "下載說話者模型（{{size}} MB）",
+        "downloading": "正在下載說話者模型… {{percent}}%",
+        "verifying": "正在檢查下載內容…",
+        "cancelDownload": "取消下載",
+        "downloadFailed": "無法下載說話者模型：{{error}}",
+        "installed": "說話者模型已安裝（{{size}} MB）",
+        "remove": "移除說話者模型",
+        "removeError": "無法移除說話者模型：{{error}}",
+        "removeConfirm": "要移除說話者模型嗎？之後若要標示說話者，需要重新下載（{{size}} MB）。",
+        "license": "說話者模型由 NVIDIA 提供，採用 NVIDIA Open Model License（<page>模型頁面</page>）。",
+        "title": "說話者",
+        "defaultName": "說話者 {{number}}",
+        "rename": "重新命名 {{name}}",
+        "nameLabel": "{{name}} 的新名稱",
+        "save": "儲存",
+        "cancel": "取消",
+        "renameError": "無法重新命名說話者：{{error}}",
+        "approximate": "由於此模型不提供時間戳記，說話者切換的位置為近似值。",
+        "unassigned": "部分段落無法對應到說話者。",
+        "none": "此轉錄沒有說話者標示。",
+        "labelAction": "標示說話者",
+        "labelHint": "說話者標示會在這台電腦上根據原始錄音 {{file}} 產生。較長的錄音需要幾分鐘。",
+        "needsModel": "標示說話者需要說話者模型，需一次性下載 {{size}} MB。",
+        "labelError": "無法加入說話者標示：{{error}}",
+        "findRecording": "尋找錄音…",
+        "findRecordingHint": "請選擇已移動的錄音。它必須是當初轉錄的同一個檔案。",
+        "relabel": "重新標示…",
+        "relabelTitle": "重新標示說話者",
+        "relabelConfirm": "要根據錄音重新標示說話者嗎？名稱、合併和段落變更都會遺失。",
+        "mergeInto": "將 {{name}} 合併到其他說話者",
+        "mergePrompt": "將 {{name}} 合併到：",
+        "mergeTitle": "合併說話者",
+        "mergeConfirm": "要將 {{from}} 合併到 {{into}} 嗎？{{from}} 的所有段落都會標為 {{into}}。在關閉轉錄之前，你可以復原此操作。",
+        "mergeError": "無法合併說話者：{{error}}",
+        "changeSpeaker": "變更此段落的說話者（{{name}}）",
+        "changeSpeakerPrompt": "這是誰說的？",
+        "newSpeaker": "新說話者",
+        "unknownSpeaker": "未知說話者",
+        "changeSpeakerError": "無法變更說話者：{{error}}",
+        "undo": "復原",
+        "undoError": "無法復原：{{error}}",
+        "jobKind": "說話者標示",
+        "state": {
+          "running": "正在辨識說話者…",
+          "done": "說話者：{{number}}",
+          "failed": "無法標示說話者",
+          "skipped": {
+            "modelMissing": "已略過說話者標示：尚未下載說話者模型。",
+            "noSpeech": "已略過說話者標示：未偵測到語音。"
+          }
+        }
+      },
+      "queue": {
+        "title": "檔案",
+        "cancelAll": "全部取消",
+        "clearFinished": "清除已完成"
+      },
+      "status": {
+        "queued": "等待開始",
+        "preparing": "準備中…",
+        "waiting": "聽寫期間已暫停",
+        "transcribing": "正在轉錄…",
+        "completed": "完成",
+        "partial": "已完成，有缺漏",
+        "cancelled": "已取消",
+        "failed": "失敗"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "已轉錄 {{processed}}",
+      "noSpeech": "此檔案中未偵測到語音。",
+      "actions": {
+        "cancel": "取消",
+        "remove": "從清單中移除",
+        "view": "檢視轉錄",
+        "copy": "複製轉錄",
+        "showFile": "顯示檔案"
+      },
+      "copied": "轉錄已複製到剪貼簿。",
+      "copyError": "複製轉錄失敗。",
+      "savedToHistory": "已儲存到歷史紀錄",
+      "errors": {
+        "notFound": "找不到或無法開啟此檔案。",
+        "unsupportedFormat": "不支援此檔案類型。",
+        "needsFfmpeg": "此格式需要 ffmpeg。請安裝 ffmpeg 後再試一次。",
+        "noModel": "未選擇轉錄模型。",
+        "modelChanged": "轉錄此檔案期間模型已變更。",
+        "decodeFailed": "無法讀取此檔案中的音訊。",
+        "engineFailed": "轉錄失敗。",
+        "serverUnreachable": "無法連線到 Lemonade Server。請確認它正在執行。",
+        "serverUnauthorized": "Lemonade Server 不接受此 API 金鑰。",
+        "serverModelMissing": "Lemonade Server 上沒有所選的模型。",
+        "internal": "發生錯誤。",
+        "sourceChanged": "此位置的錄音在轉錄後已被變更，因此無法將其說話者對應到此轉錄。如果是同一個錄音，請透過「尋找錄音…」選擇它。",
+        "speakerLabelsFailed": "說話者標示失敗。",
+        "enqueue": "無法新增檔案：{{error}}",
+        "cancel": "無法取消：{{error}}",
+        "remove": "無法從清單中移除：{{error}}",
+        "loadTranscript": "無法載入轉錄：{{error}}"
+      },
+      "transcript": {
+        "title": "轉錄：{{file}}",
+        "live": "隨轉錄進度即時更新",
+        "partial": "此轉錄不完整：{{reason}}",
+        "partialNoReason": "此轉錄不完整。",
+        "approximateTimes": "由於此模型不提供時間戳記，時間為近似值。",
+        "empty": "未偵測到語音。",
+        "segmentsLabel": "附時間戳記的轉錄"
+      },
+      "export": {
+        "button": "匯出…",
+        "dialogTitle": "匯出轉錄",
+        "formats": {
+          "docx": "Word 文件 (.docx)",
+          "txt": "純文字 (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip 字幕 (.srt)",
+          "vtt": "WebVTT 字幕 (.vtt)"
+        },
+        "success": "轉錄已匯出。",
+        "showInFolder": "在資料夾中顯示",
+        "error": "匯出失敗：{{error}}"
+      }
+    },
     "history": {
       "title": "歷史紀錄",
       "openFolder": "開啟錄音資料夾",
@@ -477,7 +733,14 @@
       "retranscribe": "重新轉錄",
       "retranscribeError": "重新轉錄失敗，請重試。",
       "transcribing": "轉錄中...",
-      "transcriptionFailed": "轉錄失敗。您可以使用重試圖示重新轉錄。"
+      "transcriptionFailed": "轉錄失敗。您可以使用重試圖示重新轉錄。",
+      "openTranscript": "開啟轉錄",
+      "showOriginal": "顯示原始檔案",
+      "originalMissing": "原始檔案已被移動或刪除。",
+      "fileDuration": "長度 {{duration}}",
+      "incomplete": "不完整",
+      "speakerCount": "說話者：{{number}}",
+      "retranscribeFileUnavailable": "如要重新轉錄此檔案，請使用「轉錄」頁面。"
     },
     "debug": {
       "title": "偵錯",
@@ -644,6 +907,142 @@
       "whatsNewUpdates": {
         "label": "顯示新功能",
         "description": "Handy 更新後顯示版本資訊"
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

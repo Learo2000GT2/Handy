@@ -7,16 +7,19 @@
     "model": "Modell",
     "quit": "Avsluta",
     "cancel": "Avbryt",
-    "secureInputWarning": "⚠ Kortkommandon blockeras av Secure Input"
+    "secureInputWarning": "⚠ Kortkommandon blockeras av Secure Input",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "Allmänt",
+    "transcribe": "Transkribera",
     "models": "Modeller",
     "advanced": "Avancerat",
     "postProcessing": "Efterbearbetning",
     "history": "Historik",
     "debug": "Felsökning",
-    "about": "Om"
+    "about": "Om",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "För att komma igång, välj en transkriptionsmodell",
@@ -179,6 +182,10 @@
           "transcribe_with_post_process": {
             "name": "Snabbkommando för efterbearbetning",
             "description": "Valfritt: En dedikerad snabbknapp som alltid tillämpar AI-efterbearbetning på din transkription."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -216,6 +223,7 @@
       "availableModels": "Tillgängliga att ladda ner",
       "deleteConfirm": "Är du säker på att du vill ta bort {{modelName}}? Du måste ladda ner den igen för att använda den.",
       "deleteActiveConfirm": "{{modelName}} är din aktiva modell. Om du tar bort den avbryts transkriptioner tills du väljer en ny modell. Är du säker?",
+      "deleteRecordingsConfirm": "{{modelName}} är din modell för inspelningar. Om du tar bort den använder inspelningar din dikteringsmodell. Är du säker?",
       "deleteTitle": "Ta bort modell",
       "filters": {
         "allLanguages": "Alla språk",
@@ -378,10 +386,47 @@
       "customWords": {
         "title": "Anpassade ord",
         "description": "Hjälp modeller som stöds att känna igen namn och specialtermer. Ungefärlig korrigering är för närvarande begränsad till ord med bokstäverna A–Z och siffror.",
-        "placeholder": "Lägg till ett ord",
         "add": "Lägg till",
         "remove": "Ta bort {{word}}",
-        "duplicate": "\"{{word}}\" finns redan"
+        "duplicate": "\"{{word}}\" finns redan",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "Röstaktivitetsdetektering",
@@ -463,6 +508,217 @@
         "createFirst": "Klicka på 'Skapa ny prompt' ovan för att skapa din första prompt för efterbearbetning."
       }
     },
+    "transcribeFiles": {
+      "title": "Transkribera filer",
+      "description": "Gör om befintliga inspelningar till text på den här datorn. Dina filer lämnar aldrig din enhet.",
+      "settingsNote": "Använder din valda modell och dina inställningar för språk, översättning, anpassade ord och utfyllnadsord.",
+      "settingsNoteLemonade": "Använder dina inställningar för språk, anpassade ord och utfyllnadsord.",
+      "settingsNoteOwnModel": "Använder din modell för inspelningar och dina inställningar för språk, översättning, anpassade ord och utfyllnadsord.",
+      "model": "Modell: {{model}}",
+      "modelLemonade": "Modell: {{model}} på Lemonade Server",
+      "noModel": "Välj en nedladdad modell på sidan Modeller för att transkribera filer.",
+      "noLemonadeModel": "Välj en Lemonade-modell för att transkribera filer.",
+      "noRecordingsModel": "Din modell för inspelningar är inte nedladdad. Välj en annan ovan eller ladda ned den på sidan Modeller.",
+      "dropzone": {
+        "title": "Släpp ljud- eller videofiler här",
+        "hint": "Intervjuer, möten, föreläsningar och röstmemon av valfri längd",
+        "active": "Släpp för att lägga till",
+        "choose": "Välj filer…",
+        "skipped": "Överhoppade filer som inte är ljud eller video: {{number}}"
+      },
+      "picker": {
+        "title": "Välj inspelningar",
+        "filterName": "Ljud- och videofiler"
+      },
+      "formats": {
+        "native": "Öppnar {{formats}}",
+        "ffmpegAvailable": "Andra format som Opus, WebM, WMA och DSS öppnas med ffmpeg.",
+        "ffmpegMissing": "Installera ffmpeg för att även kunna öppna Opus, WebM, WMA, DSS och andra format."
+      },
+      "saveToHistory": {
+        "label": "Spara i historik",
+        "description": "Färdiga transkriptioner sparas och stjärnmarkeras så att automatisk rensning behåller dem."
+      },
+      "engine": {
+        "title": "Transkriberingsmotor",
+        "label": "Transkribera med",
+        "description": "Diktering använder alltid Handys egen modell. Det här valet gäller bara filer.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Modell för inspelningar",
+        "description": "Inspelningar kan använda en långsammare men mer exakt modell än diktering. Den körs separat och läses bara in medan filer transkriberas, så att din dikteringsmodell förblir redo. Båda modellerna måste få plats i minnet.",
+        "same": "Samma som diktering ({{model}})",
+        "sameNoModel": "Samma som diktering",
+        "switchWarning": "Den här filen använder din dikteringsmodell, så om du byter dikteringsmodell nu avbryts den. Välj en annan modell för inspelningar för att hålla isär dem.",
+        "onCpu": "Inspelningarna körs på processorn eftersom grafikminnet inte räcker till båda modellerna. Välj en mindre modell för inspelningar för att använda grafikkortet."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Serveradress",
+          "description": "Vanligtvis http://localhost:13305. Äldre versioner av Lemonade använde port 8000."
+        },
+        "apiKey": {
+          "label": "API-nyckel",
+          "description": "Behövs bara om din Lemonade Server kräver en.",
+          "placeholder": "Valfritt"
+        },
+        "model": {
+          "label": "Modell",
+          "description": "Lemonade-modellen som transkriberar dina filer, till exempel Whisper-Base.",
+          "placeholder": "Välj en Whisper-modell",
+          "notDownloaded": "{{model}} (laddas ner vid första användning)",
+          "none": "Inga transkriptionsmodeller hittades på den här servern.",
+          "use": "Använd ”{{model}}”"
+        },
+        "test": "Testa anslutning",
+        "testing": "Ansluter…",
+        "connected": "Ansluten. Tillgängliga transkriptionsmodeller: {{number}}",
+        "checkFailed": "Det gick inte att kontrollera Lemonade Server: {{error}}",
+        "saveError": "Det gick inte att spara Lemonade-inställningarna: {{error}}",
+        "firstChunkSlow": "Lemonade kanske laddar ner eller läser in modellen. Första gången kan det ta några minuter.",
+        "errors": {
+          "invalidUrl": "Ange en adress som http://localhost:13305.",
+          "unreachable": "Det går inte att nå Lemonade Server på {{url}}. Kontrollera att den körs.",
+          "timeout": "Lemonade Server svarade inte i tid.",
+          "unauthorized": "Lemonade Server godkände inte API-nyckeln.",
+          "modelNotFound": "Lemonade Server har inte den här modellen.",
+          "http": "Lemonade Server returnerade ett fel.",
+          "badResponse": "Lemonade Server skickade ett svar som Handy inte kunde läsa.",
+          "cancelled": "Anslutningstestet avbröts."
+        },
+        "notes": {
+          "noTranslate": "Översätt till engelska är inte tillgängligt med Lemonade Server. Filerna transkriberas på det språk som talas.",
+          "remote": "Den här adressen finns inte på den här datorn. Dina inspelningar skickas dit."
+        }
+      },
+      "speakers": {
+        "label": "Märk ut talare",
+        "description": "Visar vem som sa vad, för upp till 4 talare. Körs på den här datorn och kräver en engångsnedladdning på {{size}} MB.",
+        "download": "Ladda ner talarmodell ({{size}} MB)",
+        "downloading": "Laddar ner talarmodell… {{percent}}%",
+        "verifying": "Kontrollerar nedladdningen…",
+        "cancelDownload": "Avbryt nedladdning",
+        "downloadFailed": "Det gick inte att ladda ner talarmodellen: {{error}}",
+        "installed": "Talarmodell installerad ({{size}} MB)",
+        "remove": "Ta bort talarmodell",
+        "removeError": "Det gick inte att ta bort talarmodellen: {{error}}",
+        "removeConfirm": "Ta bort talarmodellen? Du måste ladda ner den igen ({{size}} MB) för att märka ut talare.",
+        "license": "Talarmodell från NVIDIA, under NVIDIA Open Model License (<page>modellsida</page>).",
+        "title": "Talare",
+        "defaultName": "Talare {{number}}",
+        "rename": "Byt namn på {{name}}",
+        "nameLabel": "Nytt namn för {{name}}",
+        "save": "Spara",
+        "cancel": "Avbryt",
+        "renameError": "Det gick inte att byta namn på talaren: {{error}}",
+        "approximate": "Talarbyten är ungefärliga eftersom den här modellen inte rapporterar tidsstämplar.",
+        "unassigned": "Vissa avsnitt kunde inte kopplas till en talare.",
+        "none": "Den här transkriptionen har inga talarmarkeringar.",
+        "labelAction": "Märk ut talare",
+        "labelHint": "Talarna märks ut på den här datorn utifrån originalinspelningen, {{file}}. Långa inspelningar tar några minuter.",
+        "needsModel": "För att märka ut talare behövs talarmodellen, en engångsnedladdning på {{size}} MB.",
+        "labelError": "Det gick inte att märka ut talare: {{error}}",
+        "findRecording": "Hitta inspelning…",
+        "findRecordingHint": "Välj den flyttade inspelningen. Det måste vara samma fil som transkriberades.",
+        "relabel": "Märk ut igen…",
+        "relabelTitle": "Märk ut talare igen",
+        "relabelConfirm": "Vill du märka ut talarna igen utifrån inspelningen? Namn, sammanslagningar och ändrade avsnitt går förlorade.",
+        "mergeInto": "Slå ihop {{name}} med en annan talare",
+        "mergePrompt": "Slå ihop {{name}} med:",
+        "mergeTitle": "Slå ihop talare",
+        "mergeConfirm": "Slå ihop {{from}} med {{into}}? Alla avsnitt från {{from}} markeras som {{into}}. Du kan ångra det tills du stänger transkriptionen.",
+        "mergeError": "Det gick inte att slå ihop talarna: {{error}}",
+        "changeSpeaker": "Byt talare för det här avsnittet ({{name}})",
+        "changeSpeakerPrompt": "Vem sa det här?",
+        "newSpeaker": "Ny talare",
+        "unknownSpeaker": "Okänd talare",
+        "changeSpeakerError": "Det gick inte att byta talare: {{error}}",
+        "undo": "Ångra",
+        "undoError": "Det gick inte att ångra: {{error}}",
+        "jobKind": "Talarmärkning",
+        "state": {
+          "running": "Identifierar talare…",
+          "done": "Talare: {{number}}",
+          "failed": "Det gick inte att märka ut talare",
+          "skipped": {
+            "modelMissing": "Talarmärkning hoppades över: talarmodellen är inte nedladdad.",
+            "noSpeech": "Talarmärkning hoppades över: inget tal hittades."
+          }
+        }
+      },
+      "queue": {
+        "title": "Filer",
+        "cancelAll": "Avbryt alla",
+        "clearFinished": "Rensa färdiga"
+      },
+      "status": {
+        "queued": "Väntar på att starta",
+        "preparing": "Förbereder…",
+        "waiting": "Pausad medan du dikterar",
+        "transcribing": "Transkriberar…",
+        "completed": "Klar",
+        "partial": "Klar, med luckor",
+        "cancelled": "Avbruten",
+        "failed": "Misslyckades"
+      },
+      "progress": "{{processed}} av {{total}}",
+      "progressNoTotal": "{{processed}} transkriberat",
+      "noSpeech": "Inget tal hittades i den här filen.",
+      "actions": {
+        "cancel": "Avbryt",
+        "remove": "Ta bort från listan",
+        "view": "Visa transkription",
+        "copy": "Kopiera transkription",
+        "showFile": "Visa fil"
+      },
+      "copied": "Transkriptionen har kopierats till urklipp.",
+      "copyError": "Det gick inte att kopiera transkriptionen.",
+      "savedToHistory": "Sparad i historik",
+      "errors": {
+        "notFound": "Filen kan inte hittas eller öppnas.",
+        "unsupportedFormat": "Den här filtypen stöds inte.",
+        "needsFfmpeg": "Det här formatet kräver ffmpeg. Installera ffmpeg och försök igen.",
+        "noModel": "Ingen transkriptionsmodell är vald.",
+        "modelChanged": "Modellen ändrades medan den här filen transkriberades.",
+        "decodeFailed": "Ljudet i den här filen kunde inte läsas.",
+        "engineFailed": "Transkriberingen misslyckades.",
+        "serverUnreachable": "Det går inte att nå Lemonade Server. Kontrollera att den körs.",
+        "serverUnauthorized": "Lemonade Server godkände inte API-nyckeln.",
+        "serverModelMissing": "Lemonade Server har inte den valda modellen.",
+        "internal": "Något gick fel.",
+        "sourceChanged": "Inspelningen på den här platsen har ändrats sedan den transkriberades, så dess talare kan inte kopplas till den här transkriptionen. Om det är samma inspelning väljer du den med ”Hitta inspelning…”.",
+        "speakerLabelsFailed": "Talarmärkningen misslyckades.",
+        "enqueue": "Det gick inte att lägga till filer: {{error}}",
+        "cancel": "Det gick inte att avbryta: {{error}}",
+        "remove": "Det gick inte att ta bort från listan: {{error}}",
+        "loadTranscript": "Det gick inte att läsa in transkriptionen: {{error}}"
+      },
+      "transcript": {
+        "title": "Transkription: {{file}}",
+        "live": "Uppdateras medan transkriberingen pågår",
+        "partial": "Den här transkriptionen är ofullständig: {{reason}}",
+        "partialNoReason": "Den här transkriptionen är ofullständig.",
+        "approximateTimes": "Tiderna är ungefärliga eftersom den här modellen inte rapporterar tidsstämplar.",
+        "empty": "Inget tal hittades.",
+        "segmentsLabel": "Transkription med tidsstämplar"
+      },
+      "export": {
+        "button": "Exportera…",
+        "dialogTitle": "Exportera transkription",
+        "formats": {
+          "docx": "Word-dokument (.docx)",
+          "txt": "Oformaterad text (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip-undertexter (.srt)",
+          "vtt": "WebVTT-undertexter (.vtt)"
+        },
+        "success": "Transkriptionen har exporterats.",
+        "showInFolder": "Visa i mapp",
+        "error": "Exporten misslyckades: {{error}}"
+      }
+    },
     "history": {
       "title": "Historik",
       "openFolder": "Öppna mapp för inspelningar",
@@ -477,7 +733,14 @@
       "retranscribe": "Transkribera igen",
       "retranscribeError": "Misslyckades med att transkribera igen. Försök igen.",
       "transcribing": "Transkriberar...",
-      "transcriptionFailed": "Transkribering misslyckades. Du kan transkribera igen med hjälp av ikonen för nytt försök."
+      "transcriptionFailed": "Transkribering misslyckades. Du kan transkribera igen med hjälp av ikonen för nytt försök.",
+      "openTranscript": "Öppna transkription",
+      "showOriginal": "Visa originalfil",
+      "originalMissing": "Originalfilen har flyttats eller tagits bort.",
+      "fileDuration": "Längd {{duration}}",
+      "incomplete": "Ofullständig",
+      "speakerCount": "Talare: {{number}}",
+      "retranscribeFileUnavailable": "Använd sidan Transkribera för att transkribera den här filen igen."
     },
     "debug": {
       "title": "Felsökning",
@@ -644,6 +907,142 @@
       "whatsNewUpdates": {
         "label": "Visa nyheter",
         "description": "Visa versionsinformation efter Handy-uppdateringar"
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },
