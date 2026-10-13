@@ -851,6 +851,25 @@ async setSelectedChannel(channel: number | null) : Promise<Result<null, string>>
 async setModelUnloadTimeout(timeout: ModelUnloadTimeout) : Promise<void> {
     await TAURI_INVOKE("set_model_unload_timeout", { timeout });
 },
+async startPronunciationSample() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("start_pronunciation_sample") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async stopPronunciationSample() : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("stop_pronunciation_sample") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelPronunciationSample() : Promise<void> {
+    await TAURI_INVOKE("cancel_pronunciation_sample");
+},
 async getModelLoadStatus() : Promise<Result<ModelLoadStatus, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_model_load_status") };

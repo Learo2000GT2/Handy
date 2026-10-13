@@ -5,13 +5,13 @@ import { useSettings } from "../../hooks/useSettings";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { SettingContainer } from "../ui/SettingContainer";
+import { openAddWordDialog } from "./AddWordDialog";
 import {
   MAX_ENTRY_LENGTH,
   MAX_SPELLING_WORDS,
   SpellingMap,
   hasWord,
   isUsableSpelling,
-  normalizeCustomWord,
   normalizeSpelling,
   phraseKey,
   spellingOwner as findSpellingOwner,
@@ -44,13 +44,11 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
   ({ descriptionMode = "tooltip", grouped = false }) => {
     const { t } = useTranslation();
     const { getSetting, updateSetting, isUpdating } = useSettings();
-    const [newWord, setNewWord] = useState("");
     const [selectedWord, setSelectedWord] = useState<string | null>(null);
     const [newSpelling, setNewSpelling] = useState("");
     const chipToggles = useRef(new Map<string, HTMLButtonElement>());
     const customWords = getSetting("custom_words") || [];
     const spellingMap: SpellingMap = getSetting("custom_word_variants") || {};
-    const normalizedWord = normalizeCustomWord(newWord);
     const normalizedSpelling = normalizeSpelling(newSpelling);
     const isSaving =
       isUpdating("custom_words") || isUpdating("custom_word_variants");
@@ -60,31 +58,6 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
     const spellingsFor = (word: string) => spellingsOf(spellingMap, word);
     const spellingOwner = (text: string) =>
       findSpellingOwner(customWords, spellingMap, text);
-
-    const handleAddWord = () => {
-      if (normalizedWord && normalizedWord.length <= MAX_ENTRY_LENGTH) {
-        if (customWords.includes(normalizedWord)) {
-          toast.error(
-            t("settings.advanced.customWords.duplicate", {
-              word: normalizedWord,
-            }),
-          );
-          return;
-        }
-        const owner = spellingOwner(normalizedWord);
-        if (owner) {
-          toast.error(
-            t("settings.advanced.customWords.spellingDuplicate", {
-              spelling: normalizedWord,
-              word: owner,
-            }),
-          );
-          return;
-        }
-        updateSetting("custom_words", [...customWords, normalizedWord]);
-        setNewWord("");
-      }
-    };
 
     const handleRemoveWord = async (wordToRemove: string) => {
       if (activeWord === wordToRemove) {
@@ -167,13 +140,6 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
       );
     };
 
-    const handleWordKeyPress = (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        handleAddWord();
-      }
-    };
-
     const handleSpellingKeyPress = (e: React.KeyboardEvent) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -198,30 +164,14 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
           descriptionMode={descriptionMode}
           grouped={grouped}
         >
-          <div className="flex items-center gap-2">
-            <Input
-              type="text"
-              className="max-w-40"
-              value={newWord}
-              onChange={(e) => setNewWord(e.target.value)}
-              onKeyDown={handleWordKeyPress}
-              placeholder={t("settings.advanced.customWords.placeholder")}
-              variant="compact"
-              disabled={isUpdating("custom_words")}
-            />
-            <Button
-              onClick={handleAddWord}
-              disabled={
-                !normalizedWord ||
-                normalizedWord.length > MAX_ENTRY_LENGTH ||
-                isUpdating("custom_words")
-              }
-              variant="primary"
-              size="md"
-            >
-              {t("settings.advanced.customWords.add")}
-            </Button>
-          </div>
+          <Button
+            onClick={() => openAddWordDialog()}
+            disabled={isSaving}
+            variant="primary"
+            size="md"
+          >
+            {t("settings.advanced.customWords.addWordButton")}
+          </Button>
         </SettingContainer>
         {customWords.length > 0 && (
           <div
