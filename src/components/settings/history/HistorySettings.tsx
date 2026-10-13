@@ -1,7 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { Check, Copy, FolderOpen, RotateCcw, Star, Trash2 } from "lucide-react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import {
+  Check,
+  Copy,
+  FileText,
+  FolderOpen,
+  Loader2,
+  RotateCcw,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -11,33 +21,24 @@ import {
   type HistoryUpdatePayload,
 } from "@/bindings";
 import { useOsType } from "@/hooks/useOsType";
+import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
 import { formatDateTime } from "@/utils/dateFormat";
+import {
+  activeLabelJobForHistory,
+  formatDuration,
+  isolateLtr,
+  previewText,
+} from "@/lib/utils/transcript";
 import { AudioPlayer, AudioPlayerGroup } from "../../ui/AudioPlayer";
 import { Button } from "../../ui/Button";
+import { IconButton } from "../../ui/IconButton";
+import { TranscriptDialog } from "../transcribe/TranscriptDialog";
 import { copyToClipboard } from "./clipboard";
 
-const IconButton: React.FC<{
-  onClick: () => void;
-  title: string;
-  disabled?: boolean;
-  active?: boolean;
-  children: React.ReactNode;
-}> = ({ onClick, title, disabled, active, children }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className={`p-1.5 rounded-md flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed disabled:text-text/20 ${
-      active
-        ? "text-logo-primary hover:text-logo-primary/80"
-        : "text-text/50 hover:text-logo-primary"
-    }`}
-    title={title}
-  >
-    {children}
-  </button>
-);
-
 const PAGE_SIZE = 30;
+
+// File transcripts can be very long; the clamped preview needs only the start.
+const FILE_PREVIEW_CHARS = 1000;
 
 interface OpenRecordingsButtonProps {
   onClick: () => void;
@@ -69,6 +70,10 @@ export const HistorySettings: React.FC = () => {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const entriesRef = useRef<HistoryEntry[]>([]);
   const loadingRef = useRef(false);
+  const [openTranscript, setOpenTranscript] = useState<{
+    historyId: number;
+    fileName: string;
+  } | null>(null);
 
   // Keep ref in sync for use in IntersectionObserver callback
   useEffect(() => {
@@ -138,8 +143,20 @@ export const HistorySettings: React.FC = () => {
       if (payload.action === "added") {
         setEntries((prev) => [payload.entry, ...prev]);
       } else if (payload.action === "updated") {
+        const updated = payload.entry;
         setEntries((prev) =>
-          prev.map((e) => (e.id === payload.entry.id ? payload.entry : e)),
+          prev.map((e) => {
+            if (e.id !== updated.id) return e;
+            // An update doesn't check the source file; what the page
+            // found stays true unless the entry now points elsewhere.
+            if (e.file && updated.file?.source_path === e.file.source_path) {
+              return {
+                ...updated,
+                file: { ...updated.file, source_exists: e.file.source_exists },
+              };
+            }
+            return updated;
+          }),
         );
       }
       // "deleted" and "toggled" are handled by optimistic updates only,
@@ -255,6 +272,12 @@ export const HistorySettings: React.FC = () => {
                 getAudioUrl={getAudioUrl}
                 deleteAudio={deleteAudioEntry}
                 retryTranscription={retryHistoryEntry}
+                onOpenTranscript={() =>
+                  setOpenTranscript({
+                    historyId: entry.id,
+                    fileName: entry.file?.source_name ?? entry.title,
+                  })
+                }
               />
             ))}
           </div>
@@ -283,6 +306,15 @@ export const HistorySettings: React.FC = () => {
           {content}
         </div>
       </div>
+      <TranscriptDialog
+        source={
+          openTranscript
+            ? { kind: "history", history_id: openTranscript.historyId }
+            : null
+        }
+        fileName={openTranscript?.fileName ?? ""}
+        onClose={() => setOpenTranscript(null)}
+      />
     </div>
   );
 };
@@ -294,6 +326,8 @@ interface HistoryEntryProps {
   getAudioUrl: (fileName: string) => Promise<string | null>;
   deleteAudio: (id: number) => Promise<void>;
   retryTranscription: (id: number) => Promise<void>;
+  /** File entries only: shows the full timestamped transcript. */
+  onOpenTranscript: () => void;
 }
 
 const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
@@ -303,10 +337,15 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
   getAudioUrl,
   deleteAudio,
   retryTranscription,
+  onOpenTranscript,
 }) => {
   const { t, i18n } = useTranslation();
   const [showCopied, setShowCopied] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  // Speaker labels are being made for this entry.
+  const labelling = useFileTranscriptionStore(
+    (state) => activeLabelJobForHistory(state.jobs, entry.id) !== null,
+  );
 
   const hasTranscription = entry.transcription_text.trim().length > 0;
 
@@ -351,13 +390,67 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
     }
   };
 
+  const handleShowOriginal = async () => {
+    if (!entry.file) return;
+    try {
+      await revealItemInDir(entry.file.source_path);
+    } catch (error) {
+      console.error("Failed to reveal original file:", error);
+      toast.error(t("settings.history.originalMissing"));
+    }
+  };
+
   const formattedDate = formatDateTime(String(entry.timestamp), i18n.language);
+  const file = entry.file;
 
   return (
     <div className="px-4 py-2 pb-5 flex flex-col gap-3">
-      <div className="flex justify-between items-center">
-        <p className="text-sm font-medium">{formattedDate}</p>
-        <div className="flex items-center">
+      <div className="flex justify-between items-center gap-2">
+        {file ? (
+          <div className="min-w-0">
+            <p
+              className="text-sm font-medium truncate"
+              title={file.source_path}
+            >
+              {file.source_name}
+            </p>
+            <p className="text-xs text-text/60 flex flex-wrap items-center gap-x-2">
+              <span>{formattedDate}</span>
+              {file.duration_ms > 0 && (
+                <span className="tabular-nums">
+                  {t("settings.history.fileDuration", {
+                    duration: isolateLtr(formatDuration(file.duration_ms)),
+                  })}
+                </span>
+              )}
+              {file.status === "partial" && (
+                <span className="rounded-full bg-yellow-500/15 px-2 text-yellow-500">
+                  {t("settings.history.incomplete")}
+                </span>
+              )}
+              {labelling ? (
+                <span className="rounded-full bg-mid-gray/20 px-2 text-text/70 flex items-center gap-1">
+                  <Loader2
+                    className="w-3 h-3 animate-spin"
+                    aria-hidden="true"
+                  />
+                  {t("settings.transcribeFiles.speakers.state.running")}
+                </span>
+              ) : (
+                file.speaker_count > 0 && (
+                  <span className="rounded-full bg-mid-gray/20 px-2 text-text/70">
+                    {t("settings.history.speakerCount", {
+                      number: file.speaker_count,
+                    })}
+                  </span>
+                )
+              )}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm font-medium">{formattedDate}</p>
+        )}
+        <div className="flex items-center shrink-0">
           <IconButton
             onClick={handleCopyText}
             disabled={!hasTranscription || retrying}
@@ -385,21 +478,46 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
               fill={entry.saved ? "currentColor" : "none"}
             />
           </IconButton>
-          <IconButton
-            onClick={handleRetranscribe}
-            disabled={retrying}
-            title={t("settings.history.retranscribe")}
-          >
-            <RotateCcw
-              width={16}
-              height={16}
-              style={
-                retrying
-                  ? { animation: "spin 1s linear infinite reverse" }
-                  : undefined
-              }
-            />
-          </IconButton>
+          {file ? (
+            <>
+              <IconButton
+                onClick={handleShowOriginal}
+                disabled={!file.source_exists}
+                title={
+                  file.source_exists
+                    ? t("settings.history.showOriginal")
+                    : t("settings.history.originalMissing")
+                }
+                aria-label={t("settings.history.showOriginal")}
+              >
+                <FolderOpen width={16} height={16} />
+              </IconButton>
+              {/* File entries can't be retried here; say where instead. */}
+              <IconButton
+                disabled
+                title={t("settings.history.retranscribeFileUnavailable")}
+                aria-label={t("settings.history.retranscribe")}
+              >
+                <RotateCcw width={16} height={16} />
+              </IconButton>
+            </>
+          ) : (
+            <IconButton
+              onClick={handleRetranscribe}
+              disabled={retrying}
+              title={t("settings.history.retranscribe")}
+            >
+              <RotateCcw
+                width={16}
+                height={16}
+                style={
+                  retrying
+                    ? { animation: "spin 1s linear infinite reverse" }
+                    : undefined
+                }
+              />
+            </IconButton>
+          )}
           <IconButton
             onClick={handleDeleteEntry}
             disabled={retrying}
@@ -410,36 +528,58 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
         </div>
       </div>
 
-      <p
-        className={`italic text-sm pb-2 ${
-          retrying
-            ? ""
-            : hasTranscription
-              ? "text-text/90 select-text cursor-text whitespace-pre-wrap break-words"
-              : "text-text/40"
-        }`}
-        style={
-          retrying
-            ? { animation: "transcribe-pulse 3s ease-in-out infinite" }
-            : undefined
-        }
-      >
-        {retrying && (
-          <style>{`
+      {file ? (
+        <div className="flex flex-col items-start gap-3">
+          <p
+            dir="auto"
+            className="text-sm text-text/90 select-text cursor-text whitespace-pre-wrap break-words line-clamp-4"
+          >
+            {previewText(entry.transcription_text, FILE_PREVIEW_CHARS)}
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={onOpenTranscript}
+          >
+            <FileText className="w-4 h-4" aria-hidden="true" />
+            <span>{t("settings.history.openTranscript")}</span>
+          </Button>
+        </div>
+      ) : (
+        <>
+          <p
+            className={`italic text-sm pb-2 ${
+              retrying
+                ? ""
+                : hasTranscription
+                  ? "text-text/90 select-text cursor-text whitespace-pre-wrap break-words"
+                  : "text-text/40"
+            }`}
+            style={
+              retrying
+                ? { animation: "transcribe-pulse 3s ease-in-out infinite" }
+                : undefined
+            }
+          >
+            {retrying && (
+              <style>{`
             @keyframes transcribe-pulse {
               0%, 100% { color: color-mix(in srgb, var(--color-text) 40%, transparent); }
               50% { color: color-mix(in srgb, var(--color-text) 90%, transparent); }
             }
           `}</style>
-        )}
-        {retrying
-          ? t("settings.history.transcribing")
-          : hasTranscription
-            ? entry.transcription_text
-            : t("settings.history.transcriptionFailed")}
-      </p>
+            )}
+            {retrying
+              ? t("settings.history.transcribing")
+              : hasTranscription
+                ? entry.transcription_text
+                : t("settings.history.transcriptionFailed")}
+          </p>
 
-      <AudioPlayer onLoadRequest={handleLoadAudio} className="w-full" />
+          <AudioPlayer onLoadRequest={handleLoadAudio} className="w-full" />
+        </>
+      )}
     </div>
   );
 };

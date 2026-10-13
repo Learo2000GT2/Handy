@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Chung",
+    "transcribe": "Phiên âm",
     "models": "Mô hình",
     "advanced": "Nâng cao",
     "postProcessing": "Xử lý sau",
@@ -163,6 +164,7 @@
       "description": "Chọn mô hình chuyển đổi hoặc tải thêm mô hình. Các mô hình khác nhau có mức độ chính xác và tốc độ khác nhau.",
       "deleteConfirm": "Bạn có chắc chắn muốn xóa {{modelName}}? Bạn sẽ cần tải lại để sử dụng.",
       "deleteActiveConfirm": "{{modelName}} là mô hình đang hoạt động của bạn. Xóa nó sẽ dừng phiên âm cho đến khi bạn chọn một mô hình mới. Bạn có chắc không?",
+      "deleteRecordingsConfirm": "{{modelName}} là mô hình cho bản ghi âm của bạn. Nếu xóa nó, bản ghi âm sẽ dùng mô hình nhập bằng giọng nói của bạn. Bạn có chắc không?",
       "deleteTitle": "Xóa mô hình",
       "filters": {
         "allLanguages": "Tất cả ngôn ngữ",
@@ -487,6 +489,217 @@
         "createFirst": "Nhấn 'Tạo Prompt mới' ở trên để tạo prompt xử lý sau đầu tiên của bạn."
       }
     },
+    "transcribeFiles": {
+      "title": "Phiên âm tệp",
+      "description": "Chuyển các bản ghi âm có sẵn thành văn bản ngay trên máy tính này. Tệp của bạn không bao giờ rời khỏi thiết bị.",
+      "settingsNote": "Sử dụng mô hình bạn đã chọn cùng các cài đặt ngôn ngữ, dịch, từ tùy chỉnh và từ đệm của bạn.",
+      "settingsNoteLemonade": "Sử dụng các cài đặt ngôn ngữ, từ tùy chỉnh và từ đệm của bạn.",
+      "settingsNoteOwnModel": "Sử dụng mô hình cho bản ghi âm cùng các cài đặt ngôn ngữ, dịch, từ tùy chỉnh và từ đệm của bạn.",
+      "model": "Mô hình: {{model}}",
+      "modelLemonade": "Mô hình: {{model}} trên Lemonade Server",
+      "noModel": "Chọn một mô hình đã tải xuống ở trang Mô hình để phiên âm tệp.",
+      "noLemonadeModel": "Chọn một mô hình Lemonade để phiên âm tệp.",
+      "noRecordingsModel": "Mô hình cho bản ghi âm của bạn chưa được tải xuống. Hãy chọn mô hình khác ở trên hoặc tải xuống ở trang Mô hình.",
+      "dropzone": {
+        "title": "Thả tệp âm thanh hoặc video vào đây",
+        "hint": "Phỏng vấn, cuộc họp, bài giảng và ghi chú giọng nói với mọi độ dài",
+        "active": "Thả ra để thêm",
+        "choose": "Chọn tệp…",
+        "skipped": "Đã bỏ qua các tệp không phải âm thanh hoặc video: {{number}}"
+      },
+      "picker": {
+        "title": "Chọn bản ghi âm",
+        "filterName": "Tệp âm thanh và video"
+      },
+      "formats": {
+        "native": "Hỗ trợ {{formats}}",
+        "ffmpegAvailable": "Các định dạng khác như Opus, WebM, WMA và DSS được mở bằng ffmpeg.",
+        "ffmpegMissing": "Cài đặt ffmpeg để mở thêm Opus, WebM, WMA, DSS và các định dạng khác."
+      },
+      "saveToHistory": {
+        "label": "Lưu vào lịch sử",
+        "description": "Bản chép lời hoàn tất được lưu và gắn sao để tính năng tự động dọn dẹp giữ lại chúng."
+      },
+      "engine": {
+        "title": "Công cụ phiên âm",
+        "label": "Phiên âm bằng",
+        "description": "Nhập bằng giọng nói luôn dùng mô hình riêng của Handy. Lựa chọn này chỉ áp dụng cho tệp.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Mô hình cho bản ghi âm",
+        "description": "Bản ghi âm có thể dùng một mô hình chậm hơn nhưng chính xác hơn mô hình nhập bằng giọng nói. Mô hình này chạy riêng và chỉ được tải trong lúc phiên âm tệp, nên mô hình nhập bằng giọng nói của bạn luôn sẵn sàng. Cả hai mô hình phải vừa trong bộ nhớ.",
+        "same": "Giống nhập bằng giọng nói ({{model}})",
+        "sameNoModel": "Giống nhập bằng giọng nói",
+        "switchWarning": "Tệp này dùng mô hình nhập bằng giọng nói của bạn, nên đổi mô hình nhập bằng giọng nói lúc này sẽ dừng nó. Để tách riêng hai việc, hãy chọn một mô hình khác cho bản ghi âm.",
+        "onCpu": "Bản ghi âm đang chạy trên bộ xử lý vì bộ nhớ đồ họa không đủ cho cả hai mô hình. Hãy chọn một mô hình nhỏ hơn cho bản ghi âm để dùng card đồ họa."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Địa chỉ máy chủ",
+          "description": "Thường là http://localhost:13305. Các phiên bản Lemonade cũ hơn dùng cổng 8000."
+        },
+        "apiKey": {
+          "label": "Khóa API",
+          "description": "Chỉ cần khi Lemonade Server của bạn yêu cầu.",
+          "placeholder": "Tùy chọn"
+        },
+        "model": {
+          "label": "Mô hình",
+          "description": "Mô hình Lemonade dùng để phiên âm tệp của bạn, chẳng hạn Whisper-Base.",
+          "placeholder": "Chọn một mô hình Whisper",
+          "notDownloaded": "{{model}} (tải xuống khi dùng lần đầu)",
+          "none": "Không tìm thấy mô hình phiên âm nào trên máy chủ này.",
+          "use": "Dùng “{{model}}”"
+        },
+        "test": "Kiểm tra kết nối",
+        "testing": "Đang kết nối…",
+        "connected": "Đã kết nối. Mô hình phiên âm khả dụng: {{number}}",
+        "checkFailed": "Không thể kiểm tra Lemonade Server: {{error}}",
+        "saveError": "Không thể lưu cài đặt Lemonade: {{error}}",
+        "firstChunkSlow": "Lemonade có thể đang tải xuống hoặc nạp mô hình. Lần đầu có thể mất vài phút.",
+        "errors": {
+          "invalidUrl": "Nhập địa chỉ dạng http://localhost:13305.",
+          "unreachable": "Không thể kết nối tới Lemonade Server tại {{url}}. Hãy đảm bảo máy chủ đang chạy.",
+          "timeout": "Lemonade Server không phản hồi kịp thời.",
+          "unauthorized": "Lemonade Server không chấp nhận khóa API.",
+          "modelNotFound": "Lemonade Server không có mô hình này.",
+          "http": "Lemonade Server trả về lỗi.",
+          "badResponse": "Lemonade Server gửi phản hồi mà Handy không đọc được.",
+          "cancelled": "Đã hủy kiểm tra kết nối."
+        },
+        "notes": {
+          "noTranslate": "Không thể dùng Dịch sang tiếng Anh với Lemonade Server. Tệp sẽ được phiên âm theo ngôn ngữ được nói.",
+          "remote": "Địa chỉ này không nằm trên máy tính này. Bản ghi âm của bạn sẽ được gửi tới đó."
+        }
+      },
+      "speakers": {
+        "label": "Gắn nhãn người nói",
+        "description": "Đánh dấu ai nói gì, tối đa 4 người nói. Chạy trên máy tính này và cần tải xuống một lần {{size}} MB.",
+        "download": "Tải xuống mô hình người nói ({{size}} MB)",
+        "downloading": "Đang tải xuống mô hình người nói… {{percent}}%",
+        "verifying": "Đang kiểm tra bản tải xuống…",
+        "cancelDownload": "Hủy tải xuống",
+        "downloadFailed": "Không thể tải xuống mô hình người nói: {{error}}",
+        "installed": "Đã cài đặt mô hình người nói ({{size}} MB)",
+        "remove": "Gỡ mô hình người nói",
+        "removeError": "Không thể gỡ mô hình người nói: {{error}}",
+        "removeConfirm": "Gỡ mô hình người nói? Bạn sẽ cần tải lại mô hình ({{size}} MB) để gắn nhãn người nói.",
+        "license": "Mô hình người nói do NVIDIA phát triển, theo giấy phép NVIDIA Open Model License (<page>trang mô hình</page>).",
+        "title": "Người nói",
+        "defaultName": "Người nói {{number}}",
+        "rename": "Đổi tên {{name}}",
+        "nameLabel": "Tên mới cho {{name}}",
+        "save": "Lưu",
+        "cancel": "Hủy",
+        "renameError": "Không thể đổi tên người nói: {{error}}",
+        "approximate": "Thời điểm đổi người nói chỉ là ước tính vì mô hình này không cung cấp dấu thời gian.",
+        "unassigned": "Một số đoạn không khớp được với người nói nào.",
+        "none": "Bản chép lời này chưa có nhãn người nói.",
+        "labelAction": "Gắn nhãn người nói",
+        "labelHint": "Nhãn người nói được tạo trên máy tính này từ bản ghi âm gốc, {{file}}. Bản ghi âm dài sẽ mất vài phút.",
+        "needsModel": "Gắn nhãn người nói cần mô hình người nói, tải xuống một lần {{size}} MB.",
+        "labelError": "Không thể thêm nhãn người nói: {{error}}",
+        "findRecording": "Tìm bản ghi âm…",
+        "findRecordingHint": "Chọn bản ghi âm đã bị di chuyển. Đó phải là đúng tệp đã được phiên âm.",
+        "relabel": "Gắn nhãn lại…",
+        "relabelTitle": "Gắn nhãn người nói lại",
+        "relabelConfirm": "Gắn nhãn lại người nói từ bản ghi âm? Tên, các lần gộp và thay đổi đoạn sẽ bị mất.",
+        "mergeInto": "Gộp {{name}} vào người nói khác",
+        "mergePrompt": "Gộp {{name}} vào:",
+        "mergeTitle": "Gộp người nói",
+        "mergeConfirm": "Gộp {{from}} vào {{into}}? Tất cả các đoạn của {{from}} sẽ được đánh dấu là {{into}}. Bạn có thể hoàn tác cho đến khi đóng bản chép lời.",
+        "mergeError": "Không thể gộp người nói: {{error}}",
+        "changeSpeaker": "Đổi người nói của đoạn này ({{name}})",
+        "changeSpeakerPrompt": "Ai đã nói câu này?",
+        "newSpeaker": "Người nói mới",
+        "unknownSpeaker": "Người nói không xác định",
+        "changeSpeakerError": "Không thể đổi người nói: {{error}}",
+        "undo": "Hoàn tác",
+        "undoError": "Không thể hoàn tác: {{error}}",
+        "jobKind": "Nhãn người nói",
+        "state": {
+          "running": "Đang xác định người nói…",
+          "done": "Số người nói: {{number}}",
+          "failed": "Không thể gắn nhãn người nói",
+          "skipped": {
+            "modelMissing": "Đã bỏ qua nhãn người nói: chưa tải xuống mô hình người nói.",
+            "noSpeech": "Đã bỏ qua nhãn người nói: không tìm thấy giọng nói."
+          }
+        }
+      },
+      "queue": {
+        "title": "Tệp",
+        "cancelAll": "Hủy tất cả",
+        "clearFinished": "Xóa mục đã xong"
+      },
+      "status": {
+        "queued": "Đang chờ bắt đầu",
+        "preparing": "Đang chuẩn bị…",
+        "waiting": "Tạm dừng trong lúc bạn nhập bằng giọng nói",
+        "transcribing": "Đang phiên âm…",
+        "completed": "Xong",
+        "partial": "Xong, có đoạn bị thiếu",
+        "cancelled": "Đã hủy",
+        "failed": "Thất bại"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "Đã phiên âm {{processed}}",
+      "noSpeech": "Không tìm thấy giọng nói trong tệp này.",
+      "actions": {
+        "cancel": "Hủy",
+        "remove": "Xóa khỏi danh sách",
+        "view": "Xem bản chép lời",
+        "copy": "Sao chép bản chép lời",
+        "showFile": "Hiển thị tệp"
+      },
+      "copied": "Đã sao chép bản chép lời vào bảng nhớ tạm.",
+      "copyError": "Không thể sao chép bản chép lời.",
+      "savedToHistory": "Đã lưu vào lịch sử",
+      "errors": {
+        "notFound": "Không thể tìm thấy hoặc mở tệp.",
+        "unsupportedFormat": "Loại tệp này không được hỗ trợ.",
+        "needsFfmpeg": "Định dạng này cần ffmpeg. Hãy cài đặt ffmpeg rồi thử lại.",
+        "noModel": "Chưa chọn mô hình phiên âm.",
+        "modelChanged": "Mô hình đã thay đổi trong khi tệp này đang được phiên âm.",
+        "decodeFailed": "Không thể đọc âm thanh trong tệp này.",
+        "engineFailed": "Phiên âm thất bại.",
+        "serverUnreachable": "Không thể kết nối tới Lemonade Server. Hãy đảm bảo máy chủ đang chạy.",
+        "serverUnauthorized": "Lemonade Server không chấp nhận khóa API.",
+        "serverModelMissing": "Lemonade Server không có mô hình đã chọn.",
+        "internal": "Đã xảy ra lỗi.",
+        "sourceChanged": "Bản ghi âm ở vị trí này đã thay đổi kể từ khi được phiên âm, nên không thể khớp người nói của nó với bản chép lời này. Nếu đó là cùng một bản ghi âm, hãy chọn nó bằng “Tìm bản ghi âm…”.",
+        "speakerLabelsFailed": "Gắn nhãn người nói thất bại.",
+        "enqueue": "Không thể thêm tệp: {{error}}",
+        "cancel": "Không thể hủy: {{error}}",
+        "remove": "Không thể xóa khỏi danh sách: {{error}}",
+        "loadTranscript": "Không thể tải bản chép lời: {{error}}"
+      },
+      "transcript": {
+        "title": "Bản chép lời: {{file}}",
+        "live": "Đang cập nhật trong khi phiên âm",
+        "partial": "Bản chép lời này chưa đầy đủ: {{reason}}",
+        "partialNoReason": "Bản chép lời này chưa đầy đủ.",
+        "approximateTimes": "Thời gian chỉ là ước tính vì mô hình này không cung cấp dấu thời gian.",
+        "empty": "Không tìm thấy giọng nói.",
+        "segmentsLabel": "Bản chép lời kèm dấu thời gian"
+      },
+      "export": {
+        "button": "Xuất…",
+        "dialogTitle": "Xuất tệp bản chép lời",
+        "formats": {
+          "docx": "Tài liệu Word (.docx)",
+          "txt": "Văn bản thuần (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Phụ đề SubRip (.srt)",
+          "vtt": "Phụ đề WebVTT (.vtt)"
+        },
+        "success": "Đã xuất tệp bản chép lời.",
+        "showInFolder": "Hiển thị trong thư mục",
+        "error": "Xuất tệp thất bại: {{error}}"
+      }
+    },
     "history": {
       "title": "Lịch sử",
       "openFolder": "Mở thư mục ghi âm",
@@ -501,7 +714,14 @@
       "retranscribe": "Phiên âm lại",
       "retranscribeError": "Không thể phiên âm lại. Vui lòng thử lại.",
       "transcribing": "Đang phiên âm...",
-      "transcriptionFailed": "Phiên âm thất bại. Bạn có thể phiên âm lại bằng biểu tượng thử lại."
+      "transcriptionFailed": "Phiên âm thất bại. Bạn có thể phiên âm lại bằng biểu tượng thử lại.",
+      "openTranscript": "Mở bản chép lời",
+      "showOriginal": "Hiển thị tệp gốc",
+      "originalMissing": "Tệp gốc đã bị di chuyển hoặc xóa.",
+      "fileDuration": "Thời lượng {{duration}}",
+      "incomplete": "Chưa đầy đủ",
+      "speakerCount": "Số người nói: {{number}}",
+      "retranscribeFileUnavailable": "Để phiên âm lại tệp này, hãy dùng trang Phiên âm."
     },
     "debug": {
       "title": "Gỡ lỗi",

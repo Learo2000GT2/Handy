@@ -1,0 +1,15 @@
+{
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "windows": {
+      "signCommand": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Learo2000GT2/Handy/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

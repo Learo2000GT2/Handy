@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Generelt",
+    "transcribe": "Transskription",
     "models": "Modeller",
     "advanced": "Avanceret",
     "postProcessing": "Efterbehandling",
@@ -221,6 +222,7 @@
       "availableModels": "Tilgængelig til download",
       "deleteConfirm": "Er du sikker på, at du vil slette {{modelName}}? Du skal downloade den igen for at bruge den.",
       "deleteActiveConfirm": "{{modelName}} er din aktive model. Sletning af den vil stoppe transskriptioner, indtil du vælger en ny model. Er du sikker?",
+      "deleteRecordingsConfirm": "{{modelName}} er din model til optagelser. Hvis du sletter den, bruger optagelser din dikteringsmodel. Er du sikker?",
       "deleteTitle": "Slet model",
       "filters": {
         "allLanguages": "Alle sprog",
@@ -487,6 +489,217 @@
         "createFirst": "Klik på 'Opret ny prompt' ovenfor for at oprette din første efterbehandlingsprompt."
       }
     },
+    "transcribeFiles": {
+      "title": "Transskribér filer",
+      "description": "Gør eksisterende optagelser til tekst på denne computer. Dine filer forlader aldrig din enhed.",
+      "settingsNote": "Bruger din valgte model og dine indstillinger for sprog, oversættelse, brugerdefinerede ord og fyldord.",
+      "settingsNoteLemonade": "Bruger dine indstillinger for sprog, brugerdefinerede ord og fyldord.",
+      "settingsNoteOwnModel": "Bruger din model til optagelser og dine indstillinger for sprog, oversættelse, brugerdefinerede ord og fyldord.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} på Lemonade Server",
+      "noModel": "Vælg en downloadet model på siden Modeller for at transskribere filer.",
+      "noLemonadeModel": "Vælg en Lemonade-model for at transskribere filer.",
+      "noRecordingsModel": "Din model til optagelser er ikke downloadet. Vælg en anden ovenfor, eller download den på siden Modeller.",
+      "dropzone": {
+        "title": "Slip lyd- eller videofiler her",
+        "hint": "Interviews, møder, forelæsninger og talememoer af enhver længde",
+        "active": "Slip for at tilføje",
+        "choose": "Vælg filer…",
+        "skipped": "Filer, der ikke er lyd eller video, blev sprunget over: {{number}}"
+      },
+      "picker": {
+        "title": "Vælg optagelser",
+        "filterName": "Lyd- og videofiler"
+      },
+      "formats": {
+        "native": "Åbner {{formats}}",
+        "ffmpegAvailable": "Andre formater som Opus, WebM, WMA og DSS åbnes med ffmpeg.",
+        "ffmpegMissing": "Installer ffmpeg for også at kunne åbne Opus, WebM, WMA, DSS og andre formater."
+      },
+      "saveToHistory": {
+        "label": "Gem i historik",
+        "description": "Færdige transskriptioner gemmes og stjernemarkeres, så automatisk oprydning beholder dem."
+      },
+      "engine": {
+        "title": "Transskriptionsmotor",
+        "label": "Transskribér med",
+        "description": "Diktering bruger altid Handys egen model. Dette valg gælder kun filer.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model til optagelser",
+        "description": "Optagelser kan bruge en langsommere og mere præcis model end diktering. Den kører for sig selv og indlæses kun, mens filer transskriberes, så din dikteringsmodel forbliver klar. Begge modeller skal kunne være i hukommelsen.",
+        "same": "Samme som diktering ({{model}})",
+        "sameNoModel": "Samme som diktering",
+        "switchWarning": "Denne fil bruger din dikteringsmodel, så hvis du skifter dikteringsmodel nu, stoppes den. Vælg en anden model til optagelser for at holde dem adskilt.",
+        "onCpu": "Optagelserne kører på processoren, fordi der ikke er nok grafikhukommelse til begge modeller. Vælg en mindre model til optagelser for at bruge grafikkortet."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Serveradresse",
+          "description": "Normalt http://localhost:13305. Ældre Lemonade-versioner brugte port 8000."
+        },
+        "apiKey": {
+          "label": "API-nøgle",
+          "description": "Kun nødvendig, hvis din Lemonade Server beder om en.",
+          "placeholder": "Valgfri"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Den Lemonade-model, der transskriberer dine filer, f.eks. Whisper-Base.",
+          "placeholder": "Vælg en Whisper-model",
+          "notDownloaded": "{{model}} (downloades ved første brug)",
+          "none": "Der blev ikke fundet nogen transskriptionsmodeller på denne server.",
+          "use": "Brug “{{model}}”"
+        },
+        "test": "Test forbindelse",
+        "testing": "Opretter forbindelse…",
+        "connected": "Forbundet. Tilgængelige transskriptionsmodeller: {{number}}",
+        "checkFailed": "Kunne ikke tjekke Lemonade Server: {{error}}",
+        "saveError": "Kunne ikke gemme Lemonade-indstillingerne: {{error}}",
+        "firstChunkSlow": "Lemonade downloader eller indlæser muligvis modellen. Det kan tage et par minutter første gang.",
+        "errors": {
+          "invalidUrl": "Indtast en adresse som http://localhost:13305.",
+          "unreachable": "Kan ikke få forbindelse til Lemonade Server på {{url}}. Kontrollér, at den kører.",
+          "timeout": "Lemonade Server svarede ikke i tide.",
+          "unauthorized": "Lemonade Server accepterede ikke API-nøglen.",
+          "modelNotFound": "Lemonade Server har ikke denne model.",
+          "http": "Lemonade Server returnerede en fejl.",
+          "badResponse": "Lemonade Server sendte et svar, som Handy ikke kunne læse.",
+          "cancelled": "Forbindelsestesten blev annulleret."
+        },
+        "notes": {
+          "noTranslate": "Oversæt til engelsk er ikke tilgængelig med Lemonade Server. Filer transskriberes på det talte sprog.",
+          "remote": "Denne adresse er ikke på denne computer. Dine optagelser bliver sendt til den."
+        }
+      },
+      "speakers": {
+        "label": "Markér talere",
+        "description": "Markerer, hvem der sagde hvad, for op til 4 talere. Kører på denne computer og kræver en engangsdownload på {{size}} MB.",
+        "download": "Download talermodel ({{size}} MB)",
+        "downloading": "Downloader talermodel… {{percent}}%",
+        "verifying": "Kontrollerer downloaden…",
+        "cancelDownload": "Annuller download",
+        "downloadFailed": "Kunne ikke downloade talermodellen: {{error}}",
+        "installed": "Talermodel installeret ({{size}} MB)",
+        "remove": "Fjern talermodel",
+        "removeError": "Kunne ikke fjerne talermodellen: {{error}}",
+        "removeConfirm": "Vil du fjerne talermodellen? Du skal downloade den igen ({{size}} MB) for at markere talere.",
+        "license": "Talermodel fra NVIDIA under NVIDIA Open Model License (<page>modelside</page>).",
+        "title": "Talere",
+        "defaultName": "Taler {{number}}",
+        "rename": "Omdøb {{name}}",
+        "nameLabel": "Nyt navn til {{name}}",
+        "save": "Gem",
+        "cancel": "Annuller",
+        "renameError": "Kunne ikke omdøbe taleren: {{error}}",
+        "approximate": "Talerskift er omtrentlige, fordi denne model ikke angiver tidsstempler.",
+        "unassigned": "Nogle passager kunne ikke knyttes til en taler.",
+        "none": "Denne transskription har ingen talermarkering.",
+        "labelAction": "Markér talere",
+        "labelHint": "Talerne markeres på denne computer ud fra den originale optagelse, {{file}}. Lange optagelser tager et par minutter.",
+        "needsModel": "Talermarkering kræver talermodellen, en engangsdownload på {{size}} MB.",
+        "labelError": "Kunne ikke markere talere: {{error}}",
+        "findRecording": "Find optagelse…",
+        "findRecordingHint": "Vælg den flyttede optagelse. Det skal være den samme fil, som blev transskriberet.",
+        "relabel": "Markér igen…",
+        "relabelTitle": "Markér talere igen",
+        "relabelConfirm": "Vil du markere talerne igen ud fra optagelsen? Navne, sammenlægninger og ændrede passager går tabt.",
+        "mergeInto": "Læg {{name}} sammen med en anden taler",
+        "mergePrompt": "Læg {{name}} sammen med:",
+        "mergeTitle": "Læg talere sammen",
+        "mergeConfirm": "Vil du lægge {{from}} sammen med {{into}}? Alle passager fra {{from}} markeres som {{into}}. Du kan fortryde det, indtil du lukker transskriptionen.",
+        "mergeError": "Kunne ikke lægge talerne sammen: {{error}}",
+        "changeSpeaker": "Skift taler for denne passage ({{name}})",
+        "changeSpeakerPrompt": "Hvem sagde dette?",
+        "newSpeaker": "Ny taler",
+        "unknownSpeaker": "Ukendt taler",
+        "changeSpeakerError": "Kunne ikke skifte taler: {{error}}",
+        "undo": "Fortryd",
+        "undoError": "Kunne ikke fortryde: {{error}}",
+        "jobKind": "Talermarkering",
+        "state": {
+          "running": "Identificerer talere…",
+          "done": "Talere: {{number}}",
+          "failed": "Kunne ikke markere talere",
+          "skipped": {
+            "modelMissing": "Talermarkering sprunget over: talermodellen er ikke downloadet.",
+            "noSpeech": "Talermarkering sprunget over: der blev ikke fundet tale."
+          }
+        }
+      },
+      "queue": {
+        "title": "Filer",
+        "cancelAll": "Annuller alle",
+        "clearFinished": "Ryd færdige"
+      },
+      "status": {
+        "queued": "Venter på at starte",
+        "preparing": "Forbereder…",
+        "waiting": "Sat på pause, mens du dikterer",
+        "transcribing": "Transskriberer…",
+        "completed": "Færdig",
+        "partial": "Færdig, med huller",
+        "cancelled": "Annulleret",
+        "failed": "Mislykkedes"
+      },
+      "progress": "{{processed}} af {{total}}",
+      "progressNoTotal": "{{processed}} transskriberet",
+      "noSpeech": "Der blev ikke fundet tale i denne fil.",
+      "actions": {
+        "cancel": "Annuller",
+        "remove": "Fjern fra listen",
+        "view": "Vis transskription",
+        "copy": "Kopiér transskription",
+        "showFile": "Vis fil"
+      },
+      "copied": "Transskription kopieret til udklipsholder.",
+      "copyError": "Kunne ikke kopiere transskriptionen.",
+      "savedToHistory": "Gemt i historik",
+      "errors": {
+        "notFound": "Filen kan ikke findes eller åbnes.",
+        "unsupportedFormat": "Denne filtype understøttes ikke.",
+        "needsFfmpeg": "Dette format kræver ffmpeg. Installer ffmpeg, og prøv igen.",
+        "noModel": "Der er ikke valgt nogen transskriptionsmodel.",
+        "modelChanged": "Modellen blev ændret, mens denne fil blev transskriberet.",
+        "decodeFailed": "Lyden i denne fil kunne ikke læses.",
+        "engineFailed": "Transskription mislykkedes.",
+        "serverUnreachable": "Kan ikke få forbindelse til Lemonade Server. Kontrollér, at den kører.",
+        "serverUnauthorized": "Lemonade Server accepterede ikke API-nøglen.",
+        "serverModelMissing": "Lemonade Server har ikke den valgte model.",
+        "internal": "Noget gik galt.",
+        "sourceChanged": "Optagelsen på denne placering er ændret, siden den blev transskriberet, så dens talere kan ikke knyttes til denne transskription. Hvis det er den samme optagelse, skal du vælge den med “Find optagelse…”.",
+        "speakerLabelsFailed": "Talermarkeringen mislykkedes.",
+        "enqueue": "Kunne ikke tilføje filer: {{error}}",
+        "cancel": "Kunne ikke annullere: {{error}}",
+        "remove": "Kunne ikke fjerne fra listen: {{error}}",
+        "loadTranscript": "Kunne ikke indlæse transskriptionen: {{error}}"
+      },
+      "transcript": {
+        "title": "Transskription: {{file}}",
+        "live": "Opdateres, mens transskriptionen kører",
+        "partial": "Denne transskription er ufuldstændig: {{reason}}",
+        "partialNoReason": "Denne transskription er ufuldstændig.",
+        "approximateTimes": "Tidspunkterne er omtrentlige, fordi denne model ikke angiver tidsstempler.",
+        "empty": "Der blev ikke fundet tale.",
+        "segmentsLabel": "Transskription med tidsstempler"
+      },
+      "export": {
+        "button": "Eksportér…",
+        "dialogTitle": "Eksportér transskription",
+        "formats": {
+          "docx": "Word-dokument (.docx)",
+          "txt": "Almindelig tekst (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip-undertekster (.srt)",
+          "vtt": "WebVTT-undertekster (.vtt)"
+        },
+        "success": "Transskription eksporteret.",
+        "showInFolder": "Vis i mappe",
+        "error": "Eksport mislykkedes: {{error}}"
+      }
+    },
     "history": {
       "title": "Historik",
       "openFolder": "Åbn optagelsesmappe",
@@ -501,7 +714,14 @@
       "retranscribe": "Transskribér igen",
       "retranscribeError": "Kunne ikke transskribere igen. Prøv igen.",
       "transcribing": "Transskriberer...",
-      "transcriptionFailed": "Transskription mislykkedes. Du kan transskribere igen ved hjælp af genforsøgsikonet."
+      "transcriptionFailed": "Transskription mislykkedes. Du kan transskribere igen ved hjælp af genforsøgsikonet.",
+      "openTranscript": "Åbn transskription",
+      "showOriginal": "Vis originalfil",
+      "originalMissing": "Originalfilen er blevet flyttet eller slettet.",
+      "fileDuration": "Længde {{duration}}",
+      "incomplete": "Ufuldstændig",
+      "speakerCount": "Talere: {{number}}",
+      "retranscribeFileUnavailable": "Brug siden Transskription for at transskribere denne fil igen."
     },
     "debug": {
       "title": "Fejlfinding",

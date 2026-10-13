@@ -1,0 +1,34 @@
+name: "Fork Windows Installer"
+
+# Builds an unsigned Windows x64 installer (NSIS .exe and .msi) for this fork.
+# Upstream signs with its own Azure Trusted Signing account and updater key,
+# which a fork does not have; tauri.fork.conf.json removes the sign command,
+# skips updater artifacts and points update checks at this fork's releases,
+# so the app never offers to replace the fork with upstream Handy. The app
+# identifier is unchanged: the installer replaces an existing Handy install
+# and keeps its settings, models and History.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - claude/handy-transcription-fork-hkhdk4
+      - claude/handy-homophone-variants-s6utra
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build.yml
+    with:
+      platform: "windows-latest"
+      target: "x86_64-pc-windows-msvc"
+      build-args: "--config src-tauri/tauri.fork.conf.json"
+      sign-binaries: false
+      asset-prefix: "handy-transcribe"
+      upload-artifacts: true
+    secrets: inherit

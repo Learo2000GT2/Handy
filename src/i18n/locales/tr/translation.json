@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Genel",
+    "transcribe": "Transkripsiyon",
     "models": "Modeller",
     "advanced": "Gelişmiş",
     "postProcessing": "Son İşlem",
@@ -163,6 +164,7 @@
       "description": "Bir transkripsiyon modeli seçin veya ek modeller indirin. Farklı modeller değişen doğruluk ve hız seviyeleri sunar.",
       "deleteConfirm": "{{modelName}} modelini silmek istediğinizden emin misiniz? Kullanmak için tekrar indirmeniz gerekecek.",
       "deleteActiveConfirm": "{{modelName}} aktif modelinizdir. Silmek, yeni bir model seçene kadar transkripsiyonları durduracaktır. Emin misiniz?",
+      "deleteRecordingsConfirm": "{{modelName}} kayıtlar için seçtiğiniz modeldir. Silerseniz kayıtlar sesle yazma modelinizi kullanır. Emin misiniz?",
       "deleteTitle": "Modeli Sil",
       "filters": {
         "allLanguages": "Tüm Diller",
@@ -487,6 +489,217 @@
         "createFirst": "İlk son işlem promptunuzu oluşturmak için yukarıdaki “Yeni Prompt Oluştur” seçeneğine tıklayın."
       }
     },
+    "transcribeFiles": {
+      "title": "Dosyaları Transkribe Et",
+      "description": "Mevcut kayıtları bu bilgisayarda metne dönüştürün. Dosyalarınız cihazınızdan asla çıkmaz.",
+      "settingsNote": "Seçili modelinizi ve dil, çeviri, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
+      "settingsNoteLemonade": "Dil, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
+      "settingsNoteOwnModel": "Kayıtlar için seçtiğiniz modeli ve dil, çeviri, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: Lemonade Server'daki {{model}}",
+      "noModel": "Dosyaları transkribe etmek için Modeller sayfasından indirilmiş bir model seçin.",
+      "noLemonadeModel": "Dosyaları transkribe etmek için bir Lemonade modeli seçin.",
+      "noRecordingsModel": "Kayıtlar için seçtiğiniz model indirilmemiş. Yukarıdan başka bir model seçin veya Modeller sayfasından indirin.",
+      "dropzone": {
+        "title": "Ses veya video dosyalarını buraya bırakın",
+        "hint": "Her uzunlukta röportaj, toplantı, ders ve sesli not",
+        "active": "Eklemek için bırakın",
+        "choose": "Dosya Seç…",
+        "skipped": "Ses veya video olmadığı için atlanan dosyalar: {{number}}"
+      },
+      "picker": {
+        "title": "Kayıtları Seç",
+        "filterName": "Ses ve video dosyaları"
+      },
+      "formats": {
+        "native": "Açılabilen biçimler: {{formats}}",
+        "ffmpegAvailable": "Opus, WebM, WMA ve DSS gibi diğer biçimler ffmpeg ile açılır.",
+        "ffmpegMissing": "Opus, WebM, WMA, DSS ve diğer biçimleri de açmak için ffmpeg'i yükleyin."
+      },
+      "saveToHistory": {
+        "label": "Geçmişe Kaydet",
+        "description": "Tamamlanan transkriptler kaydedilir ve otomatik temizlemede korunmaları için yıldızlanır."
+      },
+      "engine": {
+        "title": "Transkripsiyon Motoru",
+        "label": "Kullanılacak Motor",
+        "description": "Sesle yazma her zaman Handy'nin kendi modelini kullanır. Bu seçim yalnızca dosyalar içindir.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Kayıtlar için model",
+        "description": "Kayıtlar, sesle yazmadan daha yavaş ama daha doğru bir model kullanabilir. Bu model ayrı çalışır ve yalnızca dosyalar transkribe edilirken yüklenir; böylece sesle yazma modeliniz hazır kalır. İki modelin de belleğe sığması gerekir.",
+        "same": "Sesle yazmayla aynı ({{model}})",
+        "sameNoModel": "Sesle yazmayla aynı",
+        "switchWarning": "Bu dosya sesle yazma modelinizi kullanıyor; bu yüzden sesle yazma modelini şimdi değiştirmek onu durdurur. İkisini ayrı tutmak için kayıtlar için farklı bir model seçin.",
+        "onCpu": "Grafik belleği iki model için yetmediğinden kayıtlar işlemcide çalışıyor. Ekran kartını kullanmak için kayıtlar için daha küçük bir model seçin."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Sunucu Adresi",
+          "description": "Genellikle http://localhost:13305. Eski Lemonade sürümleri 8000 numaralı bağlantı noktasını kullanıyordu."
+        },
+        "apiKey": {
+          "label": "API Anahtarı",
+          "description": "Yalnızca Lemonade Server'ınız bir anahtar isterse gerekir.",
+          "placeholder": "İsteğe bağlı"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Dosyalarınızı transkribe eden Lemonade modeli, örneğin Whisper-Base.",
+          "placeholder": "Bir Whisper modeli seçin",
+          "notDownloaded": "{{model}} (ilk kullanımda indirilir)",
+          "none": "Bu sunucuda transkripsiyon modeli bulunamadı.",
+          "use": "“{{model}}” kullan"
+        },
+        "test": "Bağlantıyı Test Et",
+        "testing": "Bağlanılıyor…",
+        "connected": "Bağlandı. Kullanılabilir transkripsiyon modelleri: {{number}}",
+        "checkFailed": "Lemonade Server kontrol edilemedi: {{error}}",
+        "saveError": "Lemonade ayarları kaydedilemedi: {{error}}",
+        "firstChunkSlow": "Lemonade modeli indiriyor veya yüklüyor olabilir. İlk seferde bu birkaç dakika sürebilir.",
+        "errors": {
+          "invalidUrl": "http://localhost:13305 gibi bir adres girin.",
+          "unreachable": "{{url}} adresindeki Lemonade Server'a ulaşılamıyor. Çalıştığından emin olun.",
+          "timeout": "Lemonade Server zamanında yanıt vermedi.",
+          "unauthorized": "Lemonade Server API anahtarını kabul etmedi.",
+          "modelNotFound": "Lemonade Server'da bu model yok.",
+          "http": "Lemonade Server bir hata döndürdü.",
+          "badResponse": "Lemonade Server, Handy'nin okuyamadığı bir yanıt gönderdi.",
+          "cancelled": "Bağlantı testi iptal edildi."
+        },
+        "notes": {
+          "noTranslate": "İngilizce'ye Çevir özelliği Lemonade Server ile kullanılamaz. Dosyalar konuşulan dilde transkribe edilir.",
+          "remote": "Bu adres bu bilgisayarda değil. Kayıtlarınız bu adrese gönderilecek."
+        }
+      },
+      "speakers": {
+        "label": "Konuşmacıları Etiketle",
+        "description": "En fazla 4 konuşmacı için kimin ne söylediğini işaretler. Bu bilgisayarda çalışır ve tek seferlik {{size}} MB indirme gerektirir.",
+        "download": "Konuşmacı Modelini İndir ({{size}} MB)",
+        "downloading": "Konuşmacı modeli indiriliyor… %{{percent}}",
+        "verifying": "İndirme kontrol ediliyor…",
+        "cancelDownload": "İndirmeyi İptal Et",
+        "downloadFailed": "Konuşmacı modeli indirilemedi: {{error}}",
+        "installed": "Konuşmacı modeli yüklendi ({{size}} MB)",
+        "remove": "Konuşmacı Modelini Kaldır",
+        "removeError": "Konuşmacı modeli kaldırılamadı: {{error}}",
+        "removeConfirm": "Konuşmacı modeli kaldırılsın mı? Konuşmacıları etiketlemek için modeli yeniden indirmeniz gerekecek ({{size}} MB).",
+        "license": "Konuşmacı modeli NVIDIA tarafından, NVIDIA Open Model License kapsamında sunulur (<page>model sayfası</page>).",
+        "title": "Konuşmacılar",
+        "defaultName": "Konuşmacı {{number}}",
+        "rename": "{{name}} adını değiştir",
+        "nameLabel": "{{name}} için yeni ad",
+        "save": "Kaydet",
+        "cancel": "İptal",
+        "renameError": "Konuşmacının adı değiştirilemedi: {{error}}",
+        "approximate": "Bu model zaman damgası bildirmediği için konuşmacı değişimleri yaklaşıktır.",
+        "unassigned": "Bazı bölümler bir konuşmacıyla eşleştirilemedi.",
+        "none": "Bu transkriptte konuşmacı etiketi yok.",
+        "labelAction": "Konuşmacıları Etiketle",
+        "labelHint": "Konuşmacı etiketleri bu bilgisayarda, orijinal kayıttan ({{file}}) oluşturulur. Uzun kayıtlar birkaç dakika sürer.",
+        "needsModel": "Konuşmacıları etiketlemek için konuşmacı modeli gerekir; bu, {{size}} MB'lık tek seferlik bir indirmedir.",
+        "labelError": "Konuşmacı etiketleri eklenemedi: {{error}}",
+        "findRecording": "Kaydı Bul…",
+        "findRecordingHint": "Taşınan kaydı seçin. Transkribe edilen dosyanın aynısı olmalıdır.",
+        "relabel": "Yeniden Etiketle…",
+        "relabelTitle": "Konuşmacıları Yeniden Etiketle",
+        "relabelConfirm": "Konuşmacılar kayıttan yeniden etiketlensin mi? Adlar, birleştirmeler ve bölüm değişiklikleri kaybolacak.",
+        "mergeInto": "{{name}} konuşmacısını başka bir konuşmacıyla birleştir",
+        "mergePrompt": "{{name}} şununla birleştirilsin:",
+        "mergeTitle": "Konuşmacıları Birleştir",
+        "mergeConfirm": "{{from}}, {{into}} ile birleştirilsin mi? {{from}} konuşmacısının tüm bölümleri {{into}} olarak işaretlenecek. Transkripti kapatana kadar bunu geri alabilirsiniz.",
+        "mergeError": "Konuşmacılar birleştirilemedi: {{error}}",
+        "changeSpeaker": "Bu bölümün konuşmacısını değiştir ({{name}})",
+        "changeSpeakerPrompt": "Bunu kim söyledi?",
+        "newSpeaker": "Yeni Konuşmacı",
+        "unknownSpeaker": "Bilinmeyen konuşmacı",
+        "changeSpeakerError": "Konuşmacı değiştirilemedi: {{error}}",
+        "undo": "Geri Al",
+        "undoError": "Geri alınamadı: {{error}}",
+        "jobKind": "Konuşmacı etiketleri",
+        "state": {
+          "running": "Konuşmacılar belirleniyor…",
+          "done": "Konuşmacılar: {{number}}",
+          "failed": "Konuşmacılar etiketlenemedi",
+          "skipped": {
+            "modelMissing": "Konuşmacı etiketleri atlandı: konuşmacı modeli indirilmemiş.",
+            "noSpeech": "Konuşmacı etiketleri atlandı: konuşma bulunamadı."
+          }
+        }
+      },
+      "queue": {
+        "title": "Dosyalar",
+        "cancelAll": "Tümünü İptal Et",
+        "clearFinished": "Bitenleri Temizle"
+      },
+      "status": {
+        "queued": "Başlamayı bekliyor",
+        "preparing": "Hazırlanıyor…",
+        "waiting": "Sesle yazma sırasında duraklatıldı",
+        "transcribing": "Transkribe ediliyor…",
+        "completed": "Tamamlandı",
+        "partial": "Tamamlandı, eksik bölümler var",
+        "cancelled": "İptal edildi",
+        "failed": "Başarısız"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "{{processed}} transkribe edildi",
+      "noSpeech": "Bu dosyada konuşma bulunamadı.",
+      "actions": {
+        "cancel": "İptal",
+        "remove": "Listeden Kaldır",
+        "view": "Transkripti Görüntüle",
+        "copy": "Transkripti Kopyala",
+        "showFile": "Dosyayı Göster"
+      },
+      "copied": "Transkript panoya kopyalandı.",
+      "copyError": "Transkript kopyalanamadı.",
+      "savedToHistory": "Geçmişe kaydedildi",
+      "errors": {
+        "notFound": "Dosya bulunamıyor veya açılamıyor.",
+        "unsupportedFormat": "Bu dosya türü desteklenmiyor.",
+        "needsFfmpeg": "Bu biçim için ffmpeg gerekir. ffmpeg'i yükleyip tekrar deneyin.",
+        "noModel": "Transkripsiyon modeli seçilmedi.",
+        "modelChanged": "Bu dosya transkribe edilirken model değişti.",
+        "decodeFailed": "Bu dosyadaki ses okunamadı.",
+        "engineFailed": "Transkripsiyon başarısız oldu.",
+        "serverUnreachable": "Lemonade Server'a ulaşılamıyor. Çalıştığından emin olun.",
+        "serverUnauthorized": "Lemonade Server API anahtarını kabul etmedi.",
+        "serverModelMissing": "Lemonade Server'da seçili model yok.",
+        "internal": "Bir şeyler ters gitti.",
+        "sourceChanged": "Bu konumdaki kayıt transkribe edildikten sonra değişti; bu nedenle konuşmacıları bu transkriptle eşleştirilemiyor. Aynı kayıtsa \"Kaydı Bul…\" ile seçin.",
+        "speakerLabelsFailed": "Konuşmacı etiketleme başarısız oldu.",
+        "enqueue": "Dosyalar eklenemedi: {{error}}",
+        "cancel": "İptal edilemedi: {{error}}",
+        "remove": "Listeden kaldırılamadı: {{error}}",
+        "loadTranscript": "Transkript yüklenemedi: {{error}}"
+      },
+      "transcript": {
+        "title": "Transkript: {{file}}",
+        "live": "Transkripsiyon sürdükçe güncelleniyor",
+        "partial": "Bu transkript eksik: {{reason}}",
+        "partialNoReason": "Bu transkript eksik.",
+        "approximateTimes": "Bu model zaman damgası bildirmediği için zamanlar yaklaşıktır.",
+        "empty": "Konuşma bulunamadı.",
+        "segmentsLabel": "Zaman damgalı transkript"
+      },
+      "export": {
+        "button": "Dışa Aktar…",
+        "dialogTitle": "Transkripti Dışa Aktar",
+        "formats": {
+          "docx": "Word belgesi (.docx)",
+          "txt": "Düz metin (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip altyazısı (.srt)",
+          "vtt": "WebVTT altyazısı (.vtt)"
+        },
+        "success": "Transkript dışa aktarıldı.",
+        "showInFolder": "Klasörde Göster",
+        "error": "Dışa aktarma başarısız: {{error}}"
+      }
+    },
     "history": {
       "title": "Geçmiş",
       "openFolder": "Kayıtlar Klasörünü Aç",
@@ -501,7 +714,14 @@
       "retranscribe": "Yeniden transkribe et",
       "retranscribeError": "Yeniden transkripsiyon başarısız oldu. Lütfen tekrar deneyin.",
       "transcribing": "Transkribe ediliyor...",
-      "transcriptionFailed": "Transkripsiyon başarısız oldu. Yeniden deneme simgesini kullanarak tekrar transkribe edebilirsiniz."
+      "transcriptionFailed": "Transkripsiyon başarısız oldu. Yeniden deneme simgesini kullanarak tekrar transkribe edebilirsiniz.",
+      "openTranscript": "Transkripti Aç",
+      "showOriginal": "Orijinal Dosyayı Göster",
+      "originalMissing": "Orijinal dosya taşınmış veya silinmiş.",
+      "fileDuration": "Süre {{duration}}",
+      "incomplete": "Eksik",
+      "speakerCount": "Konuşmacılar: {{number}}",
+      "retranscribeFileUnavailable": "Bu dosyayı yeniden transkribe etmek için Transkripsiyon sayfasını kullanın."
     },
     "debug": {
       "title": "Hata Ayıklama",

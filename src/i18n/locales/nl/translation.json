@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Algemeen",
+    "transcribe": "Transcriberen",
     "models": "Modellen",
     "advanced": "Geavanceerd",
     "postProcessing": "Naverwerking",
@@ -221,6 +222,7 @@
       "availableModels": "Beschikbaar voor download",
       "deleteConfirm": "Weet je zeker dat je {{modelName}} wilt verwijderen? Je moet het model opnieuw downloaden om het weer te gebruiken.",
       "deleteActiveConfirm": "{{modelName}} is je actieve model. Als je dit verwijdert, stoppen de transcripties totdat je een nieuw model selecteert. Weet je het zeker?",
+      "deleteRecordingsConfirm": "{{modelName}} is je model voor opnames. Als je het verwijdert, gebruiken opnames je dicteermodel. Weet je het zeker?",
       "deleteTitle": "Model verwijderen",
       "filters": {
         "allLanguages": "Alle talen",
@@ -487,6 +489,217 @@
         "createFirst": "Klik hierboven op 'Nieuwe prompt maken' om je eerste naverwerkingsprompt aan te maken."
       }
     },
+    "transcribeFiles": {
+      "title": "Bestanden transcriberen",
+      "description": "Zet bestaande opnames om in tekst op deze computer. Je bestanden verlaten je apparaat nooit.",
+      "settingsNote": "Gebruikt je geselecteerde model en je instellingen voor taal, vertaling, eigen woordenlijst en opvulwoorden.",
+      "settingsNoteLemonade": "Gebruikt je instellingen voor taal, eigen woordenlijst en opvulwoorden.",
+      "settingsNoteOwnModel": "Gebruikt je model voor opnames en je instellingen voor taal, vertaling, eigen woordenlijst en opvulwoorden.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} op Lemonade Server",
+      "noModel": "Selecteer een gedownload model op de pagina Modellen om bestanden te transcriberen.",
+      "noLemonadeModel": "Kies een Lemonade-model om bestanden te transcriberen.",
+      "noRecordingsModel": "Je model voor opnames is niet gedownload. Kies hierboven een ander of download het op de pagina Modellen.",
+      "dropzone": {
+        "title": "Sleep audio- of videobestanden hierheen",
+        "hint": "Interviews, vergaderingen, colleges en spraakmemo's van elke lengte",
+        "active": "Loslaten om toe te voegen",
+        "choose": "Bestanden kiezen…",
+        "skipped": "Overgeslagen bestanden die geen audio of video zijn: {{number}}"
+      },
+      "picker": {
+        "title": "Opnames kiezen",
+        "filterName": "Audio- en videobestanden"
+      },
+      "formats": {
+        "native": "Opent {{formats}}",
+        "ffmpegAvailable": "Andere formaten zoals Opus, WebM, WMA en DSS worden geopend met ffmpeg.",
+        "ffmpegMissing": "Installeer ffmpeg om ook Opus, WebM, WMA, DSS en andere formaten te openen."
+      },
+      "saveToHistory": {
+        "label": "Opslaan in geschiedenis",
+        "description": "Voltooide transcripties worden opgeslagen en met een ster gemarkeerd, zodat automatisch opschonen ze bewaart."
+      },
+      "engine": {
+        "title": "Transcriptie-engine",
+        "label": "Transcriberen met",
+        "description": "Dicteren gebruikt altijd het eigen model van Handy. Deze keuze geldt alleen voor bestanden.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model voor opnames",
+        "description": "Opnames kunnen een trager maar nauwkeuriger model gebruiken dan dicteren. Het draait apart en wordt alleen geladen terwijl bestanden worden getranscribeerd, zodat je dicteermodel klaar blijft. Beide modellen moeten in het geheugen passen.",
+        "same": "Zelfde als dicteren ({{model}})",
+        "sameNoModel": "Zelfde als dicteren",
+        "switchWarning": "Dit bestand gebruikt je dicteermodel, dus als je nu van dicteermodel wisselt, stopt het. Kies een ander model voor opnames om ze gescheiden te houden.",
+        "onCpu": "Opnames draaien op de processor, omdat er niet genoeg grafisch geheugen is voor beide modellen. Kies een kleiner model voor opnames om de grafische kaart te gebruiken."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Serveradres",
+          "description": "Meestal http://localhost:13305. Oudere versies van Lemonade gebruikten poort 8000."
+        },
+        "apiKey": {
+          "label": "API-sleutel",
+          "description": "Alleen nodig als je Lemonade Server erom vraagt.",
+          "placeholder": "Optioneel"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Het Lemonade-model dat je bestanden transcribeert, zoals Whisper-Base.",
+          "placeholder": "Kies een Whisper-model",
+          "notDownloaded": "{{model}} (wordt bij eerste gebruik gedownload)",
+          "none": "Geen transcriptiemodellen gevonden op deze server.",
+          "use": "“{{model}}” gebruiken"
+        },
+        "test": "Verbinding testen",
+        "testing": "Verbinden…",
+        "connected": "Verbonden. Beschikbare transcriptiemodellen: {{number}}",
+        "checkFailed": "Lemonade Server controleren mislukt: {{error}}",
+        "saveError": "Lemonade-instellingen opslaan mislukt: {{error}}",
+        "firstChunkSlow": "Lemonade is mogelijk het model aan het downloaden of laden. De eerste keer kan dit enkele minuten duren.",
+        "errors": {
+          "invalidUrl": "Voer een adres in zoals http://localhost:13305.",
+          "unreachable": "Lemonade Server op {{url}} is niet bereikbaar. Controleer of de server draait.",
+          "timeout": "Lemonade Server reageerde niet op tijd.",
+          "unauthorized": "Lemonade Server heeft de API-sleutel niet geaccepteerd.",
+          "modelNotFound": "Lemonade Server heeft dit model niet.",
+          "http": "Lemonade Server gaf een fout terug.",
+          "badResponse": "Lemonade Server stuurde een antwoord dat Handy niet kon lezen.",
+          "cancelled": "De verbindingstest is geannuleerd."
+        },
+        "notes": {
+          "noTranslate": "Vertalen naar het Engels is niet beschikbaar met Lemonade Server. Bestanden worden getranscribeerd in de gesproken taal.",
+          "remote": "Dit adres staat niet op deze computer. Je opnames worden ernaartoe verzonden."
+        }
+      },
+      "speakers": {
+        "label": "Sprekers aanduiden",
+        "description": "Geef aan wie wat zei, voor maximaal 4 sprekers. Draait op deze computer en vereist een eenmalige download van {{size}} MB.",
+        "download": "Sprekermodel downloaden ({{size}} MB)",
+        "downloading": "Sprekermodel downloaden… {{percent}}%",
+        "verifying": "Download controleren…",
+        "cancelDownload": "Download annuleren",
+        "downloadFailed": "Sprekermodel downloaden mislukt: {{error}}",
+        "installed": "Sprekermodel geïnstalleerd ({{size}} MB)",
+        "remove": "Sprekermodel verwijderen",
+        "removeError": "Sprekermodel verwijderen mislukt: {{error}}",
+        "removeConfirm": "Sprekermodel verwijderen? Om sprekers aan te duiden moet je het opnieuw downloaden ({{size}} MB).",
+        "license": "Sprekermodel van NVIDIA, onder de NVIDIA Open Model License (<page>modelpagina</page>).",
+        "title": "Sprekers",
+        "defaultName": "Spreker {{number}}",
+        "rename": "{{name}} hernoemen",
+        "nameLabel": "Nieuwe naam voor {{name}}",
+        "save": "Opslaan",
+        "cancel": "Annuleren",
+        "renameError": "Spreker hernoemen mislukt: {{error}}",
+        "approximate": "Sprekerwisselingen zijn bij benadering omdat dit model geen tijdstempels geeft.",
+        "unassigned": "Sommige passages konden niet aan een spreker worden gekoppeld.",
+        "none": "Deze transcriptie heeft geen sprekeraanduiding.",
+        "labelAction": "Sprekers aanduiden",
+        "labelHint": "Sprekers worden op deze computer aangeduid op basis van de oorspronkelijke opname, {{file}}. Lange opnames duren een paar minuten.",
+        "needsModel": "Voor het aanduiden van sprekers is het sprekermodel nodig, een eenmalige download van {{size}} MB.",
+        "labelError": "Sprekers aanduiden mislukt: {{error}}",
+        "findRecording": "Opname zoeken…",
+        "findRecordingHint": "Kies de verplaatste opname. Het moet hetzelfde bestand zijn dat is getranscribeerd.",
+        "relabel": "Opnieuw aanduiden…",
+        "relabelTitle": "Sprekers opnieuw aanduiden",
+        "relabelConfirm": "Sprekers opnieuw aanduiden op basis van de opname? Namen, samenvoegingen en wijzigingen aan passages gaan verloren.",
+        "mergeInto": "{{name}} samenvoegen met een andere spreker",
+        "mergePrompt": "{{name}} samenvoegen met:",
+        "mergeTitle": "Sprekers samenvoegen",
+        "mergeConfirm": "{{from}} samenvoegen met {{into}}? Alle passages van {{from}} worden aan {{into}} toegewezen. Je kunt dit ongedaan maken tot je de transcriptie sluit.",
+        "mergeError": "Sprekers samenvoegen mislukt: {{error}}",
+        "changeSpeaker": "Spreker van deze passage wijzigen ({{name}})",
+        "changeSpeakerPrompt": "Wie zei dit?",
+        "newSpeaker": "Nieuwe spreker",
+        "unknownSpeaker": "Onbekende spreker",
+        "changeSpeakerError": "Spreker wijzigen mislukt: {{error}}",
+        "undo": "Ongedaan maken",
+        "undoError": "Ongedaan maken mislukt: {{error}}",
+        "jobKind": "Sprekeraanduiding",
+        "state": {
+          "running": "Sprekers identificeren…",
+          "done": "Sprekers: {{number}}",
+          "failed": "Sprekers aanduiden mislukt",
+          "skipped": {
+            "modelMissing": "Sprekeraanduiding overgeslagen: het sprekermodel is niet gedownload.",
+            "noSpeech": "Sprekeraanduiding overgeslagen: geen spraak gevonden."
+          }
+        }
+      },
+      "queue": {
+        "title": "Bestanden",
+        "cancelAll": "Alles annuleren",
+        "clearFinished": "Voltooide wissen"
+      },
+      "status": {
+        "queued": "Wacht op start",
+        "preparing": "Voorbereiden…",
+        "waiting": "Gepauzeerd tijdens het dicteren",
+        "transcribing": "Transcriberen…",
+        "completed": "Klaar",
+        "partial": "Klaar, met hiaten",
+        "cancelled": "Geannuleerd",
+        "failed": "Mislukt"
+      },
+      "progress": "{{processed}} van {{total}}",
+      "progressNoTotal": "{{processed}} getranscribeerd",
+      "noSpeech": "Geen spraak gevonden in dit bestand.",
+      "actions": {
+        "cancel": "Annuleren",
+        "remove": "Verwijderen uit lijst",
+        "view": "Transcriptie bekijken",
+        "copy": "Transcriptie kopiëren",
+        "showFile": "Bestand tonen"
+      },
+      "copied": "Transcriptie naar klembord gekopieerd.",
+      "copyError": "Transcriptie kopiëren mislukt.",
+      "savedToHistory": "Opgeslagen in geschiedenis",
+      "errors": {
+        "notFound": "Het bestand kan niet worden gevonden of geopend.",
+        "unsupportedFormat": "Dit bestandstype wordt niet ondersteund.",
+        "needsFfmpeg": "Dit formaat vereist ffmpeg. Installeer ffmpeg en probeer het opnieuw.",
+        "noModel": "Er is geen transcriptiemodel geselecteerd.",
+        "modelChanged": "Het model is gewijzigd terwijl dit bestand werd getranscribeerd.",
+        "decodeFailed": "De audio in dit bestand kon niet worden gelezen.",
+        "engineFailed": "Transcriptie mislukt.",
+        "serverUnreachable": "Lemonade Server is niet bereikbaar. Controleer of de server draait.",
+        "serverUnauthorized": "Lemonade Server heeft de API-sleutel niet geaccepteerd.",
+        "serverModelMissing": "Lemonade Server heeft het geselecteerde model niet.",
+        "internal": "Er is iets misgegaan.",
+        "sourceChanged": "De opname op deze locatie is gewijzigd sinds ze is getranscribeerd, dus de sprekers ervan kunnen niet aan deze transcriptie worden gekoppeld. Is het dezelfde opname, kies die dan met ‘Opname zoeken…’.",
+        "speakerLabelsFailed": "Sprekeraanduiding mislukt.",
+        "enqueue": "Bestanden toevoegen mislukt: {{error}}",
+        "cancel": "Annuleren mislukt: {{error}}",
+        "remove": "Verwijderen uit de lijst mislukt: {{error}}",
+        "loadTranscript": "Transcriptie laden mislukt: {{error}}"
+      },
+      "transcript": {
+        "title": "Transcriptie: {{file}}",
+        "live": "Wordt bijgewerkt tijdens het transcriberen",
+        "partial": "Deze transcriptie is onvolledig: {{reason}}",
+        "partialNoReason": "Deze transcriptie is onvolledig.",
+        "approximateTimes": "Tijden zijn bij benadering omdat dit model geen tijdstempels geeft.",
+        "empty": "Geen spraak gevonden.",
+        "segmentsLabel": "Transcriptie met tijdstempels"
+      },
+      "export": {
+        "button": "Exporteren…",
+        "dialogTitle": "Transcriptie exporteren",
+        "formats": {
+          "docx": "Word-document (.docx)",
+          "txt": "Platte tekst (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip-ondertitels (.srt)",
+          "vtt": "WebVTT-ondertitels (.vtt)"
+        },
+        "success": "Transcriptie geëxporteerd.",
+        "showInFolder": "Tonen in map",
+        "error": "Exporteren mislukt: {{error}}"
+      }
+    },
     "history": {
       "title": "Geschiedenis",
       "openFolder": "Opnamemap openen",
@@ -501,7 +714,14 @@
       "retranscribe": "Opnieuw transcriberen",
       "retranscribeError": "Opnieuw transcriberen mislukt. Probeer het opnieuw.",
       "transcribing": "Transcriberen...",
-      "transcriptionFailed": "Transcriptie mislukt. Je kunt het opnieuw proberen via het herlaad-pictogram."
+      "transcriptionFailed": "Transcriptie mislukt. Je kunt het opnieuw proberen via het herlaad-pictogram.",
+      "openTranscript": "Transcriptie openen",
+      "showOriginal": "Origineel bestand tonen",
+      "originalMissing": "Het originele bestand is verplaatst of verwijderd.",
+      "fileDuration": "Lengte {{duration}}",
+      "incomplete": "Onvolledig",
+      "speakerCount": "Sprekers: {{number}}",
+      "retranscribeFileUnavailable": "Gebruik de pagina Transcriberen om dit bestand opnieuw te transcriberen."
     },
     "debug": {
       "title": "Probleemoplossing",

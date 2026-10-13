@@ -923,6 +923,235 @@ async updateRecordingRetentionPeriod(period: string) : Promise<Result<null, stri
     else return { status: "error", error: e  as any };
 }
 },
+async getSupportedAudioFormats() : Promise<Result<SupportedAudioFormats, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_supported_audio_formats") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async enqueueFileTranscriptions(paths: string[], options: FileTranscriptionOptions) : Promise<Result<FileJobSnapshot[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("enqueue_file_transcriptions", { paths, options }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelFileTranscription(jobId: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_file_transcription", { jobId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelAllFileTranscriptions() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_all_file_transcriptions") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async listFileTranscriptionJobs() : Promise<Result<FileJobSnapshot[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_file_transcription_jobs") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dismissFileTranscriptionJob(jobId: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("dismiss_file_transcription_job", { jobId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getFileTranscript(source: TranscriptSource) : Promise<Result<FileTranscript, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_file_transcript", { source }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Writes the transcript in `format` to `path` (absolute; its folder must
+ * exist; the format's extension is added when the name has none) and
+ * returns the path written.
+ */
+async exportFileTranscript(source: TranscriptSource, format: TranscriptFormat, path: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_file_transcript", { source, format, path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Sets the model for recordings (Transcribe page; "" = Same as dictation).
+ * Only a downloaded transcribe-cpp model is accepted. A recordings model
+ * that no longer matches is freed unless a job is using it (a running job
+ * keeps its model); nothing is loaded.
+ */
+async changeFileTranscriptionModelSetting(modelId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_file_transcription_model_setting", { modelId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The recordings engine's state now (see `RecordingsEngineEvent`).
+ */
+async getRecordingsEngineStatus() : Promise<Result<RecordingsEngineEvent, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_recordings_engine_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Lists the server's transcription models. Server problems are reported in
+ * `LemonadeCheck.error`; Err only for internal failures.
+ */
+async checkLemonadeServer(baseUrl: string, apiKey: string) : Promise<Result<LemonadeCheck, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("check_lemonade_server", { baseUrl, apiKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeFileTranscriptionEngineSetting(engine: FileTranscriptionEngine) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_file_transcription_engine_setting", { engine }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Validates `base_url` (Err "Invalid Lemonade Server address") and stores
+ * the trimmed values.
+ */
+async changeLemonadeSettings(lemonade: LemonadeSettings) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_lemonade_settings", { lemonade }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getSpeakerModelStatus() : Promise<Result<SpeakerModelStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_speaker_model_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async downloadSpeakerModel() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("download_speaker_model") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelSpeakerModelDownload() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_speaker_model_download") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteSpeakerModel() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_speaker_model") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Renames (or with name None/"" resets) speaker `speaker_id` in a job's result or
+ * a History entry; returns the updated transcript. History is the source of truth
+ * for a saved transcript: a job whose result has a history_id is renamed in History
+ * first and then takes the entry's labels, so a failure changes neither copy (if
+ * that entry was deleted, only the job is renamed). A History rename also updates
+ * the jobs saved as that entry. Running jobs: Err("still running"). Refused while
+ * speaker labels are being made for the transcript; can be undone.
+ */
+async renameTranscriptSpeaker(source: TranscriptSource, speakerId: number, name: string | null) : Promise<Result<FileTranscript, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("rename_transcript_speaker", { source, speakerId, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Gives all of speaker `from_id`'s passages to speaker `into_id`, which keeps
+ * its name (or takes `from_id`'s when it has none); `from_id` is removed. Saved
+ * like a rename, and can be undone.
+ */
+async mergeTranscriptSpeakers(source: TranscriptSource, fromId: number, intoId: number) : Promise<Result<FileTranscript, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("merge_transcript_speakers", { source, fromId, intoId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Gives the turn (paragraph) `paragraph_index`, which the caller saw start at
+ * `start_ms` with speaker `from_speaker`, to speaker `speaker_id`, or to a new
+ * speaker when that is None. Saved like a rename, and can be undone.
+ */
+async reassignTranscriptTurn(source: TranscriptSource, paragraphIndex: number, startMs: number, fromSpeaker: number | null, speakerId: number | null) : Promise<Result<FileTranscript, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reassign_transcript_turn", { source, paragraphIndex, startMs, fromSpeaker, speakerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Undoes the last rename, merge or passage change of the transcript (one
+ * level, and only while nothing else changed it since). Err("Nothing to undo")
+ * otherwise. An undo can't itself be undone.
+ */
+async undoTranscriptSpeakerEdit(source: TranscriptSource) : Promise<Result<FileTranscript, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("undo_transcript_speaker_edit", { source }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Queues a speaker-label job for a finished transcript (a job's result or a
+ * History entry): its recording is diarized and the labels stored with the
+ * transcript. `replace` relabels a labelled transcript, dropping names and
+ * fixes; `path` is a recording the user found in place of the stored one.
+ * Returns the job's snapshot. All errors are English.
+ */
+async labelTranscriptSpeakers(source: TranscriptSource, replace: boolean, path: string | null) : Promise<Result<FileJobSnapshot, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("label_transcript_speakers", { source, replace, path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 /**
  * Checks if the Mac is a laptop by detecting battery presence
  * 
@@ -943,11 +1172,17 @@ async isLaptop() : Promise<Result<boolean, string>> {
 
 
 export const events = __makeEvents__<{
+fileTranscriptionEvent: FileTranscriptionEvent,
 historyUpdatePayload: HistoryUpdatePayload,
+recordingsEngineEvent: RecordingsEngineEvent,
+speakerModelEvent: SpeakerModelEvent,
 streamPhaseEvent: StreamPhaseEvent,
 streamTextEvent: StreamTextEvent
 }>({
+fileTranscriptionEvent: "file-transcription-event",
 historyUpdatePayload: "history-update-payload",
+recordingsEngineEvent: "recordings-engine-event",
+speakerModelEvent: "speaker-model-event",
 streamPhaseEvent: "stream-phase-event",
 streamTextEvent: "stream-text-event"
 })
@@ -1031,7 +1266,16 @@ vad_backend?: VadBackend;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle }
+overlay_style?: OverlayStyle; 
+/**
+ * Engine for file transcription (Transcribe page); dictation is unaffected.
+ */
+file_transcription_engine?: FileTranscriptionEngine; 
+/**
+ * Handy model for file transcription (Transcribe page; default of the CLI's --model).
+ * "" = the dictation model (`selected_model`), today's behaviour. transcribe-cpp models only.
+ */
+file_transcription_model?: string; lemonade?: LemonadeSettings }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }
@@ -1047,6 +1291,11 @@ export type ChineseScript =
 "as_transcribed" | "simplified" | "traditional"
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
+export type DecoderKind = 
+/**
+ * 16 kHz mono 16-bit PCM WAV read directly (same samples as read_wav_samples).
+ */
+"wav" | "symphonia" | "ffmpeg"
 export type EngineType = 
 /**
  * Any GGML/GGUF model loaded through transcribe-cpp (Whisper, Parakeet,
@@ -1054,8 +1303,157 @@ export type EngineType =
  * the file, so this one variant covers the whole transcribe-cpp family.
  */
 "TranscribeCpp" | "Parakeet" | "Moonshine" | "MoonshineStreaming" | "SenseVoice" | "GigaAM" | "Canary" | "Cohere"
+/**
+ * Present on HistoryEntry for entries made by file transcription.
+ */
+export type FileHistoryInfo = { source_path: string; source_name: string; duration_ms: number; model_id: string | null; model_name: string | null; status: TranscriptStatus; 
+/**
+ * Whether source_path exists right now (checked when the entry is read).
+ */
+source_exists: boolean; 
+/**
+ * Number of labelled speakers; 0 when the transcript has none.
+ */
+speaker_count: number }
+export type FileJobError = { code: FileJobErrorCode; 
+/**
+ * English detail for logs/tooltips; the UI shows a translated text per `code`.
+ */
+message: string }
+export type FileJobErrorCode = "not_found" | "unsupported_format" | "needs_ffmpeg" | "no_model" | "model_changed" | "decode_failed" | "engine_failed" | 
+/**
+ * Lemonade Server: connection refused, DNS failure, reset before any answer.
+ */
+"server_unreachable" | 
+/**
+ * Lemonade Server: HTTP 401/403.
+ */
+"server_unauthorized" | 
+/**
+ * Lemonade Server does not know the requested model.
+ */
+"server_model_missing" | "internal" | 
+/**
+ * Speaker labels: the recording at the stored path is not the one that
+ * was transcribed (another size, or modified since).
+ */
+"source_changed" | 
+/**
+ * Speaker labels: the diarizer failed or its model is missing.
+ */
+"speaker_labels_failed"
+export type FileJobSnapshot = { job_id: number; path: string; file_name: string; status: FileJobStatus; duration_ms: number | null; 
+/**
+ * End of the last finished (or skipped) chunk.
+ */
+processed_ms: number; chunks_done: number; decoder: DecoderKind | null; model_id: string | null; 
+/**
+ * The engine the job runs on (fixed when it starts; settings' value while queued).
+ */
+engine: FileTranscriptionEngine; 
+/**
+ * None when speaker labels were not requested.
+ */
+speakers: SpeakerJobState | null; error: FileJobError | null; 
+/**
+ * get_file_transcript(Job) returns something (final, partial or running).
+ */
+has_transcript: boolean; transcript_status: TranscriptStatus | null; history_id: number | null; 
+/**
+ * Unix milliseconds.
+ */
+enqueued_at: number; 
+/**
+ * Set for a speaker-label job: the transcript it labels. Such a job
+ * transcribes nothing and never has a transcript of its own.
+ */
+labels_for: TranscriptSource | null; 
+/**
+ * Runs on dictation's loaded model; switching the dictation model stops it.
+ */
+shares_dictation_model?: boolean }
+export type FileJobStatus = "queued" | 
+/**
+ * Probing the file and loading the model.
+ */
+"preparing" | 
+/**
+ * Paused because a dictation is recording or being transcribed.
+ */
+"waiting" | "transcribing" | "completed" | "cancelled" | "failed"
+export type FileTranscript = { source_path: string; source_name: string; 
+/**
+ * Decoded audio length (exact when finished; probe estimate while running).
+ */
+duration_ms: number; model_id: string; model_name: string | null; 
+/**
+ * ISO code of the transcript language, when known.
+ */
+language: string | null; status: TranscriptStatus; 
+/**
+ * English explanation when `status` is `Partial`.
+ */
+status_detail: string | null; timing: TimingGrain; 
+/**
+ * `paragraphs` texts joined by "\n\n": what Copy, TXT export and History use.
+ */
+text: string; 
+/**
+ * One per transcribed (non-silent, non-empty) chunk: chunk start/end and
+ * its post-processed text (processed exactly like a dictation).
+ */
+paragraphs: TranscriptSegment[]; 
+/**
+ * Finer timed segments for subtitles and the timestamped view. For chunks
+ * without model timestamps the chunk's paragraph is its only segment.
+ */
+segments: TranscriptSegment[]; 
+/**
+ * Unix seconds when transcription finished (or the snapshot was taken).
+ */
+created_at: number; history_id: number | null; 
+/**
+ * Speaker labels ("who said what"); None when not requested or not made.
+ */
+speakers?: TranscriptSpeakers | null }
+/**
+ * Which engine transcribes files. Dictation always uses Handy's selected model.
+ */
+export type FileTranscriptionEngine = 
+/**
+ * Handy's model for recordings (the dictation model unless one is
+ * chosen on the Transcribe page).
+ */
+"handy" | 
+/**
+ * A local Lemonade Server over HTTP.
+ */
+"lemonade"
+export type FileTranscriptionEvent = 
+/**
+ * Full job state after any change. Progress-only changes are throttled
+ * to at most one per 250 ms per job; status changes are never throttled.
+ */
+{ kind: "updated"; job: FileJobSnapshot } | 
+/**
+ * Post-processed segments of one finished chunk, in order. Append to the live view.
+ */
+{ kind: "chunk"; job_id: number; chunk_index: number; segments: TranscriptSegment[] } | 
+/**
+ * The job was dismissed (or evicted) and its result freed.
+ */
+{ kind: "removed"; job_id: number }
+export type FileTranscriptionOptions = { save_to_history: boolean; 
+/**
+ * Label speakers with the local diarizer (needs the speaker model).
+ */
+label_speakers?: boolean }
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
-export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean }
+export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean; 
+/**
+ * Set for entries made by file transcription.
+ */
+file: FileHistoryInfo | null }
 export type HistoryUpdatePayload = { action: "added"; entry: HistoryEntry } | { action: "updated"; entry: HistoryEntry } | { action: "deleted"; id: number } | { action: "toggled"; id: number }
 /**
  * Result of changing keyboard implementation
@@ -1072,6 +1470,38 @@ export type KeyboardDiagnosticReport = { secure_input_enabled: boolean; culprit_
 key_down: number; key_up: number; flags_changed: number; mouse: number; duration_ms: number }
 export type KeyboardImplementation = "tauri" | "handy_keys"
 export type LLMPrompt = { id: string; name: string; prompt: string }
+export type LemonadeCheck = { ok: boolean; error: LemonadeErrorKind | null; 
+/**
+ * English detail (HTTP status/body excerpt, OS error) for a tooltip.
+ */
+detail: string | null; 
+/**
+ * The URL actually used, e.g. "http://localhost:13305/api/v1".
+ */
+api_url: string | null; 
+/**
+ * Transcription models only, server order.
+ */
+models: LemonadeModel[]; other_models: number }
+export type LemonadeErrorKind = "invalid_url" | "unreachable" | "timeout" | "unauthorized" | "model_not_found" | "http" | "bad_response" | "cancelled"
+export type LemonadeModel = { id: string; recipe: string | null; labels: string[]; 
+/**
+ * None when the server did not say.
+ */
+downloaded: boolean | null }
+export type LemonadeSettings = { 
+/**
+ * As typed by the user; normalized at use (trailing "/", "/v1", "/api/v1" removed).
+ */
+base_url: string; 
+/**
+ * Lemonade model id, e.g. "Whisper-Base"; "" = none chosen.
+ */
+model: string; 
+/**
+ * "" = send no Authorization header.
+ */
+api_key: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; is_directory: boolean; engine_type: EngineType; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }
@@ -1114,6 +1544,25 @@ export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_
 export type PermissionAccess = "allowed" | "denied" | "unknown"
 export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean }
 export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"
+/**
+ * The recordings engine's state, for the Transcribe page. Emitted when it
+ * changes; the dictation model's `model-state-changed` events never carry
+ * it, so the footer keeps showing the dictation model.
+ */
+export type RecordingsEngineEvent = { 
+/**
+ * The loaded model for recordings, if any.
+ */
+model_id: string | null; 
+/**
+ * Whether it runs on a GPU.
+ */
+on_gpu: boolean; 
+/**
+ * It was meant for the GPU, but the GPU had too little free memory for
+ * both models, so it runs on the processor.
+ */
+gpu_memory_fallback: boolean }
 export type SecretMap = Partial<{ [key in string]: string }>
 export type SecureInputStatus = { 
 /**
@@ -1168,6 +1617,25 @@ export type ShortcutActivation =
 export type ShortcutBinding = { id: string; name: string; description: string; default_binding: string; current_binding: string }
 export type SoundTheme = "marimba" | "pop" | "custom"
 /**
+ * Progress of speaker labelling for one file job.
+ */
+export type SpeakerJobState = { state: "pending" } | { state: "running" } | { state: "done"; speakers: number } | 
+/**
+ * The transcript was kept without labels.
+ */
+{ state: "failed"; message: string } | { state: "skipped"; reason: SpeakerSkipReason }
+export type SpeakerModelEvent = { kind: "progress"; downloaded: number; total: number } | { kind: "verifying" } | { kind: "completed" } | { kind: "failed"; message: string } | { kind: "cancelled" }
+export type SpeakerModelStatus = { downloaded: boolean; downloading: boolean; size_bytes: number; path: string | null }
+export type SpeakerSkipReason = 
+/**
+ * The speaker model isn't downloaded.
+ */
+"model_missing" | 
+/**
+ * The diarizer found no speech, or no transcript text matched a speaker.
+ */
+"no_speech"
+/**
  * Phase of the streaming overlay card, emitted to drive its UI state.
  */
 export type StreamPhase = 
@@ -1199,12 +1667,79 @@ export type StreamTextEvent = { committed: string; tentative: string }
  * Semantic kind of "working" phase, used to localize the spinner label.
  */
 export type StreamWorkKind = "transcribing" | "polishing"
+export type SupportedAudioFormats = { 
+/**
+ * Decoded in-process. Lowercase extensions without dots.
+ */
+native: string[]; 
+/**
+ * Need ffmpeg. Lowercase extensions without dots.
+ */
+ffmpeg: string[]; ffmpeg_available: boolean; ffmpeg_path: string | null }
 /**
  * UI appearance mode. `System` follows the OS `prefers-color-scheme`; `Light`
  * and `Dark` force one of the two palettes Handy already ships.
  */
 export type Theme = "system" | "light" | "dark"
+/**
+ * How precise segment times are. A job's grain is the minimum over its chunks.
+ */
+export type TimingGrain = 
+/**
+ * One segment per chunk (about every 15–28 s): the model gave no timestamps.
+ */
+"chunk" | 
+/**
+ * Model-provided segment (phrase/sentence) timestamps.
+ */
+"segment"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
+export type TranscriptFormat = "txt" | "md" | "srt" | "vtt" | "json" | "docx"
+/**
+ * One timed piece of transcript text. Milliseconds from the start of the
+ * source file; `end_ms > start_ms`; `text` is trimmed and non-empty.
+ */
+export type TranscriptSegment = { start_ms: number; end_ms: number; text: string; 
+/**
+ * Display speaker id (1-based, an id in `FileTranscript.speakers`) when
+ * speaker labels were made; absent from JSON otherwise.
+ */
+speaker?: number | null }
+/**
+ * Where a transcript to view or export comes from.
+ */
+export type TranscriptSource = { kind: "job"; job_id: number } | { kind: "history"; history_id: number }
+export type TranscriptSpeaker = { 
+/**
+ * Unique and 1-based. Numbered by first appearance when labels are made.
+ * Never renumbered by a merge or a passage change, so there can be gaps,
+ * and an id freed by a merge can be given to a new speaker.
+ */
+id: number; 
+/**
+ * User-given name; None shows "Speaker {id}".
+ */
+name: string | null }
+export type TranscriptSpeakers = { speakers: TranscriptSpeaker[]; 
+/**
+ * Labels were placed on sentences with interpolated times (the model
+ * gave no timestamps): expect mistakes near speaker changes.
+ */
+approximate: boolean; 
+/**
+ * Segments that overlapped no speaker turn and were left unlabeled.
+ */
+unassigned_segments: number; 
+/**
+ * Diarizer id, e.g. "sortformer-4spk-v2.1-q8_0".
+ */
+model: string }
+export type TranscriptStatus = "completed" | 
+/**
+ * Something is missing (decoding stopped early, chunks failed, the job
+ * was cancelled or is still running). See `status_detail`.
+ */
+"partial"
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type VadBackend = "silero" | "earshot"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }

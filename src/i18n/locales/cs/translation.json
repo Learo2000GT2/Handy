@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Obecné",
+    "transcribe": "Přepis",
     "models": "Modely",
     "advanced": "Pokročilé",
     "postProcessing": "Následné zpracování",
@@ -163,6 +164,7 @@
       "description": "Vyberte model přepisu nebo stáhněte další modely. Různé modely nabízejí různé úrovně přesnosti a rychlosti.",
       "deleteConfirm": "Opravdu chcete smazat {{modelName}}? Pro opětovné použití jej budete muset znovu stáhnout.",
       "deleteActiveConfirm": "{{modelName}} je váš aktivní model. Jeho smazáním se zastaví přepisy, dokud nevyberete nový model. Opravdu chcete pokračovat?",
+      "deleteRecordingsConfirm": "{{modelName}} je váš model pro nahrávky. Pokud ho smažete, nahrávky budou používat model pro diktování. Opravdu chcete pokračovat?",
       "deleteTitle": "Smazat model",
       "filters": {
         "allLanguages": "Všechny jazyky",
@@ -487,6 +489,217 @@
         "createFirst": "Klikněte nahoře na 'Vytvořit nový prompt' a vytvořte svůj první prompt pro následné zpracování."
       }
     },
+    "transcribeFiles": {
+      "title": "Přepis souborů",
+      "description": "Převeďte existující nahrávky na text přímo v tomto počítači. Vaše soubory nikdy neopustí vaše zařízení.",
+      "settingsNote": "Používá vybraný model a vaše nastavení jazyka, překladu, vlastních slov a výplňových slov.",
+      "settingsNoteLemonade": "Používá vaše nastavení jazyka, vlastních slov a výplňových slov.",
+      "settingsNoteOwnModel": "Používá model pro nahrávky a vaše nastavení jazyka, překladu, vlastních slov a výplňových slov.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} přes Lemonade Server",
+      "noModel": "Chcete-li přepisovat soubory, vyberte stažený model na stránce Modely.",
+      "noLemonadeModel": "Chcete-li přepisovat soubory, vyberte model Lemonade.",
+      "noRecordingsModel": "Model pro nahrávky není stažený. Vyberte výše jiný nebo ho stáhněte na stránce Modely.",
+      "dropzone": {
+        "title": "Přetáhněte sem zvukové nebo video soubory",
+        "hint": "Rozhovory, schůzky, přednášky a hlasové poznámky libovolné délky",
+        "active": "Pusťte pro přidání",
+        "choose": "Vybrat soubory…",
+        "skipped": "Přeskočené soubory, které nejsou zvuk ani video: {{number}}"
+      },
+      "picker": {
+        "title": "Vybrat nahrávky",
+        "filterName": "Zvukové a video soubory"
+      },
+      "formats": {
+        "native": "Otevírá formáty {{formats}}",
+        "ffmpegAvailable": "Další formáty, jako jsou Opus, WebM, WMA a DSS, se otevírají pomocí ffmpeg.",
+        "ffmpegMissing": "Nainstalujte ffmpeg, abyste mohli otevírat i Opus, WebM, WMA, DSS a další formáty."
+      },
+      "saveToHistory": {
+        "label": "Uložit do historie",
+        "description": "Dokončené přepisy se uloží a označí hvězdičkou, takže je automatické mazání ponechá."
+      },
+      "engine": {
+        "title": "Nástroj pro přepis",
+        "label": "Přepisovat pomocí",
+        "description": "Diktování vždy používá vlastní model aplikace Handy. Tato volba platí jen pro soubory.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model pro nahrávky",
+        "description": "Nahrávky mohou používat pomalejší, ale přesnější model než diktování. Běží samostatně a načítá se jen během přepisu souborů, takže model pro diktování zůstává připravený. Oba modely se musí vejít do paměti.",
+        "same": "Stejný jako pro diktování ({{model}})",
+        "sameNoModel": "Stejný jako pro diktování",
+        "switchWarning": "Tento soubor používá model pro diktování, takže změna modelu pro diktování ho teď zastaví. Chcete-li je oddělit, vyberte pro nahrávky jiný model.",
+        "onCpu": "Nahrávky se zpracovávají na procesoru, protože grafická paměť nestačí pro oba modely. Chcete-li využít grafickou kartu, vyberte pro nahrávky menší model."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Adresa serveru",
+          "description": "Obvykle http://localhost:13305. Starší verze Lemonade používaly port 8000."
+        },
+        "apiKey": {
+          "label": "API klíč",
+          "description": "Potřebný jen tehdy, pokud ho váš Lemonade Server vyžaduje.",
+          "placeholder": "Volitelné"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Model Lemonade, který přepisuje vaše soubory, například Whisper-Base.",
+          "placeholder": "Vyberte model Whisper",
+          "notDownloaded": "{{model}} (stáhne se při prvním použití)",
+          "none": "Na tomto serveru nebyly nalezeny žádné modely pro přepis.",
+          "use": "Použít „{{model}}“"
+        },
+        "test": "Otestovat připojení",
+        "testing": "Připojuji…",
+        "connected": "Připojeno. Dostupné modely pro přepis: {{number}}",
+        "checkFailed": "Lemonade Server se nepodařilo zkontrolovat: {{error}}",
+        "saveError": "Nastavení Lemonade se nepodařilo uložit: {{error}}",
+        "firstChunkSlow": "Lemonade možná stahuje nebo načítá model. Poprvé to může trvat několik minut.",
+        "errors": {
+          "invalidUrl": "Zadejte adresu ve tvaru http://localhost:13305.",
+          "unreachable": "Lemonade Server na adrese {{url}} není dostupný. Ujistěte se, že běží.",
+          "timeout": "Lemonade Server neodpověděl včas.",
+          "unauthorized": "Lemonade Server nepřijal API klíč.",
+          "modelNotFound": "Lemonade Server tento model nemá.",
+          "http": "Lemonade Server vrátil chybu.",
+          "badResponse": "Lemonade Server poslal odpověď, kterou Handy nedokázal přečíst.",
+          "cancelled": "Test připojení byl zrušen."
+        },
+        "notes": {
+          "noTranslate": "Funkce „Překládat do angličtiny“ není s Lemonade Server k dispozici. Soubory se přepisují v mluveném jazyce.",
+          "remote": "Tato adresa není v tomto počítači. Vaše nahrávky na ni budou odeslány."
+        }
+      },
+      "speakers": {
+        "label": "Označit mluvčí",
+        "description": "Označí, kdo co řekl, až pro 4 mluvčí. Běží v tomto počítači a vyžaduje jednorázové stažení {{size}} MB.",
+        "download": "Stáhnout model mluvčích ({{size}} MB)",
+        "downloading": "Stahuji model mluvčích… {{percent}}%",
+        "verifying": "Kontroluji stažený soubor…",
+        "cancelDownload": "Zrušit stahování",
+        "downloadFailed": "Model mluvčích se nepodařilo stáhnout: {{error}}",
+        "installed": "Model mluvčích je nainstalován ({{size}} MB)",
+        "remove": "Odebrat model mluvčích",
+        "removeError": "Model mluvčích se nepodařilo odebrat: {{error}}",
+        "removeConfirm": "Odebrat model mluvčích? Pro označování mluvčích jej budete muset znovu stáhnout ({{size}} MB).",
+        "license": "Model mluvčích od společnosti NVIDIA v rámci licence NVIDIA Open Model License (<page>stránka modelu</page>).",
+        "title": "Mluvčí",
+        "defaultName": "Mluvčí {{number}}",
+        "rename": "Přejmenovat {{name}}",
+        "nameLabel": "Nové jméno pro {{name}}",
+        "save": "Uložit",
+        "cancel": "Zrušit",
+        "renameError": "Mluvčího se nepodařilo přejmenovat: {{error}}",
+        "approximate": "Změny mluvčích jsou přibližné, protože tento model neposkytuje časové značky.",
+        "unassigned": "Některé pasáže se nepodařilo přiřadit k žádnému mluvčímu.",
+        "none": "Tento přepis nemá označené mluvčí.",
+        "labelAction": "Označit mluvčí",
+        "labelHint": "Mluvčí se označují na tomto počítači podle původní nahrávky {{file}}. Dlouhé nahrávky trvají několik minut.",
+        "needsModel": "K označení mluvčích je potřeba model mluvčích, jednorázové stažení {{size}} MB.",
+        "labelError": "Mluvčí se nepodařilo označit: {{error}}",
+        "findRecording": "Najít nahrávku…",
+        "findRecordingHint": "Vyberte přesunutou nahrávku. Musí to být stejný soubor, který byl přepsán.",
+        "relabel": "Označit znovu…",
+        "relabelTitle": "Znovu označit mluvčí",
+        "relabelConfirm": "Znovu označit mluvčí podle nahrávky? Jména, sloučení a změny pasáží budou ztraceny.",
+        "mergeInto": "Sloučit {{name}} s jiným mluvčím",
+        "mergePrompt": "Sloučit {{name}} s:",
+        "mergeTitle": "Sloučit mluvčí",
+        "mergeConfirm": "Sloučit {{from}} s {{into}}? Všechny pasáže mluvčího {{from}} budou přiřazeny mluvčímu {{into}}. Dokud přepis nezavřete, můžete to vrátit zpět.",
+        "mergeError": "Mluvčí se nepodařilo sloučit: {{error}}",
+        "changeSpeaker": "Změnit mluvčího této pasáže ({{name}})",
+        "changeSpeakerPrompt": "Kdo to řekl?",
+        "newSpeaker": "Nový mluvčí",
+        "unknownSpeaker": "Neznámý mluvčí",
+        "changeSpeakerError": "Mluvčího se nepodařilo změnit: {{error}}",
+        "undo": "Zpět",
+        "undoError": "Akci se nepodařilo vrátit zpět: {{error}}",
+        "jobKind": "Označení mluvčích",
+        "state": {
+          "running": "Rozpoznávám mluvčí…",
+          "done": "Mluvčí: {{number}}",
+          "failed": "Mluvčí se nepodařilo označit",
+          "skipped": {
+            "modelMissing": "Označení mluvčích přeskočeno: model mluvčích není stažen.",
+            "noSpeech": "Označení mluvčích přeskočeno: nebyla nalezena žádná řeč."
+          }
+        }
+      },
+      "queue": {
+        "title": "Soubory",
+        "cancelAll": "Zrušit vše",
+        "clearFinished": "Vymazat dokončené"
+      },
+      "status": {
+        "queued": "Čeká na spuštění",
+        "preparing": "Připravuji…",
+        "waiting": "Pozastaveno během diktování",
+        "transcribing": "Přepisuji…",
+        "completed": "Hotovo",
+        "partial": "Hotovo, s mezerami",
+        "cancelled": "Zrušeno",
+        "failed": "Selhalo"
+      },
+      "progress": "{{processed}} z {{total}}",
+      "progressNoTotal": "Přepsáno {{processed}}",
+      "noSpeech": "V tomto souboru nebyla nalezena žádná řeč.",
+      "actions": {
+        "cancel": "Zrušit",
+        "remove": "Odebrat ze seznamu",
+        "view": "Zobrazit přepis",
+        "copy": "Kopírovat přepis",
+        "showFile": "Zobrazit soubor"
+      },
+      "copied": "Přepis byl zkopírován do schránky.",
+      "copyError": "Přepis se nepodařilo zkopírovat.",
+      "savedToHistory": "Uloženo do historie",
+      "errors": {
+        "notFound": "Soubor nelze najít ani otevřít.",
+        "unsupportedFormat": "Tento typ souboru není podporován.",
+        "needsFfmpeg": "Tento formát vyžaduje ffmpeg. Nainstalujte ffmpeg a zkuste to znovu.",
+        "noModel": "Není vybrán žádný model pro přepis.",
+        "modelChanged": "Model se změnil během přepisu tohoto souboru.",
+        "decodeFailed": "Zvuk v tomto souboru se nepodařilo přečíst.",
+        "engineFailed": "Přepis selhal.",
+        "serverUnreachable": "Lemonade Server není dostupný. Ujistěte se, že běží.",
+        "serverUnauthorized": "Lemonade Server nepřijal API klíč.",
+        "serverModelMissing": "Lemonade Server nemá vybraný model.",
+        "internal": "Něco se pokazilo.",
+        "sourceChanged": "Nahrávka v tomto umístění se od přepisu změnila, takže její mluvčí nelze přiřadit k tomuto přepisu. Pokud jde o stejnou nahrávku, vyberte ji pomocí „Najít nahrávku…“.",
+        "speakerLabelsFailed": "Označení mluvčích se nezdařilo.",
+        "enqueue": "Soubory se nepodařilo přidat: {{error}}",
+        "cancel": "Nepodařilo se zrušit: {{error}}",
+        "remove": "Nepodařilo se odebrat ze seznamu: {{error}}",
+        "loadTranscript": "Přepis se nepodařilo načíst: {{error}}"
+      },
+      "transcript": {
+        "title": "Přepis: {{file}}",
+        "live": "Průběžně se aktualizuje během přepisu",
+        "partial": "Tento přepis je neúplný: {{reason}}",
+        "partialNoReason": "Tento přepis je neúplný.",
+        "approximateTimes": "Časy jsou přibližné, protože tento model neposkytuje časové značky.",
+        "empty": "Nebyla nalezena žádná řeč.",
+        "segmentsLabel": "Přepis s časovými značkami"
+      },
+      "export": {
+        "button": "Exportovat…",
+        "dialogTitle": "Exportovat přepis",
+        "formats": {
+          "docx": "Dokument Word (.docx)",
+          "txt": "Prostý text (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Titulky SubRip (.srt)",
+          "vtt": "Titulky WebVTT (.vtt)"
+        },
+        "success": "Přepis byl exportován.",
+        "showInFolder": "Zobrazit ve složce",
+        "error": "Export se nezdařil: {{error}}"
+      }
+    },
     "history": {
       "title": "Historie",
       "openFolder": "Otevřít složku nahrávek",
@@ -501,7 +714,14 @@
       "retranscribe": "Přepsat znovu",
       "retranscribeError": "Opětovný přepis se nezdařil. Zkuste to prosím znovu.",
       "transcribing": "Přepisuji...",
-      "transcriptionFailed": "Přepis selhal. Můžete zkusit přepis znovu pomocí ikony opakování."
+      "transcriptionFailed": "Přepis selhal. Můžete zkusit přepis znovu pomocí ikony opakování.",
+      "openTranscript": "Otevřít přepis",
+      "showOriginal": "Zobrazit původní soubor",
+      "originalMissing": "Původní soubor byl přesunut nebo smazán.",
+      "fileDuration": "Délka {{duration}}",
+      "incomplete": "Neúplný",
+      "speakerCount": "Mluvčí: {{number}}",
+      "retranscribeFileUnavailable": "Chcete-li tento soubor přepsat znovu, použijte stránku Přepis."
     },
     "debug": {
       "title": "Ladění",

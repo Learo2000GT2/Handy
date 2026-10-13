@@ -5,7 +5,8 @@
 //! slot, the loaded model's spec and any active stream, so "at most one
 //! model worker alive" holds by construction. Callers' commands wait their
 //! turn; waiting in the queue (e.g. behind a model load) is never a timeout.
-//! Only [`EngineSupervisor::cancel`] and device probes bypass the queue: a
+//! Only cancels ([`EngineSupervisor::cancel`] and
+//! [`EngineSupervisor::cancel_work`]) and device probes bypass the queue: a
 //! probe runs its own short-lived, model-less worker on the caller's thread,
 //! so a hung GPU driver can't hold up dictation behind it.
 //!
@@ -18,7 +19,9 @@ use super::protocol::{
     encode_message, read_message, DeviceInfo, DeviceSelector, LoadedInfo, Request, Response,
 };
 use super::worker::LOG_LINE_PREFIX;
-use super::{CPU_ONLY_FLAG, LOG_LEVEL_ENV, WORKER_FLAG};
+use super::{
+    WorkToken, WorkerOptions, CPU_ONLY_FLAG, LOG_LEVEL_ENV, LOW_PRIORITY_FLAG, WORKER_FLAG,
+};
 use log::{debug, error, info, warn, Level};
 use std::collections::VecDeque;
 use std::fmt;
@@ -30,7 +33,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
-use transcribe_cpp::{Backend, RunOptions, StreamOptions, StreamText, StreamUpdate, Transcript};
+use transcribe_cpp::{
+    Backend, DeviceType, RunOptions, StreamOptions, StreamText, StreamUpdate, Transcript,
+};
 
 /// Spawn, backend init and device listing. Listing first opens the GPU,
 /// which on macOS compiles ggml's Metal library when the system shader cache
@@ -112,6 +117,12 @@ pub struct LoadSpec {
     pub path: PathBuf,
     pub backend: Backend,
     pub device: DeviceSelector,
+    /// Free memory the GPU must report for the model to load there, checked
+    /// each time a worker starts for it (see [`gpu_fits`]). With less, the
+    /// model loads in a CPU-only worker instead and its
+    /// [`LoadedInfo::gpu_memory_fallback`] is set. `None` never checks; nor
+    /// does a CPU or pinned spec.
+    pub min_gpu_free_bytes: Option<u64>,
 }
 
 impl LoadSpec {
@@ -130,13 +141,38 @@ impl LoadSpec {
             path: self.path.clone(),
             backend: Backend::Cpu,
             device: DeviceSelector::Auto,
+            min_gpu_free_bytes: None,
         }
+    }
+}
+
+/// Whether a model that needs `need` bytes of free GPU memory fits on the
+/// GPU `selector` would load on, by the free memory `devices` last reported.
+/// A key names that GPU (an unknown key falls back to automatic selection,
+/// as in the worker); automatic selection takes the first discrete GPU, else
+/// the first integrated one. An explicit index is never second-guessed, and
+/// without a target GPU or a reported free amount there is nothing to judge.
+fn gpu_fits(devices: &[DeviceInfo], selector: &DeviceSelector, need: u64) -> bool {
+    let first = |kind: DeviceType| devices.iter().find(|device| device.device_type == kind);
+    let auto = || first(DeviceType::Gpu).or_else(|| first(DeviceType::Igpu));
+    let target = match selector {
+        DeviceSelector::Index(_) => return true,
+        DeviceSelector::Key(key) => devices
+            .iter()
+            .find(|device| device.is_gpu() && &device.key == key)
+            .or_else(auto),
+        DeviceSelector::Auto => auto(),
+    };
+    match target {
+        Some(device) if device.memory_free > 0 => device.memory_free >= need,
+        _ => true,
     }
 }
 
 #[derive(Debug)]
 pub enum EngineError {
-    /// [`EngineSupervisor::cancel`] stopped the work.
+    /// [`EngineSupervisor::cancel`] (or, for scoped work,
+    /// [`EngineSupervisor::cancel_work`]) stopped the work.
     Cancelled,
     /// No model, a transcribe.cpp error, or a worker failure that could not
     /// be recovered.
@@ -181,6 +217,9 @@ enum Command {
         pcm: Vec<f32>,
         run: RunOptions,
         epoch: u64,
+        /// Set for scoped work (a file transcription); see
+        /// [`EngineSupervisor::cancel_work`].
+        token: Option<WorkToken>,
         reply: Reply<Result<Transcript, EngineError>>,
     },
     StreamBegin {
@@ -210,6 +249,8 @@ struct Shared {
     /// Whether this host may use a GPU at all. When not, every worker is
     /// CPU-only, device probes included.
     gpu_allowed: bool,
+    /// How workers are started.
+    options: WorkerOptions,
     /// A worker with GPU backends crashed or hung (in backend init, device
     /// listing, model load or inference). Models load in CPU-only workers,
     /// and devices are not listed again, until [`EngineSupervisor::retry_gpu`].
@@ -258,7 +299,8 @@ impl Shared {
     /// Start a worker and say hello, publishing its device list if it lists
     /// one.
     fn hello(&self, cpu_only: bool, list_devices: bool) -> Result<Worker, Failure> {
-        let mut worker = Worker::spawn(cpu_only).map_err(Failure::Spawn)?;
+        let mut worker =
+            Worker::spawn(cpu_only, self.options.low_priority).map_err(Failure::Spawn)?;
         match worker.call(&Request::Hello { list_devices }, None, HELLO_TIMEOUT)? {
             Response::Hello { devices } => {
                 if let Some(devices) = devices {
@@ -314,6 +356,8 @@ impl Shared {
 struct InFlight {
     what: &'static str,
     control: Arc<Control>,
+    /// The scoped work's token, if the call carries one.
+    token: Option<WorkToken>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -332,11 +376,17 @@ impl EngineSupervisor {
     /// Without `gpu_allowed`, every worker is CPU-only, so no GPU driver is
     /// ever loaded.
     pub fn new(gpu_allowed: bool) -> Self {
+        Self::new_with(gpu_allowed, WorkerOptions::default())
+    }
+
+    /// [`new`](Self::new), starting workers as `options` says.
+    pub fn new_with(gpu_allowed: bool, options: WorkerOptions) -> Self {
         #[cfg(all(unix, not(test)))]
         record_launched_exe();
         let (commands, queue) = mpsc::channel();
         let shared = Arc::new(Shared {
             gpu_allowed,
+            options,
             ..Shared::default()
         });
         let owner = Owner {
@@ -401,11 +451,33 @@ impl EngineSupervisor {
     /// Transcribe 16 kHz mono PCM with the loaded model. A worker crash or
     /// hang is retried once in a fresh worker (on CPU if it was on the GPU).
     pub fn transcribe(&self, pcm: Vec<f32>, run: RunOptions) -> Result<Transcript, EngineError> {
+        self.submit_transcribe(pcm, run, None)
+    }
+
+    /// [`transcribe`](Self::transcribe) as scoped work: besides
+    /// [`cancel`](Self::cancel), [`cancel_work`](Self::cancel_work) with the
+    /// same `token` stops it. Cancelling the token never affects other work.
+    pub fn transcribe_scoped(
+        &self,
+        pcm: Vec<f32>,
+        run: RunOptions,
+        token: &WorkToken,
+    ) -> Result<Transcript, EngineError> {
+        self.submit_transcribe(pcm, run, Some(token.clone()))
+    }
+
+    fn submit_transcribe(
+        &self,
+        pcm: Vec<f32>,
+        run: RunOptions,
+        token: Option<WorkToken>,
+    ) -> Result<Transcript, EngineError> {
         let epoch = self.shared.epoch();
         self.ask(|reply| Command::Transcribe {
             pcm,
             run,
             epoch,
+            token,
             reply,
         })
         .unwrap_or_else(|| Err(engine_stopped()))
@@ -460,6 +532,49 @@ impl EngineSupervisor {
                 call.what, call.control.pid
             );
             call.control.kill();
+        }
+    }
+
+    /// Stop the scoped work submitted with `token`, queued or in progress,
+    /// and nothing else: unlike [`cancel`](Self::cancel) it leaves the cancel
+    /// epoch alone, so dictation is never affected. A call in progress is
+    /// stopped by killing its worker (the next use starts a fresh one and
+    /// reloads the model); queued calls see the token and never start.
+    pub fn cancel_work(&self, token: &WorkToken) {
+        token.cancel();
+        // Checked under the lock `call_work` publishes under, after the
+        // token is set: either it sees the token and sends nothing, or this
+        // sees its call and kills its worker.
+        let ours = lock(&self.shared.in_flight)
+            .take_if(|call| call.token.as_ref().is_some_and(|t| t.same_as(token)));
+        if let Some(call) = ours {
+            info!(
+                "Cancelling the scoped {} by stopping its worker (pid {})",
+                call.what, call.control.pid
+            );
+            call.control.kill();
+        }
+    }
+
+    /// Stop the scoped (file) call in progress, if any, without cancelling
+    /// its token or bumping the cancel epoch: its caller gets `Cancelled`
+    /// with a live token and may submit again. Unscoped work is never
+    /// touched. Returns whether a call was stopped.
+    ///
+    /// The call is stopped by killing its worker, which is neither a crash
+    /// nor a GPU failure: the next use starts a fresh worker for the model.
+    pub fn interrupt_scoped_work(&self) -> bool {
+        let call = lock(&self.shared.in_flight).take_if(|call| call.token.is_some());
+        match call {
+            Some(call) => {
+                info!(
+                    "Interrupting the scoped {} by stopping its worker (pid {})",
+                    call.what, call.control.pid
+                );
+                call.control.kill();
+                true
+            }
+            None => false,
         }
     }
 
@@ -634,9 +749,10 @@ impl Owner {
                     pcm,
                     run,
                     epoch,
+                    token,
                     reply,
                 } => {
-                    let _ = reply.send(self.transcribe(&pcm, &run, epoch));
+                    let _ = reply.send(self.transcribe(&pcm, &run, epoch, token.as_ref()));
                 }
                 Command::StreamBegin {
                     active,
@@ -712,9 +828,35 @@ impl Owner {
     /// GPU lists the devices in its hello, which keeps the list current (a
     /// GPU that comes back is just noticed). A CPU-only worker would only
     /// see the CPU, so it doesn't list.
+    ///
+    /// A spec with [`LoadSpec::min_gpu_free_bytes`] is checked against the
+    /// devices this hello just listed: when the GPU has too little free
+    /// memory, the model loads in a CPU-only worker instead.
     fn start_worker(&self, spec: &LoadSpec) -> Result<(Worker, LoadedInfo), Failure> {
         let cpu_only = self.cpu_only_worker(spec);
         let mut worker = self.shared.hello(cpu_only, !cpu_only)?;
+        if let Some(need) = spec.min_gpu_free_bytes {
+            if !cpu_only && !spec.pinned() {
+                let fits = lock(&self.shared.devices)
+                    .as_deref()
+                    .is_none_or(|devices| gpu_fits(devices, &spec.device, need));
+                if !fits {
+                    info!(
+                        "Not enough free GPU memory for '{}' ({} MiB needed); loading it on the CPU",
+                        spec.path.display(),
+                        need / (1024 * 1024)
+                    );
+                    drop(worker);
+                    let mut worker = self.shared.hello(true, false)?;
+                    let mut info = worker.load(&spec.cpu())?;
+                    info.gpu_memory_fallback = true;
+                    if let Some(loaded) = worker.info.as_mut() {
+                        loaded.gpu_memory_fallback = true;
+                    }
+                    return Ok((worker, info));
+                }
+            }
+        }
         let info = worker.load(spec)?;
         Ok((worker, info))
     }
@@ -811,29 +953,34 @@ impl Owner {
         Deadlines::for_device(on_gpu)
     }
 
-    /// A call that [`EngineSupervisor::cancel`] can stop. Returns
-    /// `Cancelled` if a cancel came after `epoch`, whatever the worker said.
+    /// A call that [`EngineSupervisor::cancel`] (or, for scoped work,
+    /// [`EngineSupervisor::cancel_work`] with its `token`) can stop. Returns
+    /// `Cancelled` if a cancel came after `epoch`, or the token was
+    /// cancelled, whatever the worker said.
     fn call_work(
         &mut self,
         request: &Request,
         pcm: Option<&[f32]>,
         deadline: Duration,
         epoch: u64,
+        token: Option<&WorkToken>,
     ) -> Result<Response, Failure> {
         let worker = self.worker.as_mut().expect("caller ensured a worker");
         let frame = encode_request(request, pcm)?;
         let sent = {
             // Check, send and publish under the lock cancel() takes after
-            // bumping the epoch: either this sees the cancel and sends
-            // nothing, or the cancel sees the call and kills its worker.
+            // bumping the epoch (and cancel_work() after setting the token):
+            // either this sees the cancel and sends nothing, or the cancel
+            // sees the call and kills its worker.
             let mut in_flight = lock(&self.shared.in_flight);
-            if self.shared.cancelled_since(epoch) {
+            if self.shared.cancelled_since(epoch) || token.is_some_and(WorkToken::is_cancelled) {
                 return Err(Failure::Cancelled);
             }
             let sent = worker.control.send(frame);
             *in_flight = Some(InFlight {
                 what: request_name(request),
                 control: Arc::clone(&worker.control),
+                token: token.cloned(),
             });
             sent
         };
@@ -842,10 +989,13 @@ impl Owner {
         } else {
             Err(worker.died())
         };
-        // Gone if cancel() took the call, which means it killed the worker
-        // (possibly just after it answered).
+        // Gone if cancel() or cancel_work() took the call, which means it
+        // killed the worker (possibly just after it answered).
         let killed = lock(&self.shared.in_flight).take().is_none();
-        if killed || self.shared.cancelled_since(epoch) {
+        if killed
+            || self.shared.cancelled_since(epoch)
+            || token.is_some_and(WorkToken::is_cancelled)
+        {
             if killed || result.as_ref().is_err_and(Failure::worker_lost) {
                 // The next use starts a fresh worker.
                 self.worker = None;
@@ -862,6 +1012,7 @@ impl Owner {
         pcm: &[f32],
         run: &RunOptions,
         epoch: u64,
+        token: Option<&WorkToken>,
     ) -> Result<Transcript, EngineError> {
         // A stream left open would make the worker refuse the run.
         self.end_stream();
@@ -870,14 +1021,14 @@ impl Owner {
         };
         let mut retried = false;
         loop {
-            if self.shared.cancelled_since(epoch) {
+            if self.shared.cancelled_since(epoch) || token.is_some_and(WorkToken::is_cancelled) {
                 return Err(EngineError::Cancelled);
             }
             // A respawn here runs under the load deadline; the run's own
             // deadline starts only once the model is loaded.
             self.ensure_worker()?;
             let deadline = self.deadlines().run(pcm.len());
-            match self.call_work(&request, Some(pcm), deadline, epoch) {
+            match self.call_work(&request, Some(pcm), deadline, epoch, token) {
                 Ok(Response::Transcript(transcript)) => return Ok(transcript),
                 Ok(other) => return Err(unexpected(&other).into()),
                 Err(failure) if failure.worker_lost() => {
@@ -946,7 +1097,7 @@ impl Owner {
             .deadlines()
             .audio(pcm.len() + ms_to_samples(stream.pending_ms));
         let started = Instant::now();
-        match self.call_work(&Request::Feed, Some(pcm), deadline, epoch) {
+        match self.call_work(&Request::Feed, Some(pcm), deadline, epoch, None) {
             Ok(Response::Fed { update, text }) => {
                 let Some(stream) = self.stream.as_mut() else {
                     return;
@@ -995,7 +1146,13 @@ impl Owner {
         }
         let deadline = self.deadlines().audio(ms_to_samples(stream.pending_ms));
         let started = Instant::now();
-        match self.call_work(&Request::Finalize { want_language }, None, deadline, epoch) {
+        match self.call_work(
+            &Request::Finalize { want_language },
+            None,
+            deadline,
+            epoch,
+            None,
+        ) {
             Ok(Response::Finalized {
                 update,
                 text,
@@ -1097,8 +1254,8 @@ struct Worker {
 
 impl Worker {
     /// Start a worker process. A `cpu_only` worker never registers a GPU
-    /// backend.
-    fn spawn(cpu_only: bool) -> io::Result<Self> {
+    /// backend; a `low_priority` one runs below normal priority.
+    fn spawn(cpu_only: bool, low_priority: bool) -> io::Result<Self> {
         // Under `cargo test` the current exe is the test harness; tests point
         // this at the built app instead.
         #[cfg(test)]
@@ -1108,29 +1265,7 @@ impl Worker {
         );
         #[cfg(not(test))]
         let exe = worker_exe()?;
-        let mut command = ProcessCommand::new(exe);
-        #[cfg(target_os = "linux")]
-        if let Some(arg0) = std::env::args_os().next() {
-            // Keep `ps` showing Handy's own path rather than /proc/self/exe.
-            use std::os::unix::process::CommandExt;
-            command.arg0(arg0);
-        }
-        command.arg(WORKER_FLAG);
-        if cpu_only {
-            command.arg(CPU_ONLY_FLAG);
-        }
-        command
-            .env(LOG_LEVEL_ENV, log::max_level().as_str())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-            command.creation_flags(CREATE_NO_WINDOW);
-        }
-        let mut child = command.spawn()?;
+        let mut child = Self::command(exe, cpu_only, low_priority).spawn()?;
         let pid = child.id();
         let stdin = child.stdin.take().expect("stdin is piped");
         let stdout = child.stdout.take().expect("stdout is piped");
@@ -1188,6 +1323,44 @@ impl Worker {
             pid
         );
         Ok(worker)
+    }
+
+    /// The command line that starts a worker from `exe`.
+    fn command(exe: PathBuf, cpu_only: bool, low_priority: bool) -> ProcessCommand {
+        let mut command = ProcessCommand::new(exe);
+        #[cfg(target_os = "linux")]
+        if let Some(arg0) = std::env::args_os().next() {
+            // Keep `ps` showing Handy's own path rather than /proc/self/exe.
+            use std::os::unix::process::CommandExt;
+            command.arg0(arg0);
+        }
+        command.arg(WORKER_FLAG);
+        if cpu_only {
+            command.arg(CPU_ONLY_FLAG);
+        }
+        // Windows sets the priority class at creation instead, below.
+        #[cfg(unix)]
+        if low_priority {
+            command.arg(LOW_PRIORITY_FLAG);
+        }
+        command
+            .env(LOG_LEVEL_ENV, log::max_level().as_str())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+            let priority = if low_priority {
+                BELOW_NORMAL_PRIORITY_CLASS
+            } else {
+                0
+            };
+            command.creation_flags(CREATE_NO_WINDOW | priority);
+        }
+        command
     }
 
     fn load(&mut self, spec: &LoadSpec) -> Result<LoadedInfo, Failure> {
@@ -1472,6 +1645,202 @@ mod unit_tests {
         assert_eq!(ms_to_samples(1500), 24_000);
         assert_eq!(ms_to_samples(-5), 0);
     }
+
+    #[test]
+    fn low_priority_flag_reaches_the_worker_command() {
+        let args = |cpu_only: bool, low_priority: bool| -> Vec<String> {
+            Worker::command(PathBuf::from("handy"), cpu_only, low_priority)
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect()
+        };
+        assert_eq!(args(false, false), [WORKER_FLAG]);
+        assert_eq!(args(true, false), [WORKER_FLAG, CPU_ONLY_FLAG]);
+        #[cfg(unix)]
+        assert_eq!(
+            args(true, true),
+            [WORKER_FLAG, CPU_ONLY_FLAG, LOW_PRIORITY_FLAG]
+        );
+        // Windows lowers the priority class instead of passing a flag.
+        #[cfg(windows)]
+        assert_eq!(args(true, true), [WORKER_FLAG, CPU_ONLY_FLAG]);
+    }
+
+    #[test]
+    fn work_tokens_compare_by_identity() {
+        let token = WorkToken::new();
+        let other = WorkToken::new();
+        assert!(token.same_as(&token.clone()));
+        assert!(!token.same_as(&other));
+        token.clone().cancel();
+        assert!(token.is_cancelled());
+        assert!(!other.is_cancelled());
+    }
+
+    /// A scoped cancel never counts as a global one, so dictation work
+    /// submitted before or after it is unaffected. No worker is started.
+    #[test]
+    fn cancel_work_sets_the_token_and_leaves_the_epoch_alone() {
+        let engine = EngineSupervisor::new(false);
+        let token = WorkToken::new();
+        let epoch = engine.shared.epoch();
+        engine.cancel_work(&token);
+        assert!(token.is_cancelled());
+        assert_eq!(engine.shared.epoch(), epoch);
+        assert!(!engine.shared.cancelled_since(epoch));
+    }
+
+    /// `cancel_work` kills the in-flight call only when it carries the same
+    /// token: never an unscoped (dictation) call, nor another job's.
+    #[cfg(unix)]
+    #[test]
+    fn cancel_work_kills_only_a_call_with_its_token() {
+        // A stand-in for a worker process.
+        let child = ProcessCommand::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("spawn sleep");
+        let control = Arc::new(Control {
+            pid: child.id(),
+            child: Mutex::new(child),
+            stdin: Mutex::new(None),
+        });
+        let engine = EngineSupervisor::new(false);
+        let ours = WorkToken::new();
+        let publish = |token: Option<WorkToken>| {
+            *lock(&engine.shared.in_flight) = Some(InFlight {
+                what: "transcription",
+                control: Arc::clone(&control),
+                token,
+            });
+        };
+
+        publish(None);
+        engine.cancel_work(&ours);
+        assert!(lock(&engine.shared.in_flight).is_some());
+
+        publish(Some(WorkToken::new()));
+        engine.cancel_work(&ours);
+        assert!(lock(&engine.shared.in_flight).is_some());
+        assert!(lock(&control.child).try_wait().unwrap().is_none());
+
+        publish(Some(ours.clone()));
+        engine.cancel_work(&ours);
+        assert!(lock(&engine.shared.in_flight).is_none());
+        let status = lock(&control.child).wait().unwrap();
+        assert!(!status.success(), "the stand-in worker was killed");
+        assert_eq!(engine.shared.epoch(), 0);
+    }
+
+    /// `interrupt_scoped_work` stops only a scoped call, and leaves its
+    /// token and the cancel epoch alone, so the caller can tell it from a
+    /// cancel and submit again.
+    #[cfg(unix)]
+    #[test]
+    fn interrupt_scoped_work_stops_only_a_scoped_call() {
+        let stand_in = || {
+            let child = ProcessCommand::new("sleep")
+                .arg("30")
+                .spawn()
+                .expect("spawn sleep");
+            Arc::new(Control {
+                pid: child.id(),
+                child: Mutex::new(child),
+                stdin: Mutex::new(None),
+            })
+        };
+        let engine = EngineSupervisor::new(false);
+        let publish = |control: &Arc<Control>, token: Option<WorkToken>| {
+            *lock(&engine.shared.in_flight) = Some(InFlight {
+                what: "transcription",
+                control: Arc::clone(control),
+                token,
+            });
+        };
+
+        assert!(!engine.interrupt_scoped_work(), "nothing in flight");
+
+        let dictation = stand_in();
+        publish(&dictation, None);
+        assert!(!engine.interrupt_scoped_work());
+        assert!(lock(&engine.shared.in_flight).is_some());
+        assert!(lock(&dictation.child).try_wait().unwrap().is_none());
+        dictation.kill();
+        let _ = lock(&dictation.child).wait();
+
+        let chunk = stand_in();
+        let token = WorkToken::new();
+        publish(&chunk, Some(token.clone()));
+        assert!(engine.interrupt_scoped_work());
+        assert!(lock(&engine.shared.in_flight).is_none());
+        let status = lock(&chunk.child).wait().unwrap();
+        assert!(!status.success(), "the stand-in worker was killed");
+        assert!(!token.is_cancelled());
+        assert_eq!(engine.shared.epoch(), 0);
+    }
+
+    #[test]
+    fn a_cpu_spec_never_checks_gpu_memory() {
+        let spec = LoadSpec {
+            path: PathBuf::from("model.gguf"),
+            backend: Backend::Auto,
+            device: DeviceSelector::Key("gpu".to_string()),
+            min_gpu_free_bytes: Some(1 << 30),
+        };
+        let cpu = spec.cpu();
+        assert_eq!(cpu.backend, Backend::Cpu);
+        assert_eq!(cpu.device, DeviceSelector::Auto);
+        assert_eq!(cpu.min_gpu_free_bytes, None);
+        assert_eq!(cpu.path, spec.path);
+    }
+
+    fn device(key: &str, device_type: DeviceType, memory_free: u64) -> DeviceInfo {
+        DeviceInfo {
+            name: key.to_string(),
+            description: String::new(),
+            kind: "vulkan".to_string(),
+            device_type,
+            device_id: None,
+            memory_total: memory_free * 2,
+            memory_free,
+            index: Some(0),
+            key: key.to_string(),
+        }
+    }
+
+    #[test]
+    fn gpu_fits_judges_the_gpu_the_model_would_load_on() {
+        const GIB: u64 = 1 << 30;
+        let devices = [
+            device("cpu", DeviceType::Cpu, 0),
+            device("igpu", DeviceType::Igpu, 8 * GIB),
+            device("small", DeviceType::Gpu, GIB),
+            device("big", DeviceType::Gpu, 16 * GIB),
+        ];
+        let key = |key: &str| DeviceSelector::Key(key.to_string());
+
+        // A key selects that exact device.
+        assert!(gpu_fits(&devices, &key("big"), 4 * GIB));
+        assert!(!gpu_fits(&devices, &key("small"), 4 * GIB));
+        assert!(gpu_fits(&devices, &key("igpu"), 4 * GIB));
+        // An unknown key (or a non-GPU one) falls back to the automatic rule.
+        assert!(!gpu_fits(&devices, &key("gone"), 4 * GIB));
+        assert!(!gpu_fits(&devices, &key("cpu"), 4 * GIB));
+        // Auto prefers the first discrete GPU over an earlier integrated one.
+        assert!(!gpu_fits(&devices, &DeviceSelector::Auto, 4 * GIB));
+        assert!(gpu_fits(&devices, &DeviceSelector::Auto, GIB));
+        let integrated_only = [devices[0].clone(), devices[1].clone()];
+        assert!(gpu_fits(&integrated_only, &DeviceSelector::Auto, 4 * GIB));
+        assert!(!gpu_fits(&integrated_only, &DeviceSelector::Auto, 9 * GIB));
+        // Free memory not reported: nothing to judge.
+        let unreported = [device("gpu", DeviceType::Gpu, 0)];
+        assert!(gpu_fits(&unreported, &DeviceSelector::Auto, u64::MAX));
+        // No GPU at all.
+        assert!(gpu_fits(&devices[..1], &DeviceSelector::Auto, u64::MAX));
+        assert!(gpu_fits(&[], &key("big"), u64::MAX));
+        // An explicit index is never second-guessed.
+        assert!(gpu_fits(&devices, &DeviceSelector::Index(3), u64::MAX));
+    }
 }
 
 /// End-to-end checks against a real worker and model. Crash and hang tests
@@ -1484,6 +1853,7 @@ mod unit_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use transcribe_cpp::TimestampKind;
 
     fn env_path(name: &str) -> PathBuf {
         PathBuf::from(std::env::var_os(name).unwrap_or_else(|| panic!("set {name}")))
@@ -1498,6 +1868,7 @@ mod tests {
             path: env_path("HANDY_TEST_MODEL"),
             backend: Backend::Auto,
             device: DeviceSelector::Auto,
+            min_gpu_free_bytes: None,
         }
     }
 
@@ -1832,7 +2203,7 @@ mod tests {
     #[ignore]
     fn cpu_only_worker_lists_no_gpu() {
         set_fault(None, false);
-        let mut worker = Worker::spawn(true).unwrap();
+        let mut worker = Worker::spawn(true, false).unwrap();
         let Ok(Response::Hello {
             devices: Some(devices),
         }) = worker.call(&Request::Hello { list_devices: true }, None, HELLO_TIMEOUT)
@@ -1926,13 +2297,268 @@ mod tests {
         set_fault(None, false);
     }
 
+    /// A scoped cancel stops its own run at once, leaves the global epoch
+    /// alone, and the next (unscoped) run works in a fresh worker.
+    #[test]
+    #[ignore]
+    fn cancel_work_stops_a_scoped_run() {
+        let pcm = long_pcm(60);
+        set_fault(None, false);
+        let engine = EngineSupervisor::new(true);
+        engine.load(spec()).unwrap();
+        let token = WorkToken::new();
+        let run = {
+            let engine = engine.clone();
+            let token = token.clone();
+            thread::spawn(move || engine.transcribe_scoped(pcm, RunOptions::default(), &token))
+        };
+        wait_in_flight(&engine, "transcription");
+        let epoch = engine.shared.epoch();
+        let t = Instant::now();
+        engine.cancel_work(&token);
+        let result = run.join().unwrap();
+        println!("scoped run cancelled {:?} after cancel_work()", t.elapsed());
+        assert!(matches!(result, Err(EngineError::Cancelled)));
+        assert!(t.elapsed() < Duration::from_secs(2));
+        assert_eq!(engine.shared.epoch(), epoch);
+        assert!(engine.loaded().is_some());
+        assert!(!engine.shared.gpu_unavailable());
+        // Work queued with a cancelled token never starts.
+        assert!(matches!(
+            engine.transcribe_scoped(test_pcm(), RunOptions::default(), &token),
+            Err(EngineError::Cancelled)
+        ));
+        engine
+            .transcribe(test_pcm(), RunOptions::default())
+            .unwrap();
+    }
+
+    /// A scoped cancel leaves an unscoped (dictation) run alone.
+    #[test]
+    #[ignore]
+    fn cancel_work_leaves_an_unscoped_run_alone() {
+        set_fault(None, false);
+        let engine = EngineSupervisor::new(true);
+        engine.load(spec()).unwrap();
+        let run = {
+            let engine = engine.clone();
+            thread::spawn(move || engine.transcribe(long_pcm(30), RunOptions::default()))
+        };
+        wait_in_flight(&engine, "transcription");
+        engine.cancel_work(&WorkToken::new());
+        run.join().unwrap().unwrap();
+    }
+
+    /// File runs ask for segment timestamps (where the model has any) and
+    /// get timed rows inside the audio.
+    #[test]
+    #[ignore]
+    fn scoped_run_returns_segment_timestamps() {
+        set_fault(None, false);
+        let engine = EngineSupervisor::new(true);
+        let info = engine.load(spec()).unwrap();
+        let max = info.capabilities.max_timestamp_kind;
+        if matches!(max, TimestampKind::None | TimestampKind::Auto) {
+            println!("model has no timestamps ({max:?}); nothing to check");
+            return;
+        }
+        let pcm = test_pcm();
+        let audio_ms = (pcm.len() / 16) as i64;
+        let run = RunOptions {
+            timestamps: TimestampKind::Segment,
+            ..RunOptions::default()
+        };
+        let transcript = engine
+            .transcribe_scoped(pcm, run, &WorkToken::new())
+            .unwrap();
+        println!(
+            "{:?}: {:?}",
+            transcript.timestamp_kind,
+            transcript
+                .segments
+                .iter()
+                .map(|s| (s.t0_ms, s.t1_ms, s.text.as_str()))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(transcript.timestamp_kind, TimestampKind::Segment);
+        assert!(transcript
+            .segments
+            .iter()
+            .all(|s| 0 <= s.t0_ms && s.t0_ms <= s.t1_ms && s.t1_ms <= audio_ms + 1_000));
+    }
+
+    /// A global cancel (Escape) also stops a scoped run; its token stays
+    /// unset, so the file job can tell it apart and retry the chunk.
+    #[test]
+    #[ignore]
+    fn global_cancel_stops_a_scoped_run() {
+        let pcm = long_pcm(60);
+        set_fault(None, false);
+        let engine = EngineSupervisor::new(true);
+        engine.load(spec()).unwrap();
+        let token = WorkToken::new();
+        let run = {
+            let engine = engine.clone();
+            let token = token.clone();
+            thread::spawn(move || engine.transcribe_scoped(pcm, RunOptions::default(), &token))
+        };
+        wait_in_flight(&engine, "transcription");
+        engine.cancel();
+        assert!(matches!(run.join().unwrap(), Err(EngineError::Cancelled)));
+        assert!(!token.is_cancelled());
+        engine
+            .transcribe_scoped(test_pcm(), RunOptions::default(), &token)
+            .unwrap();
+    }
+
+    /// The recordings engine beside dictation's: two supervisors, one at low
+    /// priority, each hold a model and transcribe at the same time.
+    #[test]
+    #[ignore]
+    fn two_supervisors_transcribe_side_by_side() {
+        set_fault(None, false);
+        let dictation = EngineSupervisor::new(true);
+        let recordings = EngineSupervisor::new_with(true, WorkerOptions { low_priority: true });
+        dictation.load(spec()).unwrap();
+        recordings.load(spec()).unwrap();
+        assert_eq!(worker_count(), 2);
+        let file = {
+            let recordings = recordings.clone();
+            thread::spawn(move || {
+                recordings.transcribe_scoped(long_pcm(30), RunOptions::default(), &WorkToken::new())
+            })
+        };
+        let t = Instant::now();
+        let spoken = dictation
+            .transcribe(test_pcm(), RunOptions::default())
+            .unwrap();
+        println!(
+            "dictation beside a file run took {:?}: {}",
+            t.elapsed(),
+            spoken.text
+        );
+        file.join().unwrap().unwrap();
+        recordings.unload().wait();
+        assert_eq!(worker_count(), 1);
+        assert!(dictation.loaded().is_some());
+    }
+
+    /// An interrupt stops a scoped run like a cancel, but leaves its token
+    /// and the epoch alone, and isn't held against the GPU: the next run
+    /// starts a fresh worker on the same device.
+    #[test]
+    #[ignore]
+    fn interrupt_scoped_work_stops_a_run_that_can_be_redone() {
+        set_fault(None, false);
+        let engine = EngineSupervisor::new_with(true, WorkerOptions { low_priority: true });
+        let on_gpu = engine.load(spec()).unwrap().on_gpu;
+        let token = WorkToken::new();
+        let run = {
+            let engine = engine.clone();
+            let token = token.clone();
+            thread::spawn(move || {
+                engine.transcribe_scoped(long_pcm(60), RunOptions::default(), &token)
+            })
+        };
+        wait_in_flight(&engine, "transcription");
+        let epoch = engine.shared.epoch();
+        let t = Instant::now();
+        assert!(engine.interrupt_scoped_work());
+        let result = run.join().unwrap();
+        println!("scoped run interrupted {:?} after the call", t.elapsed());
+        assert!(matches!(result, Err(EngineError::Cancelled)));
+        assert!(t.elapsed() < Duration::from_secs(2));
+        assert!(!token.is_cancelled());
+        assert_eq!(engine.shared.epoch(), epoch);
+        assert!(!engine.shared.gpu_unavailable());
+        let t = Instant::now();
+        engine
+            .transcribe_scoped(test_pcm(), RunOptions::default(), &token)
+            .unwrap();
+        println!("redone after a respawn in {:?}", t.elapsed());
+        assert_eq!(engine.loaded().unwrap().on_gpu, on_gpu);
+        // Nothing scoped in flight now.
+        assert!(!engine.interrupt_scoped_work());
+    }
+
+    /// A GPU crash in one supervisor's worker marks only that supervisor's
+    /// GPU unavailable: the other keeps its model on the GPU.
+    #[test]
+    #[ignore]
+    fn a_gpu_crash_in_one_supervisor_leaves_the_other_on_the_gpu() {
+        set_fault(None, false);
+        let dictation = EngineSupervisor::new(true);
+        if !dictation.load(spec()).unwrap().on_gpu {
+            println!("the model did not load on a GPU; nothing to check");
+            return;
+        }
+        // Faults are read at spawn, so only the second supervisor's worker
+        // has it.
+        set_fault(Some("abort@run"), true);
+        let recordings = EngineSupervisor::new_with(true, WorkerOptions { low_priority: true });
+        assert!(recordings.load(spec()).unwrap().on_gpu);
+        recordings
+            .transcribe(test_pcm(), RunOptions::default())
+            .unwrap();
+        assert!(recordings.shared.gpu_unavailable());
+        assert!(!recordings.loaded().unwrap().on_gpu);
+        set_fault(None, false);
+        assert!(!dictation.shared.gpu_unavailable());
+        dictation
+            .transcribe(test_pcm(), RunOptions::default())
+            .unwrap();
+        assert!(dictation.loaded().unwrap().on_gpu);
+    }
+
+    /// A GPU that reports too little free memory gets the model loaded on
+    /// the CPU instead, marked as such, also after a respawn.
+    #[test]
+    #[ignore]
+    fn too_little_gpu_memory_loads_on_the_cpu() {
+        set_fault(None, false);
+        let engine = EngineSupervisor::new(true);
+        let devices = engine.devices().expect("devices not listed");
+        if gpu_fits(&devices, &DeviceSelector::Auto, u64::MAX) {
+            println!("no GPU reports its free memory; nothing to check");
+            return;
+        }
+        let info = engine
+            .load(LoadSpec {
+                min_gpu_free_bytes: Some(u64::MAX),
+                ..spec()
+            })
+            .unwrap();
+        assert!(!info.on_gpu, "loaded on '{}'", info.backend);
+        assert!(info.gpu_memory_fallback);
+        assert!(!engine.shared.gpu_unavailable());
+        let token = WorkToken::new();
+        let run = {
+            let engine = engine.clone();
+            let token = token.clone();
+            thread::spawn(move || {
+                engine.transcribe_scoped(long_pcm(30), RunOptions::default(), &token)
+            })
+        };
+        wait_in_flight(&engine, "transcription");
+        assert!(engine.interrupt_scoped_work());
+        assert!(matches!(run.join().unwrap(), Err(EngineError::Cancelled)));
+        engine
+            .transcribe_scoped(test_pcm(), RunOptions::default(), &token)
+            .unwrap();
+        let info = engine.loaded().unwrap();
+        assert!(!info.on_gpu);
+        assert!(info.gpu_memory_fallback);
+        // Without the requirement it goes to the GPU.
+        assert!(engine.load(spec()).unwrap().on_gpu);
+    }
+
     /// A worker hung in native code still exits when its parent goes away
     /// (stdin closes), without being killed.
     #[test]
     #[ignore]
     fn hung_worker_exits_when_stdin_closes() {
         set_fault(Some("hang@run"), false);
-        let mut worker = Worker::spawn(false).unwrap();
+        let mut worker = Worker::spawn(false, false).unwrap();
         worker
             .call(
                 &Request::Hello {

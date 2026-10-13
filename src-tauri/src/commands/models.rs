@@ -85,9 +85,28 @@ pub async fn delete_model(
         write_settings(&app_handle, settings);
     }
 
-    model_manager
-        .delete_model(&model_id)
-        .map_err(|e| e.to_string())
+    // The recordings engine may hold it too, even mid-job. No recordings
+    // load can start until the file is gone, so none reopens it in between
+    // (Windows can't delete a file a worker has open). Recordings then use
+    // the dictation model, and a job still on it stops: its model is gone.
+    let tm = Arc::clone(&transcription_manager);
+    let mm = Arc::clone(&model_manager);
+    let app = app_handle.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _no_loads = tm.hold_recordings_loads();
+        if let Some(unloading) = tm.unload_recordings_model_if(&model_id) {
+            unloading.wait();
+        }
+        let mut settings = get_settings(&app);
+        if settings.file_transcription_model.trim() == model_id {
+            settings.file_transcription_model = String::new();
+            write_settings(&app, settings);
+        }
+        mm.delete_model(&model_id)
+    })
+    .await
+    .map_err(|e| format!("Failed to delete model: {}", e))?
+    .map_err(|e| e.to_string())
 }
 
 /// Shared logic for switching the active model, used by both the Tauri command

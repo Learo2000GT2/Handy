@@ -26,6 +26,11 @@ import "./i18n";
 import { useModelStore } from "./stores/modelStore";
 useModelStore.getState().initialize();
 
+// Initialize the file transcription store here rather than in its page, so
+// running jobs keep their state while the page is not shown
+import { useFileTranscriptionStore } from "./stores/fileTranscriptionStore";
+useFileTranscriptionStore.getState().initialize();
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />

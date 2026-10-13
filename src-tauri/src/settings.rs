@@ -337,9 +337,11 @@ pub enum VadBackend {
     Earshot,
 }
 
+// `pub` because `AppSettings` is reachable from the public `file_transcription`
+// module; the map itself stays private to the crate.
 #[derive(Clone, Serialize, Deserialize, Type)]
 #[serde(transparent)]
-pub(crate) struct SecretMap(HashMap<String, String>);
+pub struct SecretMap(HashMap<String, String>);
 
 impl fmt::Debug for SecretMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -362,6 +364,63 @@ impl std::ops::Deref for SecretMap {
 impl std::ops::DerefMut for SecretMap {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+/// Which engine transcribes files. Dictation always uses Handy's selected model.
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default, clap::ValueEnum,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum FileTranscriptionEngine {
+    /// Handy's model for recordings (the dictation model unless one is
+    /// chosen on the Transcribe page).
+    #[default]
+    Handy,
+    /// A local Lemonade Server over HTTP.
+    Lemonade,
+}
+
+pub const DEFAULT_LEMONADE_URL: &str = "http://localhost:13305";
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Type)]
+#[serde(default)]
+pub struct LemonadeSettings {
+    /// As typed by the user; normalized at use (trailing "/", "/v1", "/api/v1" removed).
+    pub base_url: String,
+    /// Lemonade model id, e.g. "Whisper-Base"; "" = none chosen.
+    pub model: String,
+    /// "" = send no Authorization header.
+    pub api_key: String,
+}
+
+impl Default for LemonadeSettings {
+    fn default() -> Self {
+        Self {
+            base_url: DEFAULT_LEMONADE_URL.to_string(),
+            model: String::new(),
+            api_key: String::new(),
+        }
+    }
+}
+
+impl fmt::Debug for LemonadeSettings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LemonadeSettings")
+            .field(
+                "base_url",
+                &crate::file_transcription::lemonade::redact_url(&self.base_url),
+            )
+            .field("model", &self.model)
+            .field(
+                "api_key",
+                &if self.api_key.is_empty() {
+                    ""
+                } else {
+                    "[REDACTED]"
+                },
+            )
+            .finish()
     }
 }
 
@@ -535,6 +594,15 @@ pub struct AppSettings {
     /// `overlay_position` (position `none` → style `None`).
     #[serde(default = "default_overlay_style")]
     pub overlay_style: OverlayStyle,
+    /// Engine for file transcription (Transcribe page); dictation is unaffected.
+    #[serde(default)]
+    pub file_transcription_engine: FileTranscriptionEngine,
+    /// Handy model for file transcription (Transcribe page; default of the CLI's --model).
+    /// "" = the dictation model (`selected_model`), today's behaviour. transcribe-cpp models only.
+    #[serde(default)]
+    pub file_transcription_model: String,
+    #[serde(default)]
+    pub lemonade: LemonadeSettings,
 }
 
 fn default_model() -> String {
@@ -1017,6 +1085,9 @@ pub fn get_default_settings() -> AppSettings {
         vad_enabled: default_vad_enabled(),
         vad_backend: VadBackend::default(),
         overlay_style: default_overlay_style(),
+        file_transcription_engine: FileTranscriptionEngine::Handy,
+        file_transcription_model: String::new(),
+        lemonade: LemonadeSettings::default(),
     }
 }
 
@@ -1046,6 +1117,15 @@ impl AppSettings {
         self.post_process_providers
             .iter_mut()
             .find(|provider| provider.id == provider_id)
+    }
+
+    /// The Handy model files are transcribed with: the Transcribe page's model
+    /// for recordings when one is chosen, else the dictation model.
+    pub fn recordings_model(&self) -> &str {
+        match self.file_transcription_model.trim() {
+            "" => &self.selected_model,
+            chosen => chosen,
+        }
     }
 }
 
@@ -1496,6 +1576,10 @@ mod tests {
             serde_json::json!("parakeet-tdt-0.6b-v3"),
         );
         map.insert("onboarding_completed".into(), serde_json::json!(true));
+        map.insert(
+            "file_transcription_model".into(),
+            serde_json::json!("cohere-transcribe"),
+        );
         // An enum variant this build doesn't know, e.g. written by a newer
         // version before a downgrade.
         map.insert("sound_theme".into(), serde_json::json!("theremin"));
@@ -1510,6 +1594,35 @@ mod tests {
         assert!(salvaged.onboarding_completed);
         assert_eq!(salvaged.bindings["transcribe"].current_binding, "f13");
         assert_eq!(salvaged.sound_theme, default_sound_theme());
+        assert_eq!(salvaged.file_transcription_model, "cohere-transcribe");
+    }
+
+    #[test]
+    fn recordings_model_defaults_to_the_dictation_model() {
+        let defaults = get_default_settings();
+        assert_eq!(defaults.file_transcription_model, "");
+
+        // A store written before the setting existed reads as "Same as dictation".
+        let mut stored = default_settings_json();
+        stored
+            .as_object_mut()
+            .unwrap()
+            .remove("file_transcription_model");
+        let settings: AppSettings = serde_json::from_value(stored).unwrap();
+        assert_eq!(settings.file_transcription_model, "");
+
+        let mut settings = AppSettings {
+            selected_model: "small".to_string(),
+            ..defaults
+        };
+        for same in ["", "  "] {
+            settings.file_transcription_model = same.to_string();
+            assert_eq!(settings.recordings_model(), "small", "{same:?}");
+        }
+        settings.file_transcription_model = "x".to_string();
+        assert_eq!(settings.recordings_model(), "x");
+        settings.file_transcription_model = " x ".to_string();
+        assert_eq!(settings.recordings_model(), "x");
     }
 
     #[test]
@@ -1866,6 +1979,29 @@ mod tests {
         assert!(!debug_output.contains("sk-proj-secret-key-12345"));
         assert!(!debug_output.contains("sk-ant-secret-key-67890"));
         assert!(debug_output.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn debug_output_redacts_lemonade_key() {
+        let mut settings = get_default_settings();
+        settings.lemonade.api_key = "lemonade-secret-key-24680".to_string();
+
+        let debug_output = format!("{:?}", settings);
+
+        assert!(!debug_output.contains("lemonade-secret-key-24680"));
+        assert!(debug_output.contains("[REDACTED]"));
+
+        settings.lemonade.api_key.clear();
+        let debug_output = format!("{:?}", settings.lemonade);
+        assert!(!debug_output.contains("[REDACTED]"));
+        assert!(debug_output.contains(DEFAULT_LEMONADE_URL));
+
+        // A password in the address is never printed either.
+        settings.lemonade.base_url = "http://alice:s3cretpw@lemon.lan:13305".to_string();
+        let debug_output = format!("{:?}", settings);
+        assert!(!debug_output.contains("s3cretpw"), "{debug_output}");
+        assert!(!debug_output.contains("alice"), "{debug_output}");
+        assert!(debug_output.contains("http://lemon.lan:13305"));
     }
 
     #[test]
