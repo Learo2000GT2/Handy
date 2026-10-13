@@ -397,6 +397,15 @@ impl ShortcutAction for TranscribeAction {
         let start_time = Instant::now();
         debug!("TranscribeAction::start called for binding: {}", binding_id);
 
+        // A meeting owns the microphone and the engine while it records, and
+        // dictation chimes would end up in its audio. Returning before
+        // anything starts lets the coordinator roll back cleanly.
+        if crate::meeting::is_active() {
+            warn!("Not starting dictation: a meeting is being recorded");
+            let _ = app.emit("dictation-blocked", ());
+            return;
+        }
+
         // Load model in the background
         let tm = app.state::<Arc<TranscriptionManager>>();
         let rm = app.state::<Arc<AudioRecordingManager>>();

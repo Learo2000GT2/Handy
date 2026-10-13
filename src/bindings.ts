@@ -870,6 +870,101 @@ async stopPronunciationSample() : Promise<Result<string, string>> {
 async cancelPronunciationSample() : Promise<void> {
     await TAURI_INVOKE("cancel_pronunciation_sample");
 },
+async getMeetingState() : Promise<MeetingState> {
+    return await TAURI_INVOKE("get_meeting_state");
+},
+/**
+ * Records 10 seconds from the meeting microphone and reports how it
+ * sounds and what Handy heard.
+ */
+async checkMeetingMicrophone() : Promise<Result<MicCheckResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("check_meeting_microphone") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelMeetingMicrophoneCheck() : Promise<void> {
+    await TAURI_INVOKE("cancel_meeting_microphone_check");
+},
+async startMeeting(options: StartMeetingOptions) : Promise<Result<MeetingStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("start_meeting", { options }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async pauseMeeting(paused: boolean) : Promise<Result<MeetingStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("pause_meeting", { paused }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async addMeetingNote(label: string | null) : Promise<Result<MeetingMarker, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_meeting_note", { label }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Stops the meeting and sends the recording to the transcription queue.
+ */
+async stopMeeting() : Promise<Result<MeetingSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("stop_meeting") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Stops the meeting, saves the recording without transcribing it (the
+ * next start offers that), and quits.
+ */
+async stopMeetingAndQuit() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("stop_meeting_and_quit") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async listMeetings() : Promise<Result<MeetingSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_meetings") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Sends a past meeting's recording to the transcription queue.
+ */
+async transcribeMeeting(id: string) : Promise<Result<MeetingSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("transcribe_meeting", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Opens a meeting's folder, or the meetings folder for None.
+ */
+async openMeetingFolder(id: string | null) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("open_meeting_folder", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getModelLoadStatus() : Promise<Result<ModelLoadStatus, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_model_load_status") };
@@ -1193,6 +1288,7 @@ async isLaptop() : Promise<Result<boolean, string>> {
 export const events = __makeEvents__<{
 fileTranscriptionEvent: FileTranscriptionEvent,
 historyUpdatePayload: HistoryUpdatePayload,
+meetingEvent: MeetingEvent,
 recordingsEngineEvent: RecordingsEngineEvent,
 speakerModelEvent: SpeakerModelEvent,
 streamPhaseEvent: StreamPhaseEvent,
@@ -1200,6 +1296,7 @@ streamTextEvent: StreamTextEvent
 }>({
 fileTranscriptionEvent: "file-transcription-event",
 historyUpdatePayload: "history-update-payload",
+meetingEvent: "meeting-event",
 recordingsEngineEvent: "recordings-engine-event",
 speakerModelEvent: "speaker-model-event",
 streamPhaseEvent: "stream-phase-event",
@@ -1521,7 +1618,201 @@ model: string;
  * "" = send no Authorization header.
  */
 api_key: string }
+export type LiveStatus = 
+/**
+ * Turned off for this meeting, or no model is selected.
+ */
+{ kind: "off" } | 
+/**
+ * Loading the model.
+ */
+{ kind: "starting" } | 
+/**
+ * Transcribing as the meeting goes.
+ */
+{ kind: "listening" } | 
+/**
+ * The preview cannot run; the recording is unaffected.
+ */
+{ kind: "unavailable"; message: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
+export type MarkerKind = 
+/**
+ * Added by the user.
+ */
+"note" | "paused" | "resumed" | 
+/**
+ * The microphone stopped sending audio.
+ */
+"mic_lost" | 
+/**
+ * The microphone is back after `MicLost`.
+ */
+"mic_back" | 
+/**
+ * The computer slept or stalled; `label` holds nothing, the gap length
+ * is `wall_ms` minus the previous marker's.
+ */
+"gap" | 
+/**
+ * The disk filled up; nothing after this marker was saved.
+ */
+"disk_full" | 
+/**
+ * Writing the audio failed for another reason.
+ */
+"write_failed"
+export type MeetingEvent = 
+/**
+ * The running meeting's state, about four times a second, or None when
+ * no meeting runs.
+ */
+{ kind: "status"; status: MeetingStatus | null } | 
+/**
+ * New live transcript segments of the running meeting.
+ */
+{ kind: "segments"; meeting_id: string; segments: TranscriptSegment[] } | 
+/**
+ * Microphone check level, about four times a second.
+ */
+{ kind: "check_level"; rms_db: number; peak_db: number; elapsed_ms: number } | 
+/**
+ * A meeting finished recording.
+ */
+{ kind: "stopped"; meeting: MeetingSummary } | 
+/**
+ * Quitting was held back because a meeting is recording.
+ */
+{ kind: "quit_requested" }
+export type MeetingFileState = 
+/**
+ * Being recorded, or interrupted if no meeting is running.
+ */
+"recording" | 
+/**
+ * Recording finished; not yet sent for transcription.
+ */
+"stopped" | 
+/**
+ * Sent to the transcription queue.
+ */
+"queued"
+export type MeetingManifest = { version: number; 
+/**
+ * Folder name, also the meeting's id.
+ */
+id: string; title: string; 
+/**
+ * Audio file name inside the meeting folder.
+ */
+audio_file: string; 
+/**
+ * Unix ms.
+ */
+started_at: number; ended_at?: number | null; state: MeetingFileState; 
+/**
+ * Microphone name; None for the system default.
+ */
+microphone?: string | null; 
+/**
+ * When the user confirmed everyone agreed to be recorded (Unix ms).
+ */
+consent_confirmed_at: number; label_speakers?: boolean; 
+/**
+ * Saved audio, ms. Updated at stop and on recovery.
+ */
+duration_ms?: number; markers?: MeetingMarker[]; 
+/**
+ * The recording ended by a crash, power loss or forced quit.
+ */
+interrupted?: boolean; 
+/**
+ * Process that recorded it.
+ */
+pid?: number }
+export type MeetingMarker = { 
+/**
+ * Position in the recording, in ms of saved audio.
+ */
+at_ms: number; 
+/**
+ * Wall-clock time, Unix ms.
+ */
+wall_ms: number; kind: MarkerKind; label?: string | null }
+export type MeetingState = { 
+/**
+ * The running meeting, if any.
+ */
+status: MeetingStatus | null; 
+/**
+ * Its live transcript so far.
+ */
+segments: TranscriptSegment[]; 
+/**
+ * Meetings closed by recovery at this start, shown once.
+ */
+recovered: string[] }
+export type MeetingStatus = { id: string; title: string; folder: string; audio_path: string; 
+/**
+ * Unix ms.
+ */
+started_at: number; microphone: string | null; phase: RecordingPhase; signal: SignalState; 
+/**
+ * Audio saved so far, ms.
+ */
+recorded_ms: number; rms_db: number; peak_db: number; markers: MeetingMarker[]; live: LiveStatus; 
+/**
+ * Audio the live preview skipped because it fell behind, ms.
+ */
+live_skipped_ms: number; 
+/**
+ * Audio lost before it reached the file, ms (should stay 0).
+ */
+dropped_ms: number; 
+/**
+ * Free space on the meetings disk, if known.
+ */
+free_bytes: number | null; low_disk: boolean; write_error: string | null }
+/**
+ * A meeting folder, for the list of past meetings.
+ */
+export type MeetingSummary = { manifest: MeetingManifest; folder: string; audio_path: string; audio_exists: boolean; 
+/**
+ * History entry with its transcript, once transcribed.
+ */
+history_id: number | null }
+export type MicCheckResult = { stats: MicCheckStats; 
+/**
+ * What Handy transcribed from the check ("" if nothing, None if the
+ * model could not run).
+ */
+heard: string | null; microphone: string | null }
+export type MicCheckStats = { verdict: MicCheckVerdict; peak_db: number; 
+/**
+ * Seconds of speech heard.
+ */
+speech_seconds: number }
+export type MicCheckVerdict = 
+/**
+ * Speech heard at a usable level.
+ */
+"good" | 
+/**
+ * Only exact silence: muted, or microphone access is blocked.
+ */
+"no_signal" | 
+/**
+ * Sound, but almost no speech.
+ */
+"no_speech" | 
+/**
+ * Speech, but very quiet.
+ */
+"too_quiet" | 
+/**
+ * Speech loud enough to distort.
+ */
+"too_loud"
 export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; is_directory: boolean; engine_type: EngineType; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }
 /**
@@ -1562,6 +1853,16 @@ export type PaginatedHistory = { entries: HistoryEntry[]; has_more: boolean }
 export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_shift_v" | "external_script"
 export type PermissionAccess = "allowed" | "denied" | "unknown"
 export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean }
+export type RecordingPhase = "recording" | "paused" | 
+/**
+ * Saving the audio after Stop.
+ */
+"stopping" | 
+/**
+ * Writing failed (usually a full disk). The audio up to then is saved;
+ * press Stop to finish.
+ */
+"failed"
 export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"
 /**
  * The recordings engine's state, for the Transcribe page. Emitted when it
@@ -1634,6 +1935,22 @@ export type ShortcutActivation =
  */
 "hold_or_toggle"
 export type ShortcutBinding = { id: string; name: string; description: string; default_binding: string; current_binding: string }
+/**
+ * What the microphone is delivering, worst first.
+ */
+export type SignalState = 
+/**
+ * No audio arrives; reconnecting.
+ */
+"lost" | 
+/**
+ * Exact silence: muted, or microphone access blocked.
+ */
+"no_signal" | 
+/**
+ * Nothing louder than a whisper for a while.
+ */
+"quiet" | "ok"
 export type SoundTheme = "marimba" | "pop" | "custom"
 /**
  * Progress of speaker labelling for one file job.
@@ -1654,6 +1971,11 @@ export type SpeakerSkipReason =
  * The diarizer found no speech, or no transcript text matched a speaker.
  */
 "no_speech"
+export type StartMeetingOptions = { title: string; 
+/**
+ * The user confirmed everyone present agreed to be recorded.
+ */
+consent_confirmed: boolean; label_speakers: boolean; live_transcript: boolean }
 /**
  * Phase of the streaming overlay card, emitted to drive its UI state.
  */

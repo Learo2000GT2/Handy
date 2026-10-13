@@ -27,6 +27,9 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
 import { WhatsNewGate } from "./components/whats-new";
 import { AddWordDialog } from "./components/settings/AddWordDialog";
+import { MeetingQuitDialog } from "./components/settings/meetings/MeetingQuitDialog";
+import { NAVIGATE_EVENT } from "./components/settings/meetings/MeetingChip";
+import { useMeetingStore } from "./stores/meetingStore";
 import { useSettings } from "./hooks/useSettings";
 import { useSettingsStore } from "./stores/settingsStore";
 import { commands } from "@/bindings";
@@ -161,6 +164,44 @@ function App() {
           t("errors.recordingFailed", { error: detail ?? "Unknown error" }),
         );
       }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [t]);
+
+  // Open a section on request: the tray's "Meeting recording" item, the
+  // quit guard, and the footer's meeting indicator.
+  useEffect(() => {
+    const open = (section: string) => {
+      if (section in SECTIONS_CONFIG) {
+        setCurrentSection(section as SidebarSection);
+      }
+    };
+    const unlisten = listen<string>("navigate-to-section", (event) =>
+      open(event.payload),
+    );
+    const onNavigate = (event: Event) =>
+      open((event as CustomEvent<string>).detail);
+    window.addEventListener(NAVIGATE_EVENT, onNavigate);
+    return () => {
+      unlisten.then((fn) => fn());
+      window.removeEventListener(NAVIGATE_EVENT, onNavigate);
+    };
+  }, []);
+
+  // A meeting interrupted by a crash or power loss: show the Meetings page.
+  const hasRecoveredMeetings = useMeetingStore(
+    (state) => state.recovered.length > 0,
+  );
+  useEffect(() => {
+    if (hasRecoveredMeetings) setCurrentSection("meetings");
+  }, [hasRecoveredMeetings]);
+
+  // Dictation is refused while a meeting records.
+  useEffect(() => {
+    const unlisten = listen("dictation-blocked", () => {
+      toast.info(t("settings.meetings.dictationBlocked"));
     });
     return () => {
       unlisten.then((fn) => fn());
@@ -379,6 +420,7 @@ function App() {
         {/* Fixed footer at bottom */}
         <Footer />
         <AddWordDialog />
+        <MeetingQuitDialog />
       </div>
     );
   }

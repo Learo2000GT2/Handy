@@ -71,6 +71,39 @@ fn resampler_frame_size_follows_the_vad_backend() {
 }
 
 #[test]
+fn without_retained_samples_frames_reach_only_the_callback() {
+    let delivered = Arc::new(Mutex::new(0usize));
+    let observed = Arc::clone(&delivered);
+    let mut processor = CaptureProcessor::new(
+        16_000,
+        None,
+        None,
+        Some(Arc::new(move |frame: &[f32]| {
+            *observed.lock().unwrap() += frame.len()
+        })),
+        Instant::now(),
+    );
+    processor.retain_samples = false;
+
+    let (ready_tx, _ready_rx) = mpsc::channel();
+    processor.begin_recording(VadPolicy::Disabled, ready_tx);
+    for _ in 0..10 {
+        processor.process_raw_chunk(&[0.1; 1600], ChunkDisposition::Capture);
+        assert!(processor.processed_samples.is_empty());
+    }
+    let samples = processor.finish_recording();
+
+    assert!(samples.is_empty());
+    // Every captured sample reached the callback; the tail is padded to a
+    // whole 30 ms frame.
+    let delivered = *delivered.lock().unwrap();
+    assert!(
+        delivered >= 16_000 && delivered.is_multiple_of(480),
+        "{delivered}"
+    );
+}
+
+#[test]
 fn idle_chunks_are_discarded_without_reaching_the_recording() {
     let mut processor = CaptureProcessor::new(16_000, None, None, None, Instant::now());
     processor.process_raw_chunk(&[1.0; 480], ChunkDisposition::Discard);

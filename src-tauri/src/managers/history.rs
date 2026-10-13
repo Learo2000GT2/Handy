@@ -1070,6 +1070,31 @@ impl HistoryManager {
         Self::get_file_source_identity_with_conn(&conn, history_id)
     }
 
+    /// The newest History entry transcribed from `source_path`, if any.
+    pub fn file_entry_for_source(&self, source_path: &str) -> Result<Option<i64>> {
+        let conn = self.get_connection()?;
+        Self::file_entry_for_source_with_conn(&conn, source_path)
+    }
+
+    fn file_entry_for_source_with_conn(
+        conn: &Connection,
+        source_path: &str,
+    ) -> Result<Option<i64>> {
+        let id = conn
+            .query_row(
+                "SELECT f.history_id
+                 FROM file_transcription f
+                 JOIN transcription_history h ON h.id = f.history_id
+                 WHERE f.source_path = ?1
+                 ORDER BY f.history_id DESC
+                 LIMIT 1",
+                params![source_path],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(id)
+    }
+
     fn get_file_source_identity_with_conn(
         conn: &Connection,
         history_id: i64,
@@ -1413,6 +1438,26 @@ mod tests {
         assert_eq!(file.model_name.as_deref(), Some("Parakeet V3"));
         assert_eq!(file.status, TranscriptStatus::Partial);
         assert!(file.source_exists);
+    }
+
+    #[test]
+    fn file_entry_for_source_finds_the_newest_entry() {
+        let mut conn = setup_conn();
+        let transcript = file_transcript("/meetings/a/Meeting.wav");
+        assert_eq!(
+            HistoryManager::file_entry_for_source_with_conn(&conn, "/meetings/a/Meeting.wav")
+                .unwrap(),
+            None
+        );
+        insert_file(&mut conn, &transcript, 1_700_000_100);
+        let newest = insert_file(&mut conn, &transcript, 1_700_000_200);
+        insert_file(&mut conn, &file_transcript("/other.wav"), 1_700_000_300);
+
+        assert_eq!(
+            HistoryManager::file_entry_for_source_with_conn(&conn, "/meetings/a/Meeting.wav")
+                .unwrap(),
+            Some(newest.id)
+        );
     }
 
     fn source_exists(entry: &HistoryEntry) -> bool {

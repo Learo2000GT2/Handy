@@ -16,6 +16,7 @@ mod helpers;
 mod input;
 mod llm_client;
 mod managers;
+mod meeting;
 mod memory;
 mod overlay;
 mod paste_tx;
@@ -227,6 +228,11 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(history_manager.clone());
     app_handle.manage(file_transcription_manager);
     app_handle.manage(speaker_model_manager);
+    let meeting_manager = Arc::new(meeting::MeetingManager::new(app_handle));
+    // Close meetings a crash or power loss left recording, before any new
+    // meeting can start.
+    meeting_manager.recover();
+    app_handle.manage(meeting_manager);
     app_handle.manage(tray::TrayState::new());
 
     // Note: Shortcuts are NOT initialized here.
@@ -326,6 +332,10 @@ fn initialize_core_logic(app_handle: &AppHandle) {
 
                 // Use centralized cancellation that handles all operations
                 cancel_current_operation(app);
+            }
+            "open_meeting" => {
+                show_main_window(app);
+                let _ = app.emit("navigate-to-section", "meetings");
             }
             "quit" => {
                 app.exit(0);
@@ -575,6 +585,17 @@ pub fn run(cli_args: CliArgs) {
             commands::pronunciation::start_pronunciation_sample,
             commands::pronunciation::stop_pronunciation_sample,
             commands::pronunciation::cancel_pronunciation_sample,
+            commands::meetings::get_meeting_state,
+            commands::meetings::check_meeting_microphone,
+            commands::meetings::cancel_meeting_microphone_check,
+            commands::meetings::start_meeting,
+            commands::meetings::pause_meeting,
+            commands::meetings::add_meeting_note,
+            commands::meetings::stop_meeting,
+            commands::meetings::stop_meeting_and_quit,
+            commands::meetings::list_meetings,
+            commands::meetings::transcribe_meeting,
+            commands::meetings::open_meeting_folder,
             commands::transcription::get_model_load_status,
             commands::transcription::unload_model_manually,
             commands::history::get_history_entries,
@@ -615,6 +636,7 @@ pub fn run(cli_args: CliArgs) {
             file_transcription::types::FileTranscriptionEvent,
             file_transcription::types::SpeakerModelEvent,
             managers::recordings_engine::RecordingsEngineEvent,
+            meeting::MeetingEvent,
         ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds
@@ -894,7 +916,11 @@ pub fn run(cli_args: CliArgs) {
             // CLI --start-hidden flag overrides the setting.
             // But if permission onboarding is required, always show the window.
             let should_hide = settings.start_hidden || cli_args.start_hidden;
-            let should_force_show = should_force_show_permissions_window(&app_handle);
+            // A meeting interrupted by a crash or power loss is shown at once.
+            let should_force_show = should_force_show_permissions_window(&app_handle)
+                || app_handle
+                    .state::<Arc<meeting::MeetingManager>>()
+                    .has_recovered();
 
             // If start_hidden but tray is disabled, we must show the window
             // anyway. Without a tray icon, the dock is the only way back in.
@@ -962,6 +988,25 @@ pub fn run(cli_args: CliArgs) {
                 tray::recreate_tray_icon(app);
             }
             show_main_window(app);
+        }
+        // A recording meeting holds quitting back until the user confirms in
+        // the window; a second quit soon after goes through, and Exit below
+        // saves the meeting. Updater restarts cannot be held and are blocked
+        // in the window instead.
+        tauri::RunEvent::ExitRequested { api, code, .. }
+            if *code != Some(tauri::RESTART_EXIT_CODE) && meeting::hold_quit() =>
+        {
+            api.prevent_exit();
+            show_main_window(app);
+            let _ = app.emit("navigate-to-section", "meetings");
+            let _ =
+                tauri_specta::Event::emit_to(&meeting::MeetingEvent::QuitRequested, app, "main");
+        }
+        // Save a meeting still recording (a forced quit or system shutdown).
+        tauri::RunEvent::Exit => {
+            if let Some(meetings) = app.try_state::<Arc<meeting::MeetingManager>>() {
+                meetings.shutdown();
+            }
         }
         // No transcription teardown on exit: transcribe.cpp runs only in the
         // worker process, which exits by itself as soon as this process's end

@@ -24,6 +24,9 @@ const BINDING: &str = "pronunciation_sample";
 #[tauri::command]
 #[specta::specta]
 pub fn start_pronunciation_sample(app: AppHandle) -> Result<(), String> {
+    if crate::meeting::is_active() {
+        return Err("A meeting is being recorded. Training is off until it stops.".to_string());
+    }
     let tm = app.state::<Arc<TranscriptionManager>>();
     // Load the model while the user speaks, as dictation does.
     tm.initiate_model_load();

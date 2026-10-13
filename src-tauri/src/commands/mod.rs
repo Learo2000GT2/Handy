@@ -2,6 +2,7 @@ pub mod audio;
 pub mod file_transcription;
 pub mod history;
 pub mod lemonade;
+pub mod meetings;
 pub mod models;
 pub mod pronunciation;
 pub mod speakers;

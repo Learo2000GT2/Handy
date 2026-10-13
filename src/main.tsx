@@ -31,6 +31,10 @@ useModelStore.getState().initialize();
 import { useFileTranscriptionStore } from "./stores/fileTranscriptionStore";
 useFileTranscriptionStore.getState().initialize();
 
+// Same for meetings: a meeting keeps recording while its page is not shown
+import { useMeetingStore } from "./stores/meetingStore";
+useMeetingStore.getState().initialize();
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />
