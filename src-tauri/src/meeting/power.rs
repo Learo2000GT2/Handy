@@ -6,7 +6,8 @@ use std::path::Path;
 
 /// Keeps the system from sleeping while it lives. On Windows the request
 /// belongs to the creating thread, so create and drop it on the same
-/// long-lived thread.
+/// long-lived thread. It also keeps the screen on: on laptops with Modern
+/// Standby, the screen turning off is what puts the system to sleep.
 pub struct KeepAwake {
     #[cfg(target_os = "macos")]
     child: Option<std::process::Child>,
@@ -17,10 +18,12 @@ impl KeepAwake {
         #[cfg(windows)]
         {
             use windows::Win32::System::Power::{
-                SetThreadExecutionState, ES_CONTINUOUS, ES_SYSTEM_REQUIRED,
+                SetThreadExecutionState, ES_CONTINUOUS, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED,
             };
             // SAFETY: plain Win32 call with constant flags.
-            let previous = unsafe { SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) };
+            let previous = unsafe {
+                SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
+            };
             if previous.0 == 0 {
                 log::warn!("Could not ask Windows to stay awake during the meeting");
             }
@@ -29,7 +32,7 @@ impl KeepAwake {
         #[cfg(target_os = "macos")]
         {
             let child = std::process::Command::new("caffeinate")
-                .args(["-i", "-w", &std::process::id().to_string()])
+                .args(["-i", "-d", "-w", &std::process::id().to_string()])
                 .spawn()
                 .map_err(|error| log::warn!("Could not start caffeinate: {error}"))
                 .ok();

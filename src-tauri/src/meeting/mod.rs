@@ -76,6 +76,10 @@ const LOW_FREE_BYTES: u64 = 200 * 1024 * 1024;
 const MIC_START_TIMEOUT: Duration = Duration::from_secs(5);
 /// Microphone check length.
 pub const MIC_CHECK_MS: u64 = 10_000;
+/// How often a new audio file is tried while saving fails.
+const WRITE_RETRY: Duration = Duration::from_secs(5);
+/// Audio kept in memory while saving fails: five minutes.
+const MAX_BACKLOG_SAMPLES: usize = 5 * 60 * 16_000;
 
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 static QUIT_CONFIRMED: AtomicBool = AtomicBool::new(false);
@@ -233,28 +237,45 @@ fn emit(app: &AppHandle, event: MeetingEvent) {
     }
 }
 
+/// One frame from the microphone, marked with whether the meeting was
+/// paused when it was captured (so Pause and Resume act at the moment they
+/// were pressed even when the writer is behind).
+struct Captured {
+    samples: Vec<f32>,
+    paused: bool,
+}
+
 /// State shared by a meeting's threads.
 struct Shared {
     /// None in tests: nothing is sent to a window.
     app: Option<AppHandle>,
     dir: PathBuf,
     manifest: Mutex<MeetingManifest>,
+    /// Serializes record saves, so a later save never loses to an earlier
+    /// one; held while writing to disk instead of `manifest`.
+    save_lock: Mutex<()>,
+    /// The writer's queue. The audio callback sends through it; Stop takes
+    /// it, which ends the writer even if the microphone will not close.
+    frame_tx: Mutex<Option<SyncSender<Captured>>>,
     stop: AtomicBool,
     paused: AtomicBool,
     /// Frames delivered by the microphone (heartbeat).
     frames_seen: AtomicU64,
+    /// Samples saved, over all audio files.
     written_samples: AtomicU64,
+    /// Samples lost before reaching a file.
     dropped_samples: AtomicU64,
     live_skipped_samples: AtomicU64,
     /// Level as f32 bits.
     rms_db: AtomicU64,
     peak_db: AtomicU64,
     zero_run_samples: AtomicU64,
-    /// Samples seen (written or not) when sound was last heard.
+    /// Samples seen (saved or not), and that count when sound was last heard.
     seen_samples: AtomicU64,
     last_sound_at: AtomicU64,
     mic_lost: AtomicBool,
-    failed: Mutex<Option<String>>,
+    /// Why saving is failing, while it is; the writer keeps retrying.
+    write_error: Mutex<Option<String>>,
     live: Mutex<LiveStatus>,
     segments: Mutex<Vec<TranscriptSegment>>,
     free_bytes: Mutex<Option<u64>>,
@@ -267,6 +288,8 @@ impl Shared {
             app,
             dir,
             manifest: Mutex::new(manifest),
+            save_lock: Mutex::new(()),
+            frame_tx: Mutex::new(None),
             stop: AtomicBool::new(false),
             paused: AtomicBool::new(false),
             frames_seen: AtomicU64::new(0),
@@ -279,11 +302,31 @@ impl Shared {
             seen_samples: AtomicU64::new(0),
             last_sound_at: AtomicU64::new(0),
             mic_lost: AtomicBool::new(false),
-            failed: Mutex::new(None),
+            write_error: Mutex::new(None),
             live: Mutex::new(LiveStatus::Off),
             segments: Mutex::new(Vec::new()),
             free_bytes: Mutex::new(free_bytes),
         }
+    }
+
+    /// Called by the audio callback for every frame. Never waits.
+    fn capture(&self, frame: &[f32]) {
+        self.frames_seen.fetch_add(1, Ordering::SeqCst);
+        let sent = self.frame_tx.lock().unwrap().as_ref().map(|tx| {
+            tx.try_send(Captured {
+                samples: frame.to_vec(),
+                paused: self.paused.load(Ordering::SeqCst),
+            })
+        });
+        if matches!(sent, Some(Err(_))) {
+            self.dropped_samples
+                .fetch_add(frame.len() as u64, Ordering::Relaxed);
+        }
+    }
+
+    /// Closes the writer's queue: the writer saves what is queued and ends.
+    fn close_queue(&self) {
+        self.frame_tx.lock().unwrap().take();
     }
 
     fn recorded_ms(&self) -> u64 {
@@ -320,10 +363,10 @@ impl Shared {
     }
 
     fn phase(&self) -> RecordingPhase {
-        if self.failed.lock().unwrap().is_some() {
-            RecordingPhase::Failed
-        } else if self.stop.load(Ordering::SeqCst) {
+        if self.stop.load(Ordering::SeqCst) {
             RecordingPhase::Stopping
+        } else if self.write_error.lock().unwrap().is_some() {
+            RecordingPhase::Failed
         } else if self.paused.load(Ordering::SeqCst) {
             RecordingPhase::Paused
         } else {
@@ -356,7 +399,7 @@ impl Shared {
             dropped_ms: wav::samples_to_ms(self.dropped_samples.load(Ordering::Relaxed)),
             free_bytes,
             low_disk: free_bytes.is_some_and(|free| free < LOW_FREE_BYTES),
-            write_error: self.failed.lock().unwrap().clone(),
+            write_error: self.write_error.lock().unwrap().clone(),
         }
     }
 
@@ -371,6 +414,20 @@ impl Shared {
         }
     }
 
+    /// Changes the record and saves it, without holding the record's lock
+    /// while writing to disk.
+    fn update_manifest(&self, change: impl FnOnce(&mut MeetingManifest)) {
+        let _saving = self.save_lock.lock().unwrap();
+        let snapshot = {
+            let mut manifest = self.manifest.lock().unwrap();
+            change(&mut manifest);
+            manifest.clone()
+        };
+        if let Err(error) = manifest::save(&self.dir, &snapshot) {
+            log::warn!("Failed to save the meeting record: {}", error);
+        }
+    }
+
     /// Adds a marker at the current end of the saved audio and saves the
     /// record.
     fn add_marker(&self, kind: MarkerKind, label: Option<String>) -> MeetingMarker {
@@ -380,35 +437,356 @@ impl Shared {
             kind,
             label,
         };
-        let mut manifest = self.manifest.lock().unwrap();
-        manifest.markers.push(marker.clone());
-        manifest.duration_ms = marker.at_ms;
-        if let Err(error) = manifest::save(&self.dir, &manifest) {
-            log::warn!("Failed to save the meeting record: {}", error);
-        }
+        self.update_manifest(|manifest| {
+            manifest.markers.push(marker.clone());
+            manifest.duration_ms = marker.at_ms;
+        });
         marker
     }
 
-    fn fail(&self, error: &io::Error) {
-        let mut failed = self.failed.lock().unwrap();
-        if failed.is_some() {
-            return;
+    /// Saving failed: marks it once per failure, until saving works again.
+    fn saving_failed(&self, error: &str, disk_full: bool) {
+        let first = {
+            let mut write_error = self.write_error.lock().unwrap();
+            let first = write_error.is_none();
+            *write_error = Some(error.to_string());
+            first
+        };
+        if first {
+            log::error!("Meeting audio could not be saved: {}", error);
+            self.add_marker(
+                if disk_full {
+                    MarkerKind::DiskFull
+                } else {
+                    MarkerKind::WriteFailed
+                },
+                Some(error.to_string()),
+            );
+            self.emit_status();
         }
-        let disk_full = error.kind() == io::ErrorKind::StorageFull;
-        log::error!("Meeting recording stopped saving audio: {}", error);
-        *failed = Some(error.to_string());
-        drop(failed);
-        self.add_marker(
-            if disk_full {
-                MarkerKind::DiskFull
-            } else {
-                MarkerKind::WriteFailed
-            },
-            Some(error.to_string()),
-        );
+    }
+
+    fn saving_resumed(&self, file_name: Option<String>) {
+        self.write_error.lock().unwrap().take();
+        log::info!("Meeting audio is being saved again");
+        if let Some(file_name) = file_name {
+            self.update_manifest(|manifest| manifest.extra_audio_files.push(file_name));
+        }
+        self.add_marker(MarkerKind::WriteResumed, None);
         self.emit_status();
     }
 }
+
+/// The writer thread's file: the current audio file, and audio held in
+/// memory while saving fails.
+struct AudioSink<'a> {
+    shared: &'a Shared,
+    live: Option<SyncSender<LiveFrame>>,
+    current: Option<(wav::DurableWav, PathBuf)>,
+    /// Number of the file being written (1 = the first).
+    part: u32,
+    backlog: std::collections::VecDeque<Vec<f32>>,
+    backlog_samples: usize,
+    next_retry: Instant,
+    last_checkpoint: Instant,
+}
+
+impl AudioSink<'_> {
+    fn written(&self) -> u64 {
+        self.shared.written_samples.load(Ordering::SeqCst)
+    }
+
+    /// Writes one frame, or keeps it in memory while saving fails.
+    fn push(&mut self, frame: Vec<f32>) {
+        if self.current.is_none() || !self.backlog.is_empty() {
+            self.hold(frame);
+            return;
+        }
+        self.write(frame);
+    }
+
+    fn write(&mut self, frame: Vec<f32>) {
+        let at_sample = self.written();
+        let Some((audio, _)) = self.current.as_mut() else {
+            self.hold(frame);
+            return;
+        };
+        match audio.write(&frame) {
+            Ok(()) => {
+                self.shared
+                    .written_samples
+                    .fetch_add(frame.len() as u64, Ordering::SeqCst);
+                if let Some(live) = &self.live {
+                    let len = frame.len() as u64;
+                    if live
+                        .try_send(LiveFrame {
+                            samples: frame,
+                            at_sample,
+                        })
+                        .is_err()
+                    {
+                        self.shared
+                            .live_skipped_samples
+                            .fetch_add(len, Ordering::Relaxed);
+                    }
+                }
+            }
+            Err(error) => {
+                self.give_up_file(&error);
+                self.hold(frame);
+            }
+        }
+    }
+
+    fn hold(&mut self, frame: Vec<f32>) {
+        self.backlog_samples += frame.len();
+        self.backlog.push_back(frame);
+        while self.backlog_samples > MAX_BACKLOG_SAMPLES {
+            let Some(oldest) = self.backlog.pop_front() else {
+                break;
+            };
+            self.backlog_samples -= oldest.len();
+            self.shared
+                .dropped_samples
+                .fetch_add(oldest.len() as u64, Ordering::Relaxed);
+        }
+    }
+
+    /// Stops using the current file after an error; the audio in it stays
+    /// readable. A new file is tried after [`WRITE_RETRY`].
+    fn give_up_file(&mut self, error: &io::Error) {
+        if let Some((audio, path)) = self.current.take() {
+            if let Err(repair_error) = audio.abandon(&path) {
+                log::warn!("Could not repair {:?}: {}", path, repair_error);
+            }
+        }
+        self.next_retry = Instant::now() + WRITE_RETRY;
+        self.shared.saving_failed(
+            &error.to_string(),
+            error.kind() == io::ErrorKind::StorageFull,
+        );
+    }
+
+    /// Starts a follow-on file and writes the audio held in memory.
+    fn retry(&mut self) {
+        if self.current.is_some() || Instant::now() < self.next_retry {
+            return;
+        }
+        let name = self
+            .shared
+            .manifest
+            .lock()
+            .unwrap()
+            .part_file_name(self.part + 1);
+        let path = self.shared.dir.join(&name);
+        match wav::DurableWav::create(&path) {
+            Ok(audio) => {
+                self.part += 1;
+                self.current = Some((audio, path));
+                self.last_checkpoint = Instant::now();
+                self.shared.saving_resumed(Some(name));
+                while let Some(frame) = self.backlog.pop_front() {
+                    self.backlog_samples -= frame.len();
+                    self.write(frame);
+                    if self.current.is_none() {
+                        break;
+                    }
+                }
+            }
+            Err(error) => {
+                self.next_retry = Instant::now() + WRITE_RETRY;
+                self.shared.saving_failed(
+                    &error.to_string(),
+                    error.kind() == io::ErrorKind::StorageFull,
+                );
+            }
+        }
+    }
+
+    fn checkpoint(&mut self, force: bool) {
+        if !force && self.last_checkpoint.elapsed() < CHECKPOINT {
+            return;
+        }
+        self.last_checkpoint = Instant::now();
+        let result = match self.current.as_mut() {
+            Some((audio, _)) => audio.checkpoint(),
+            None => return,
+        };
+        if let Err(error) = result {
+            self.give_up_file(&error);
+        }
+    }
+
+    fn finish(mut self) {
+        if !self.backlog.is_empty() {
+            // One last try for the audio held in memory.
+            self.next_retry = Instant::now();
+            self.retry();
+        }
+        if let Some((audio, path)) = self.current.take() {
+            if let Err(error) = audio.finish() {
+                log::warn!("Finishing {:?} failed: {}", path, error);
+            }
+        }
+        if self.backlog_samples > 0 {
+            log::error!(
+                "{} samples of meeting audio could not be saved",
+                self.backlog_samples
+            );
+            self.shared
+                .dropped_samples
+                .fetch_add(self.backlog_samples as u64, Ordering::Relaxed);
+        }
+    }
+}
+
+fn run_writer(
+    shared: Arc<Shared>,
+    audio: wav::DurableWav,
+    audio_path: PathBuf,
+    frames: Receiver<Captured>,
+    live: Option<SyncSender<LiveFrame>>,
+) {
+    let mut meter = LevelMeter::new(1_600);
+    let mut sink = AudioSink {
+        shared: &shared,
+        live,
+        current: Some((audio, audio_path)),
+        part: 1,
+        backlog: std::collections::VecDeque::new(),
+        backlog_samples: 0,
+        next_retry: Instant::now(),
+        last_checkpoint: Instant::now(),
+    };
+    loop {
+        match frames.recv_timeout(Duration::from_millis(250)) {
+            Ok(frame) => {
+                let len = frame.samples.len() as u64;
+                let seen = shared.seen_samples.fetch_add(len, Ordering::Relaxed) + len;
+                if let Some(level) = meter.push(&frame.samples) {
+                    shared.set_level(level);
+                    if level.peak_db >= SOUND_DB {
+                        shared.last_sound_at.store(seen, Ordering::Relaxed);
+                    }
+                }
+                shared
+                    .zero_run_samples
+                    .store(meter.zero_run_samples(), Ordering::Relaxed);
+                if !frame.paused {
+                    sink.push(frame.samples);
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => break,
+        }
+        sink.retry();
+        sink.checkpoint(false);
+    }
+    sink.finish();
+}
+
+/// Waits up to `limit` for a thread; past that it is left running.
+fn join_within<T>(handle: JoinHandle<T>, limit: Duration, name: &str) -> bool {
+    let deadline = Instant::now() + limit;
+    while !handle.is_finished() {
+        if Instant::now() >= deadline {
+            log::warn!("Meeting {} did not finish in time; leaving it", name);
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let _ = handle.join();
+    true
+}
+
+fn run_supervisor(shared: Arc<Shared>, mut recorder: AudioRecorder, device_name: Option<String>) {
+    let _awake = power::KeepAwake::start();
+    let mut last_frames = shared.frames_seen.load(Ordering::SeqCst);
+    let mut last_frame_at = Instant::now();
+    let mut last_wall = SystemTime::now();
+    let mut next_retry = Instant::now();
+    let mut next_disk_check = Instant::now();
+    while !shared.stop.load(Ordering::SeqCst) {
+        std::thread::sleep(TICK);
+
+        let wall = SystemTime::now();
+        if wall
+            .duration_since(last_wall)
+            .is_ok_and(|elapsed| elapsed >= SLEEP_GAP)
+        {
+            log::warn!("Meeting recording: the computer was asleep or stalled");
+            shared.add_marker(MarkerKind::Gap, None);
+            // Give a stream that survived the sleep time to deliver again.
+            last_frame_at = Instant::now();
+        }
+        last_wall = wall;
+
+        let frames = shared.frames_seen.load(Ordering::SeqCst);
+        let lost = shared.mic_lost.load(Ordering::SeqCst);
+        if frames != last_frames {
+            last_frames = frames;
+            last_frame_at = Instant::now();
+            if lost {
+                log::info!("Meeting microphone is back");
+                shared.mic_lost.store(false, Ordering::SeqCst);
+                shared.add_marker(MarkerKind::MicBack, None);
+            }
+        } else if !lost
+            && (last_frame_at.elapsed() >= MIC_STALL
+                || (recorder.needs_reopen() && last_frame_at.elapsed() >= TICK * 2))
+        {
+            log::warn!("Meeting microphone stopped delivering audio");
+            shared.mic_lost.store(true, Ordering::SeqCst);
+            shared.add_marker(MarkerKind::MicLost, None);
+            next_retry = Instant::now();
+        }
+        if shared.mic_lost.load(Ordering::SeqCst) && Instant::now() >= next_retry {
+            match open_recorder(&mut recorder, &device_name) {
+                Ok(_) => {
+                    log::info!("Reopened the meeting microphone");
+                    last_frame_at = Instant::now();
+                    // Slow devices (Bluetooth) take seconds to send their
+                    // first audio: don't reopen again before then.
+                    next_retry = Instant::now() + MIC_START_TIMEOUT + MIC_RETRY;
+                }
+                Err(error) => {
+                    log::debug!("Meeting microphone not back yet: {}", error);
+                    next_retry = Instant::now() + MIC_RETRY;
+                }
+            }
+        }
+
+        if Instant::now() >= next_disk_check {
+            next_disk_check = Instant::now() + Duration::from_secs(10);
+            *shared.free_bytes.lock().unwrap() = power::free_space(&shared.dir);
+        }
+        shared.emit_status();
+    }
+    // Stop flushes the last captured audio through the callback; Stop then
+    // closes the writer's queue whether or not this returns.
+    let _ = recorder.stop();
+    let _ = recorder.close();
+}
+
+/// How long Stop waits for each thread.
+struct StopLimits {
+    supervisor: Duration,
+    writer: Duration,
+    live: Duration,
+}
+
+const STOP_LIMITS: StopLimits = StopLimits {
+    supervisor: Duration::from_secs(6),
+    writer: Duration::from_secs(20),
+    live: Duration::from_secs(5),
+};
+
+/// At exit the system may allow only a few seconds.
+const EXIT_LIMITS: StopLimits = StopLimits {
+    supervisor: Duration::from_millis(2_500),
+    writer: Duration::from_secs(2),
+    live: Duration::ZERO,
+};
 
 /// The running meeting's threads.
 struct Session {
@@ -421,6 +799,10 @@ struct Session {
 pub struct MeetingManager {
     app: AppHandle,
     session: Mutex<Option<Session>>,
+    /// A start is opening the microphone (the session lock is not held).
+    starting: AtomicBool,
+    /// Held for the whole of a Stop.
+    stop_lock: Mutex<()>,
     /// Set while a microphone check runs; cleared to stop it early.
     check_running: AtomicBool,
     check_cancel: AtomicBool,
@@ -460,143 +842,13 @@ fn open_recorder(
         .map_err(|e| format!("Failed to start the microphone: {}", e))
 }
 
-fn run_writer(
-    shared: Arc<Shared>,
-    mut audio: wav::DurableWav,
-    frames: Receiver<Vec<f32>>,
-    live: Option<SyncSender<LiveFrame>>,
-) {
-    let mut meter = LevelMeter::new(1_600);
-    let mut last_checkpoint = Instant::now();
-    let mut failed = false;
-    loop {
-        match frames.recv_timeout(Duration::from_millis(250)) {
-            Ok(frame) => {
-                let seen = shared
-                    .seen_samples
-                    .fetch_add(frame.len() as u64, Ordering::Relaxed)
-                    + frame.len() as u64;
-                if let Some(level) = meter.push(&frame) {
-                    shared.set_level(level);
-                    if level.peak_db >= SOUND_DB {
-                        shared.last_sound_at.store(seen, Ordering::Relaxed);
-                    }
-                }
-                shared
-                    .zero_run_samples
-                    .store(meter.zero_run_samples(), Ordering::Relaxed);
-                if failed || shared.paused.load(Ordering::SeqCst) {
-                    continue;
-                }
-                let at_sample = audio.samples();
-                if let Err(error) = audio.write(&frame) {
-                    failed = true;
-                    shared.fail(&error);
-                    continue;
-                }
-                shared
-                    .written_samples
-                    .store(audio.samples(), Ordering::SeqCst);
-                if let Some(live) = &live {
-                    let len = frame.len() as u64;
-                    if live
-                        .try_send(LiveFrame {
-                            samples: frame,
-                            at_sample,
-                        })
-                        .is_err()
-                    {
-                        shared
-                            .live_skipped_samples
-                            .fetch_add(len, Ordering::Relaxed);
-                    }
-                }
-            }
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => break,
-        }
-        if !failed && last_checkpoint.elapsed() >= CHECKPOINT {
-            last_checkpoint = Instant::now();
-            if let Err(error) = audio.checkpoint() {
-                failed = true;
-                shared.fail(&error);
-            }
-        }
-    }
-    drop(live);
-    if let Err(error) = audio.finish() {
-        log::warn!("Finishing the meeting audio failed: {}", error);
-    }
-}
-
-fn run_supervisor(shared: Arc<Shared>, mut recorder: AudioRecorder, device_name: Option<String>) {
-    let _awake = power::KeepAwake::start();
-    let mut last_frames = shared.frames_seen.load(Ordering::SeqCst);
-    let mut last_frame_at = Instant::now();
-    let mut last_wall = SystemTime::now();
-    let mut next_retry = Instant::now();
-    let mut next_disk_check = Instant::now();
-    while !shared.stop.load(Ordering::SeqCst) {
-        std::thread::sleep(TICK);
-
-        let wall = SystemTime::now();
-        if wall
-            .duration_since(last_wall)
-            .is_ok_and(|elapsed| elapsed >= SLEEP_GAP)
-        {
-            log::warn!("Meeting recording: the computer was asleep or stalled");
-            shared.add_marker(MarkerKind::Gap, None);
-        }
-        last_wall = wall;
-
-        let frames = shared.frames_seen.load(Ordering::SeqCst);
-        let lost = shared.mic_lost.load(Ordering::SeqCst);
-        if frames != last_frames {
-            last_frames = frames;
-            last_frame_at = Instant::now();
-            if lost {
-                log::info!("Meeting microphone is back");
-                shared.mic_lost.store(false, Ordering::SeqCst);
-                shared.add_marker(MarkerKind::MicBack, None);
-            }
-        } else if !lost
-            && (last_frame_at.elapsed() >= MIC_STALL
-                || (recorder.needs_reopen() && last_frame_at.elapsed() >= TICK * 2))
-        {
-            log::warn!("Meeting microphone stopped delivering audio");
-            shared.mic_lost.store(true, Ordering::SeqCst);
-            shared.add_marker(MarkerKind::MicLost, None);
-            next_retry = Instant::now();
-        }
-        if shared.mic_lost.load(Ordering::SeqCst) && Instant::now() >= next_retry {
-            next_retry = Instant::now() + MIC_RETRY;
-            match open_recorder(&mut recorder, &device_name) {
-                Ok(_) => {
-                    log::info!("Reopened the meeting microphone");
-                    last_frame_at = Instant::now();
-                }
-                Err(error) => log::debug!("Meeting microphone not back yet: {}", error),
-            }
-        }
-
-        if Instant::now() >= next_disk_check {
-            next_disk_check = Instant::now() + Duration::from_secs(10);
-            *shared.free_bytes.lock().unwrap() = power::free_space(&shared.dir);
-        }
-        shared.emit_status();
-    }
-    let _ = recorder.stop();
-    let _ = recorder.close();
-    // Dropping the recorder drops the writer queue's sender, which ends the
-    // writer once it has saved everything queued.
-    drop(recorder);
-}
-
 impl MeetingManager {
     pub fn new(app: &AppHandle) -> Self {
         Self {
             app: app.clone(),
             session: Mutex::new(None),
+            starting: AtomicBool::new(false),
+            stop_lock: Mutex::new(()),
             check_running: AtomicBool::new(false),
             check_cancel: AtomicBool::new(false),
             recovered: Mutex::new(Vec::new()),
@@ -637,27 +889,28 @@ impl MeetingManager {
         !self.recovered.lock().unwrap().is_empty()
     }
 
-    pub fn status(&self) -> Option<MeetingStatus> {
+    fn shared(&self) -> Option<Arc<Shared>> {
         self.session
             .lock()
             .unwrap()
             .as_ref()
-            .map(|session| session.shared.status())
+            .map(|session| Arc::clone(&session.shared))
+    }
+
+    pub fn status(&self) -> Option<MeetingStatus> {
+        self.shared().map(|shared| shared.status())
     }
 
     pub fn live_segments(&self) -> Vec<TranscriptSegment> {
-        self.session
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|session| session.shared.segments.lock().unwrap().clone())
+        self.shared()
+            .map(|shared| shared.segments.lock().unwrap().clone())
             .unwrap_or_default()
     }
 
     /// Records 10 seconds from the meeting microphone, reporting levels as it
     /// goes, then judges the sound and transcribes it. Blocking.
     pub fn check_microphone(&self) -> Result<MicCheckResult, String> {
-        if is_active() {
+        if is_active() || self.starting.load(Ordering::SeqCst) {
             return Err("A meeting is being recorded.".to_string());
         }
         if self.check_running.swap(true, Ordering::SeqCst) {
@@ -748,16 +1001,25 @@ impl MeetingManager {
         self.check_cancel.store(true, Ordering::SeqCst);
     }
 
-    /// Starts recording a meeting. Blocking (opens the microphone).
+    /// Starts recording a meeting. Blocking (opens the microphone), without
+    /// holding the session lock, so the window stays responsive.
     pub fn start(&self, options: StartMeetingOptions) -> Result<MeetingStatus, String> {
         if !options.consent_confirmed {
             return Err("Confirm that everyone agreed to be recorded.".to_string());
         }
-        let mut session_slot = self.session.lock().unwrap();
-        // ACTIVE also covers a meeting that is still saving after Stop.
-        if session_slot.is_some() || is_active() {
-            return Err("A meeting is already being recorded.".to_string());
+        {
+            let session = self.session.lock().unwrap();
+            // ACTIVE also covers a meeting that is still saving after Stop.
+            if session.is_some() || is_active() || self.starting.swap(true, Ordering::SeqCst) {
+                return Err("A meeting is already being recorded.".to_string());
+            }
         }
+        let result = self.start_recording(options);
+        self.starting.store(false, Ordering::SeqCst);
+        result
+    }
+
+    fn start_recording(&self, options: StartMeetingOptions) -> Result<MeetingStatus, String> {
         if self.check_running.load(Ordering::SeqCst) {
             return Err("Wait for the microphone check to finish.".to_string());
         }
@@ -802,11 +1064,11 @@ impl MeetingManager {
             })
             .ok_or_else(|| "Failed to create the meeting folder.".to_string())?;
         let stamp = now.format("%Y-%m-%d %H-%M").to_string();
-        let title = options.title.trim().to_string();
         let started_at = now.timestamp_millis();
-        let mut manifest = MeetingManifest::new(
+        // Consent was confirmed by the Start click that led here.
+        let manifest = MeetingManifest::new(
             id.clone(),
-            title,
+            options.title.trim().to_string(),
             manifest::audio_file_name(&stamp, &options.title),
             started_at,
             microphone.clone(),
@@ -821,7 +1083,8 @@ impl MeetingManager {
             cleanup(&dir);
             return Err(format!("Failed to save the meeting record: {}", error));
         }
-        let audio = match wav::DurableWav::create(&manifest.audio_path(&dir)) {
+        let audio_path = manifest.audio_path(&dir);
+        let audio = match wav::DurableWav::create(&audio_path) {
             Ok(audio) => audio,
             Err(error) => {
                 cleanup(&dir);
@@ -829,12 +1092,13 @@ impl MeetingManager {
             }
         };
 
-        let (frame_tx, frame_rx) = mpsc::sync_channel::<Vec<f32>>(WRITER_QUEUE_FRAMES);
+        let (frame_tx, frame_rx) = mpsc::sync_channel::<Captured>(WRITER_QUEUE_FRAMES);
         let shared = Arc::new(Shared::new(
             Some(self.app.clone()),
             dir.clone(),
             manifest.clone(),
         ));
+        *shared.frame_tx.lock().unwrap() = Some(frame_tx);
 
         let callback_shared = Arc::clone(&shared);
         let mut recorder = match AudioRecorder::new() {
@@ -846,79 +1110,53 @@ impl MeetingManager {
         }
         .with_selected_channel(settings.selected_channel)
         .without_retained_samples()
-        .with_audio_callback(move |frame| {
-            callback_shared.frames_seen.fetch_add(1, Ordering::SeqCst);
-            if frame_tx.try_send(frame.to_vec()).is_err() {
-                callback_shared
-                    .dropped_samples
-                    .fetch_add(frame.len() as u64, Ordering::Relaxed);
-            }
-        });
+        .with_audio_callback(move |frame| callback_shared.capture(frame));
 
         // The live transcript, then the writer, so the queues drain from the
         // first frame.
-        let live = if options.live_transcript {
-            let (live_tx, live_rx) = mpsc::sync_channel::<LiveFrame>(LIVE_QUEUE_FRAMES);
-            let token = WorkToken::new();
-            let live_shared = Arc::clone(&shared);
-            let live_token = token.clone();
-            let app = self.app.clone();
-            let handle = std::thread::Builder::new()
-                .name("meeting-live".into())
-                .spawn(move || {
-                    let meeting_id = live_shared.manifest.lock().unwrap().id.clone();
-                    let transcript_path = live_shared.dir.join("live-transcript.txt");
-                    live::run(app, live_rx, live_token, |event| match event {
-                        LiveEvent::Status(status) => {
-                            *live_shared.live.lock().unwrap() = status;
-                            live_shared.emit_status();
-                        }
-                        LiveEvent::Segments(segments) => {
-                            append_live_transcript(&transcript_path, &segments);
-                            live_shared
-                                .segments
-                                .lock()
-                                .unwrap()
-                                .extend(segments.iter().cloned());
-                            if let Some(app) = &live_shared.app {
-                                emit(
-                                    app,
-                                    MeetingEvent::Segments {
-                                        meeting_id: meeting_id.clone(),
-                                        segments,
-                                    },
-                                );
-                            }
-                        }
-                    });
-                })
-                .map_err(|e| e.to_string());
-            match handle {
-                Ok(handle) => Some((handle, token, live_tx)),
-                Err(error) => {
-                    log::warn!("Could not start the live transcript: {}", error);
-                    None
-                }
+        let (live_handle, live_tx) = if options.live_transcript {
+            match self.spawn_live(&shared) {
+                Some((handle, token, tx)) => (Some((handle, token)), Some(tx)),
+                None => (None, None),
             }
         } else {
-            None
+            (None, None)
         };
-        let (live_handle, live_tx) = match live {
-            Some((handle, token, tx)) => (Some((handle, token)), Some(tx)),
-            None => (None, None),
+        let stop_live = |live_handle: Option<(JoinHandle<()>, WorkToken)>| {
+            if let Some((handle, token)) = live_handle {
+                token.cancel();
+                // A model load can't be cancelled; don't wait for it.
+                drop(handle);
+            }
         };
 
         let writer_shared = Arc::clone(&shared);
         let writer = std::thread::Builder::new()
             .name("meeting-writer".into())
-            .spawn(move || run_writer(writer_shared, audio, frame_rx, live_tx))
-            .map_err(|e| e.to_string());
+            .spawn(move || {
+                let shared = Arc::clone(&writer_shared);
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_writer(writer_shared, audio, audio_path, frame_rx, live_tx)
+                }));
+                if result.is_err() {
+                    shared.saving_failed("the audio writer stopped unexpectedly", false);
+                }
+            });
         let writer = match writer {
             Ok(writer) => writer,
             Err(error) => {
+                stop_live(live_handle);
                 cleanup(&dir);
-                return Err(error);
+                return Err(error.to_string());
             }
+        };
+        let abort = |shared: &Shared,
+                     writer: JoinHandle<()>,
+                     live_handle: Option<(JoinHandle<()>, WorkToken)>| {
+            shared.close_queue();
+            join_within(writer, STOP_LIMITS.writer, "writer");
+            stop_live(live_handle);
+            cleanup(&dir);
         };
 
         let ready = recorder
@@ -936,37 +1174,32 @@ impl MeetingManager {
             });
         if let Err(error) = ready {
             let _ = recorder.close();
-            drop(recorder);
-            let _ = writer.join();
-            if let Some((handle, token)) = live_handle {
-                token.cancel();
-                let _ = handle.join();
-            }
-            cleanup(&dir);
+            abort(&shared, writer, live_handle);
             return Err(error);
         }
 
         let supervisor_shared = Arc::clone(&shared);
         let device_name = microphone.clone();
-        let supervisor = std::thread::Builder::new()
+        let supervisor = match std::thread::Builder::new()
             .name("meeting-supervisor".into())
             .spawn(move || run_supervisor(supervisor_shared, recorder, device_name))
-            .map_err(|e| e.to_string())?;
-
-        manifest.consent_confirmed_at = now_ms();
-        *shared.manifest.lock().unwrap() = manifest.clone();
-        let _ = manifest::save(&dir, &manifest);
+        {
+            Ok(supervisor) => supervisor,
+            Err(error) => {
+                abort(&shared, writer, live_handle);
+                return Err(error.to_string());
+            }
+        };
 
         ACTIVE.store(true, Ordering::SeqCst);
         QUIT_CONFIRMED.store(false, Ordering::SeqCst);
         log::info!("Meeting {} started in {:?}", id, dir);
-        *session_slot = Some(Session {
+        *self.session.lock().unwrap() = Some(Session {
             shared: Arc::clone(&shared),
             supervisor: Some(supervisor),
             writer: Some(writer),
             live: live_handle,
         });
-        drop(session_slot);
         crate::tray::set_meeting_active(&self.app, true);
         let status = shared.status();
         emit(
@@ -978,12 +1211,57 @@ impl MeetingManager {
         Ok(status)
     }
 
+    fn spawn_live(
+        &self,
+        shared: &Arc<Shared>,
+    ) -> Option<(JoinHandle<()>, WorkToken, SyncSender<LiveFrame>)> {
+        let (live_tx, live_rx) = mpsc::sync_channel::<LiveFrame>(LIVE_QUEUE_FRAMES);
+        let token = WorkToken::new();
+        let live_shared = Arc::clone(shared);
+        let live_token = token.clone();
+        let app = self.app.clone();
+        let handle = std::thread::Builder::new()
+            .name("meeting-live".into())
+            .spawn(move || {
+                let meeting_id = live_shared.manifest.lock().unwrap().id.clone();
+                let transcript_path = live_shared.dir.join("live-transcript.txt");
+                live::run(app, live_rx, live_token, |event| match event {
+                    LiveEvent::Status(status) => {
+                        *live_shared.live.lock().unwrap() = status;
+                        live_shared.emit_status();
+                    }
+                    LiveEvent::Segments(segments) => {
+                        append_live_transcript(&transcript_path, &segments);
+                        live_shared
+                            .segments
+                            .lock()
+                            .unwrap()
+                            .extend(segments.iter().cloned());
+                        if let Some(app) = &live_shared.app {
+                            emit(
+                                app,
+                                MeetingEvent::Segments {
+                                    meeting_id: meeting_id.clone(),
+                                    segments,
+                                },
+                            );
+                        }
+                    }
+                });
+            });
+        match handle {
+            Ok(handle) => Some((handle, token, live_tx)),
+            Err(error) => {
+                log::warn!("Could not start the live transcript: {}", error);
+                None
+            }
+        }
+    }
+
     pub fn set_paused(&self, paused: bool) -> Result<MeetingStatus, String> {
-        let session = self.session.lock().unwrap();
-        let shared = &session
-            .as_ref()
-            .ok_or_else(|| "No meeting is being recorded.".to_string())?
-            .shared;
+        let shared = self
+            .shared()
+            .ok_or_else(|| "No meeting is being recorded.".to_string())?;
         if shared.paused.swap(paused, Ordering::SeqCst) != paused {
             shared.add_marker(
                 if paused {
@@ -999,11 +1277,9 @@ impl MeetingManager {
     }
 
     pub fn add_note(&self, label: Option<String>) -> Result<MeetingMarker, String> {
-        let session = self.session.lock().unwrap();
-        let shared = &session
-            .as_ref()
-            .ok_or_else(|| "No meeting is being recorded.".to_string())?
-            .shared;
+        let shared = self
+            .shared()
+            .ok_or_else(|| "No meeting is being recorded.".to_string())?;
         let label = label
             .map(|label| label.trim().chars().take(200).collect::<String>())
             .filter(|label| !label.is_empty());
@@ -1015,6 +1291,12 @@ impl MeetingManager {
     /// Stops the meeting, saves the audio and, unless `transcribe` is false,
     /// sends it to the transcription queue. Blocking (a few seconds).
     pub fn stop(&self, transcribe: bool) -> Result<MeetingSummary, String> {
+        self.stop_within(transcribe, &STOP_LIMITS)
+    }
+
+    fn stop_within(&self, transcribe: bool, limits: &StopLimits) -> Result<MeetingSummary, String> {
+        // A second Stop (or the exit handler) waits for the first.
+        let _stopping = self.stop_lock.lock().unwrap();
         let Some(mut session) = self.session.lock().unwrap().take() else {
             return Err("No meeting is being recorded.".to_string());
         };
@@ -1022,42 +1304,64 @@ impl MeetingManager {
         shared.stop.store(true, Ordering::SeqCst);
         shared.emit_status();
 
+        // 1. The supervisor stops the microphone; its last audio still
+        //    reaches the writer. A driver that hangs is left behind.
         if let Some(supervisor) = session.supervisor.take() {
-            let _ = supervisor.join();
+            join_within(supervisor, limits.supervisor, "microphone");
         }
-        if let Some(writer) = session.writer.take() {
-            let _ = writer.join();
-        }
-        if let Some((handle, token)) = session.live.take() {
-            token.cancel();
-            if let Some(tm) = self.app.try_state::<Arc<TranscriptionManager>>() {
-                tm.cancel_file_work(&token);
-            }
-            let _ = handle.join();
-        }
-        ACTIVE.store(false, Ordering::SeqCst);
+        // 2. The writer saves what is queued and finishes its file.
+        shared.close_queue();
+        let saved = session
+            .writer
+            .take()
+            .is_none_or(|writer| join_within(writer, limits.writer, "writer"));
 
+        // 3. The record, before anything slower.
         let mut manifest = shared.manifest.lock().unwrap().clone();
-        let audio_path = manifest.audio_path(&shared.dir);
-        // Makes the header match the file even if the last write failed.
-        let samples = wav::repair(&audio_path)
-            .unwrap_or_else(|_| shared.written_samples.load(Ordering::SeqCst));
+        let mut samples = 0;
+        for path in manifest.audio_paths(&shared.dir) {
+            // Makes each header match its file, even after a failed write.
+            match wav::repair(&path) {
+                Ok(part) => samples += part,
+                Err(error) => log::warn!("Could not check {:?}: {}", path, error),
+            }
+        }
         manifest.duration_ms = wav::samples_to_ms(samples);
         manifest.ended_at = Some(now_ms());
-        manifest.state = MeetingFileState::Stopped;
-        if let Err(error) = manifest::save(&shared.dir, &manifest) {
-            log::error!("Failed to save the meeting record: {}", error);
+        // A writer still running is repaired again at the next start.
+        manifest.state = if saved {
+            MeetingFileState::Stopped
+        } else {
+            MeetingFileState::Recording
+        };
+        {
+            let _saving = shared.save_lock.lock().unwrap();
+            if let Err(error) = manifest::save(&shared.dir, &manifest) {
+                log::error!("Failed to save the meeting record: {}", error);
+            }
         }
+        ACTIVE.store(false, Ordering::SeqCst);
         log::info!(
             "Meeting {} stopped with {} ms of audio",
             manifest.id,
             manifest.duration_ms
         );
 
+        // 4. The live transcript last: a model load can't be interrupted.
+        if let Some((handle, token)) = session.live.take() {
+            token.cancel();
+            if let Some(tm) = self.app.try_state::<Arc<TranscriptionManager>>() {
+                tm.cancel_file_work(&token);
+            }
+            if !limits.live.is_zero() {
+                join_within(handle, limits.live, "live transcript");
+            }
+        }
+
         crate::tray::set_meeting_active(&self.app, false);
         emit(&self.app, MeetingEvent::Status { status: None });
 
-        if transcribe && samples > 0 {
+        if transcribe && saved && samples > 0 {
             if let Err(error) = self.enqueue(&shared.dir, &mut manifest) {
                 log::error!("Failed to queue the meeting for transcription: {}", error);
             }
@@ -1073,9 +1377,14 @@ impl MeetingManager {
     }
 
     /// Saves the running meeting without transcribing it, for app exit.
+    /// Waits briefly for a Stop already in progress.
     pub fn shutdown(&self) {
+        let deadline = Instant::now() + Duration::from_secs(6);
+        while self.stop_lock.try_lock().is_err() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
         if is_active() {
-            let _ = self.stop(false);
+            let _ = self.stop_within(false, &EXIT_LIMITS);
         }
     }
 
@@ -1084,9 +1393,17 @@ impl MeetingManager {
             .app
             .try_state::<Arc<FileTranscriptionManager>>()
             .ok_or_else(|| "The transcription queue is not running.".to_string())?;
-        let path = manifest.audio_path(dir).to_string_lossy().into_owned();
+        let paths: Vec<String> = manifest
+            .audio_paths(dir)
+            .into_iter()
+            .filter(|path| path.is_file())
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+        if paths.is_empty() {
+            return Err("The meeting has no audio file.".to_string());
+        }
         let jobs = queue.enqueue(
-            vec![path],
+            paths,
             FileTranscriptionOptions {
                 save_to_history: true,
                 label_speakers: manifest.label_speakers,
@@ -1119,11 +1436,8 @@ impl MeetingManager {
     pub fn list(&self) -> Result<Vec<MeetingSummary>, String> {
         let root = meetings_dir(&self.app)?;
         let running = self
-            .session
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|session| session.shared.manifest.lock().unwrap().id.clone());
+            .shared()
+            .map(|shared| shared.manifest.lock().unwrap().id.clone());
         Ok(manifest::list(&root)
             .into_iter()
             .filter(|(_, manifest)| Some(&manifest.id) != running.as_ref())
@@ -1179,16 +1493,15 @@ mod tests {
         vec![value; 480]
     }
 
-    struct Writer {
-        shared: Arc<Shared>,
-        frames: SyncSender<Vec<f32>>,
-        handle: JoinHandle<()>,
-        audio: PathBuf,
+    fn captured(value: f32, paused: bool) -> Captured {
+        Captured {
+            samples: frame(value),
+            paused,
+        }
     }
 
-    fn start_writer(live: Option<SyncSender<LiveFrame>>) -> (tempfile::TempDir, Writer) {
-        let dir = tempfile::tempdir().unwrap();
-        let manifest = MeetingManifest::new(
+    fn sample_manifest() -> MeetingManifest {
+        MeetingManifest::new(
             "m".into(),
             String::new(),
             "Meeting.wav".into(),
@@ -1196,13 +1509,26 @@ mod tests {
             None,
             0,
             false,
-        );
+        )
+    }
+
+    struct Writer {
+        shared: Arc<Shared>,
+        frames: SyncSender<Captured>,
+        handle: JoinHandle<()>,
+        audio: PathBuf,
+    }
+
+    fn start_writer(live: Option<SyncSender<LiveFrame>>) -> (tempfile::TempDir, Writer) {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = sample_manifest();
         let audio = manifest.audio_path(dir.path());
         let wav = wav::DurableWav::create(&audio).unwrap();
         let shared = Arc::new(Shared::new(None, dir.path().to_path_buf(), manifest));
         let (frames, rx) = mpsc::sync_channel(WRITER_QUEUE_FRAMES);
         let writer_shared = Arc::clone(&shared);
-        let handle = std::thread::spawn(move || run_writer(writer_shared, wav, rx, live));
+        let path = audio.clone();
+        let handle = std::thread::spawn(move || run_writer(writer_shared, wav, path, rx, live));
         (
             dir,
             Writer {
@@ -1214,37 +1540,46 @@ mod tests {
         )
     }
 
-    fn wait_for_written(shared: &Shared, samples: u64) {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while shared.written_samples.load(Ordering::SeqCst) < samples {
-            assert!(Instant::now() < deadline, "writer did not catch up");
+    fn wait_until(what: &str, condition: impl Fn() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !condition() {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    fn wait_for_written(shared: &Shared, samples: u64) {
+        wait_until("the writer", || {
+            shared.written_samples.load(Ordering::SeqCst) >= samples
+        });
+    }
+
+    fn read_samples(path: &Path) -> Vec<i16> {
+        hound::WavReader::open(path)
+            .unwrap()
+            .samples::<i16>()
+            .map(Result::unwrap)
+            .collect()
     }
 
     #[test]
     fn writer_saves_audio_skips_paused_frames_and_places_markers() {
         let (_dir, writer) = start_writer(None);
         for _ in 0..100 {
-            writer.frames.send(frame(0.25)).unwrap();
+            writer.frames.send(captured(0.25, false)).unwrap();
         }
         wait_for_written(&writer.shared, 48_000);
-
-        writer.shared.paused.store(true, Ordering::SeqCst);
         writer.shared.add_marker(MarkerKind::Paused, None);
+        // Captured while paused: moves the meter, not saved.
         for _ in 0..50 {
-            writer.frames.send(frame(0.5)).unwrap();
+            writer.frames.send(captured(0.5, true)).unwrap();
         }
-        // Paused frames still move the level meter but are not saved.
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while writer.shared.seen_samples.load(Ordering::Relaxed) < 72_000 {
-            assert!(Instant::now() < deadline);
-            std::thread::sleep(Duration::from_millis(5));
-        }
-        writer.shared.paused.store(false, Ordering::SeqCst);
+        wait_until("paused frames", || {
+            writer.shared.seen_samples.load(Ordering::Relaxed) >= 72_000
+        });
         writer.shared.add_marker(MarkerKind::Resumed, None);
         for _ in 0..20 {
-            writer.frames.send(frame(-0.25)).unwrap();
+            writer.frames.send(captured(-0.25, false)).unwrap();
         }
         wait_for_written(&writer.shared, 57_600);
         let note = writer
@@ -1254,11 +1589,7 @@ mod tests {
         drop(writer.frames);
         writer.handle.join().unwrap();
 
-        let samples: Vec<i16> = hound::WavReader::open(&writer.audio)
-            .unwrap()
-            .samples::<i16>()
-            .map(Result::unwrap)
-            .collect();
+        let samples = read_samples(&writer.audio);
         assert_eq!(samples.len(), 57_600);
         assert!(samples[..48_000].iter().all(|s| *s > 0));
         assert!(samples[48_000..].iter().all(|s| *s < 0));
@@ -1282,19 +1613,120 @@ mod tests {
     }
 
     #[test]
+    fn capture_marks_frames_paused_when_they_were_recorded() {
+        let shared = Shared::new(None, PathBuf::from("."), sample_manifest());
+        let (tx, rx) = mpsc::sync_channel(4);
+        *shared.frame_tx.lock().unwrap() = Some(tx);
+        shared.capture(&frame(0.1));
+        shared.paused.store(true, Ordering::SeqCst);
+        shared.capture(&frame(0.1));
+        let paused: Vec<bool> = rx.try_iter().map(|frame| frame.paused).collect();
+        assert_eq!(paused, [false, true]);
+
+        // A closed queue loses nothing silently: frames are counted.
+        shared.close_queue();
+        shared.capture(&frame(0.1));
+        assert_eq!(shared.frames_seen.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn closing_the_queue_ends_the_writer_without_the_microphone() {
+        let (_dir, writer) = start_writer(None);
+        *writer.shared.frame_tx.lock().unwrap() = Some(writer.frames.clone());
+        for _ in 0..10 {
+            writer.shared.capture(&frame(0.3));
+        }
+        // The test's own sender stands in for nothing else holding the queue.
+        drop(writer.frames);
+        writer.shared.close_queue();
+        assert!(join_within(writer.handle, Duration::from_secs(5), "writer"));
+        assert_eq!(read_samples(&writer.audio).len(), 4_800);
+    }
+
+    #[test]
     fn audio_is_readable_before_the_meeting_ends() {
         let (_dir, writer) = start_writer(None);
         for _ in 0..100 {
-            writer.frames.send(frame(0.1)).unwrap();
+            writer.frames.send(captured(0.1, false)).unwrap();
         }
         wait_for_written(&writer.shared, 48_000);
         // The next checkpoint makes it durable and readable as is.
         std::thread::sleep(CHECKPOINT + Duration::from_millis(500));
-        let readable = hound::WavReader::open(&writer.audio).unwrap().len();
-        assert_eq!(readable, 48_000);
+        assert_eq!(hound::WavReader::open(&writer.audio).unwrap().len(), 48_000);
 
         drop(writer.frames);
         writer.handle.join().unwrap();
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_failed_file_is_continued_in_a_follow_on_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = Shared::new(None, dir.path().to_path_buf(), sample_manifest());
+        // /dev/full fails every write with "no space left on device".
+        let full = wav::DurableWav::open_existing(Path::new("/dev/full")).unwrap();
+        let mut sink = AudioSink {
+            shared: &shared,
+            live: None,
+            current: Some((full, PathBuf::from("/dev/full"))),
+            part: 1,
+            backlog: std::collections::VecDeque::new(),
+            backlog_samples: 0,
+            next_retry: Instant::now(),
+            last_checkpoint: Instant::now(),
+        };
+        for _ in 0..40 {
+            sink.push(frame(0.2));
+        }
+        sink.checkpoint(true);
+        assert!(sink.current.is_none());
+        assert!(shared.write_error.lock().unwrap().is_some());
+        assert_eq!(shared.phase(), RecordingPhase::Failed);
+
+        // Audio keeps arriving and is held until the retry.
+        for _ in 0..10 {
+            sink.push(frame(0.2));
+        }
+        sink.retry();
+        assert!(sink.current.is_none(), "retried before WRITE_RETRY");
+        sink.next_retry = Instant::now();
+        sink.retry();
+        assert!(sink.current.is_some());
+        assert!(shared.write_error.lock().unwrap().is_none());
+        sink.push(frame(0.2));
+        sink.finish();
+
+        let manifest = shared.manifest.lock().unwrap().clone();
+        assert_eq!(manifest.extra_audio_files, ["Meeting (part 2).wav"]);
+        let kinds: Vec<MarkerKind> = manifest.markers.iter().map(|m| m.kind).collect();
+        assert_eq!(kinds, [MarkerKind::DiskFull, MarkerKind::WriteResumed]);
+        // Frames that never reached /dev/full's disk plus the held ones
+        // went to part 2; whatever the buffered writer had taken first is
+        // the only loss.
+        let part2 = read_samples(&dir.path().join("Meeting (part 2).wav"));
+        assert!(part2.len() >= 11 * 480, "{}", part2.len());
+    }
+
+    #[test]
+    fn backlog_is_bounded() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = Shared::new(None, dir.path().to_path_buf(), sample_manifest());
+        let mut sink = AudioSink {
+            shared: &shared,
+            live: None,
+            current: None,
+            part: 1,
+            backlog: std::collections::VecDeque::new(),
+            backlog_samples: 0,
+            next_retry: Instant::now() + Duration::from_secs(60),
+            last_checkpoint: Instant::now(),
+        };
+        let frames = MAX_BACKLOG_SAMPLES / 480 + 10;
+        for _ in 0..frames {
+            sink.push(frame(0.2));
+        }
+        assert!(sink.backlog_samples <= MAX_BACKLOG_SAMPLES);
+        assert_eq!(shared.dropped_samples.load(Ordering::Relaxed), 10 * 480);
     }
 
     #[test]
@@ -1304,7 +1736,7 @@ mod tests {
         let (live_tx, live_rx) = mpsc::sync_channel::<LiveFrame>(10);
         let (_dir, writer) = start_writer(Some(live_tx));
         for _ in 0..200 {
-            writer.frames.send(frame(0.2)).unwrap();
+            writer.frames.send(captured(0.2, false)).unwrap();
         }
         wait_for_written(&writer.shared, 96_000);
         drop(writer.frames);
@@ -1328,14 +1760,14 @@ mod tests {
         let (_dir, writer) = start_writer(None);
         // Three seconds of exact zeros: muted or blocked.
         for _ in 0..100 {
-            writer.frames.send(frame(0.0)).unwrap();
+            writer.frames.send(captured(0.0, false)).unwrap();
         }
         wait_for_written(&writer.shared, 48_000);
         assert_eq!(writer.shared.signal(), SignalState::NoSignal);
 
         // Faint but not zero: a working microphone that hears nothing yet.
         for _ in 0..10 {
-            writer.frames.send(frame(0.0001)).unwrap();
+            writer.frames.send(captured(0.0001, false)).unwrap();
         }
         wait_for_written(&writer.shared, 52_800);
         assert_eq!(writer.shared.signal(), SignalState::Ok);
@@ -1350,6 +1782,14 @@ mod tests {
 
         drop(writer.frames);
         writer.handle.join().unwrap();
+    }
+
+    #[test]
+    fn join_within_gives_up_on_a_stuck_thread() {
+        let slow = std::thread::spawn(|| std::thread::sleep(Duration::from_millis(500)));
+        assert!(!join_within(slow, Duration::from_millis(50), "test"));
+        let quick = std::thread::spawn(|| {});
+        assert!(join_within(quick, Duration::from_secs(5), "test"));
     }
 
     #[test]

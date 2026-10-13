@@ -131,12 +131,16 @@ export const useMeetingStore = create<MeetingStoreState>()((set, get) => {
         console.error("Failed to listen for meeting events:", error);
       }
       try {
-        const state = await commands.getMeetingState();
-        set({
-          status: state.status,
-          segments: state.segments,
-          recovered: state.recovered,
-        });
+        const result = await commands.getMeetingState();
+        if (result.status === "ok") {
+          set({
+            status: result.data.status,
+            segments: result.data.segments,
+            recovered: result.data.recovered,
+          });
+        } else {
+          console.error("Failed to read the meeting state:", result.error);
+        }
       } catch (error) {
         console.error("Failed to read the meeting state:", error);
       }

@@ -870,8 +870,13 @@ async stopPronunciationSample() : Promise<Result<string, string>> {
 async cancelPronunciationSample() : Promise<void> {
     await TAURI_INVOKE("cancel_pronunciation_sample");
 },
-async getMeetingState() : Promise<MeetingState> {
-    return await TAURI_INVOKE("get_meeting_state");
+async getMeetingState() : Promise<Result<MeetingState, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_meeting_state") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 },
 /**
  * Records 10 seconds from the meeting microphone and reports how it
@@ -1661,7 +1666,11 @@ export type MarkerKind =
 /**
  * Writing the audio failed for another reason.
  */
-"write_failed"
+"write_failed" | 
+/**
+ * Saving works again, into a follow-on audio file.
+ */
+"write_resumed"
 export type MeetingEvent = 
 /**
  * The running meeting's state, about four times a second, or None when
@@ -1706,6 +1715,11 @@ id: string; title: string;
  * Audio file name inside the meeting folder.
  */
 audio_file: string; 
+/**
+ * Follow-on audio files, in order, started when saving to the previous
+ * one failed.
+ */
+extra_audio_files?: string[]; 
 /**
  * Unix ms.
  */

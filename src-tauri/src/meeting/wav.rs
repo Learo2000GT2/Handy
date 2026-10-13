@@ -75,17 +75,42 @@ impl DurableWav {
         self.file.sync_data()
     }
 
-    /// Samples written so far.
-    pub fn samples(&self) -> u64 {
-        self.samples
-    }
-
     /// Finishes the file and forces it to disk. Returns the sample count.
     pub fn finish(self) -> io::Result<u64> {
         let samples = self.samples;
         self.writer.finalize().map_err(to_io)?;
         self.file.sync_all()?;
         Ok(samples)
+    }
+}
+
+impl DurableWav {
+    /// Writes to an existing file or device (tests: `/dev/full`).
+    #[cfg(test)]
+    pub fn open_existing(path: &Path) -> io::Result<Self> {
+        let file = OpenOptions::new().write(true).read(true).open(path)?;
+        let sync_handle = file.try_clone()?;
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: SAMPLE_RATE,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let writer = hound::WavWriter::new(BufWriter::new(file), spec).map_err(to_io)?;
+        Ok(Self {
+            writer,
+            file: sync_handle,
+            samples: 0,
+        })
+    }
+
+    /// Gives up on the file after a write error and makes what reached the
+    /// disk readable. The writer is leaked, not dropped: after a failed
+    /// checkpoint hound's position can be left inside the header, and its
+    /// drop would write there, over the start of the audio.
+    pub fn abandon(self, path: &Path) -> io::Result<u64> {
+        std::mem::forget(self);
+        repair(path)
     }
 }
 
@@ -244,6 +269,17 @@ mod tests {
         assert!(repair(&path).is_err());
         std::fs::write(&path, b"RIFF\0\0\0\0AVI LIST\0\0\0\0").unwrap();
         assert!(repair(&path).is_err());
+    }
+
+    #[test]
+    fn abandon_keeps_what_was_checkpointed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("meeting.wav");
+        let mut wav = DurableWav::create(&path).unwrap();
+        wav.write(&tone(16_000)).unwrap();
+        wav.checkpoint().unwrap();
+        assert_eq!(wav.abandon(&path).unwrap(), 16_000);
+        assert_eq!(read_back(&path).len(), 16_000);
     }
 
     #[test]

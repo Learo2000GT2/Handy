@@ -951,7 +951,7 @@
           "label": "Everyone in the meeting knows it is being recorded and agrees.",
           "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
         },
-        "startHint": "The audio is saved every 2 seconds, so a crash or power loss keeps everything up to that point.",
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
         "start": "Start meeting",
         "starting": "Starting…"
       },
@@ -960,7 +960,7 @@
           "recording": "Recording",
           "paused": "Paused",
           "stopping": "Saving the recording…",
-          "failed": "The audio can no longer be saved"
+          "failed": "Saving paused: trying again"
         },
         "recordedFor": "Recorded {{time}}",
         "level": "Microphone level",
@@ -974,7 +974,7 @@
         "alerts": {
           "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
           "noSignal": "The microphone sends no sound. Check that it is not muted.",
-          "writeFailed": "The audio could not be saved ({{error}}). Everything recorded until then is kept. Press Stop meeting to finish.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
           "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
           "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
         },
@@ -996,7 +996,8 @@
           "mic_back": "Microphone back",
           "gap": "The computer was asleep",
           "disk_full": "Disk full",
-          "write_failed": "Saving failed"
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
         },
         "transcript": {
           "title": "Live transcript",

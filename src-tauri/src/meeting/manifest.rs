@@ -43,6 +43,8 @@ pub enum MarkerKind {
     DiskFull,
     /// Writing the audio failed for another reason.
     WriteFailed,
+    /// Saving works again, into a follow-on audio file.
+    WriteResumed,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
@@ -64,6 +66,10 @@ pub struct MeetingManifest {
     pub title: String,
     /// Audio file name inside the meeting folder.
     pub audio_file: String,
+    /// Follow-on audio files, in order, started when saving to the previous
+    /// one failed.
+    #[serde(default)]
+    pub extra_audio_files: Vec<String>,
     /// Unix ms.
     pub started_at: i64,
     #[serde(default)]
@@ -104,6 +110,7 @@ impl MeetingManifest {
             id,
             title,
             audio_file,
+            extra_audio_files: Vec::new(),
             started_at,
             ended_at: None,
             state: MeetingFileState::Recording,
@@ -119,6 +126,23 @@ impl MeetingManifest {
 
     pub fn audio_path(&self, dir: &Path) -> PathBuf {
         dir.join(&self.audio_file)
+    }
+
+    /// Every audio file of the meeting, in order.
+    pub fn audio_paths(&self, dir: &Path) -> Vec<PathBuf> {
+        std::iter::once(&self.audio_file)
+            .chain(&self.extra_audio_files)
+            .map(|name| dir.join(name))
+            .collect()
+    }
+
+    /// Name for follow-on audio file `part` (2, 3, ...).
+    pub fn part_file_name(&self, part: u32) -> String {
+        let stem = self
+            .audio_file
+            .strip_suffix(".wav")
+            .unwrap_or(&self.audio_file);
+        format!("{stem} (part {part}).wav")
     }
 }
 
@@ -137,6 +161,60 @@ pub fn load(dir: &Path) -> io::Result<MeetingManifest> {
     serde_json::from_slice(&bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
+/// The record of a folder whose `meeting.json` is missing or unreadable (an
+/// interrupted save can leave only its temporary copy): that copy if it
+/// reads, else a record rebuilt from the audio files, marked as recording so
+/// recovery repairs them.
+fn salvage(dir: &Path) -> Option<MeetingManifest> {
+    let entries: Vec<PathBuf> = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .collect();
+    let temp_prefix = format!("{MANIFEST_FILE}.tmp-");
+    let from_temp = entries
+        .iter()
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with(&temp_prefix))
+        })
+        .filter_map(|path| std::fs::read(path).ok())
+        .find_map(|bytes| serde_json::from_slice::<MeetingManifest>(&bytes).ok());
+    if from_temp.is_some() {
+        return from_temp;
+    }
+
+    let mut audio: Vec<String> = entries
+        .iter()
+        .filter(|path| path.extension().is_some_and(|ext| ext == "wav"))
+        .filter_map(|path| Some(path.file_name()?.to_string_lossy().into_owned()))
+        .collect();
+    if audio.is_empty() {
+        return None;
+    }
+    // "Name.wav" sorts before "Name (part 2).wav".
+    audio.sort_by_key(|name| (name.len(), name.clone()));
+    let id = dir.file_name()?.to_string_lossy().into_owned();
+    let started_at =
+        chrono::NaiveDateTime::parse_from_str(id.get(..19).unwrap_or(&id), "%Y-%m-%d_%H-%M-%S")
+            .ok()
+            .and_then(|time| time.and_local_timezone(chrono::Local).earliest())
+            .map(|time| time.timestamp_millis())
+            .unwrap_or(0);
+    let mut manifest = MeetingManifest::new(
+        id,
+        String::new(),
+        audio.remove(0),
+        started_at,
+        None,
+        started_at,
+        false,
+    );
+    manifest.extra_audio_files = audio;
+    manifest.pid = 0;
+    Some(manifest)
+}
+
 /// Every readable meeting under `root`, newest first.
 pub fn list(root: &Path) -> Vec<(PathBuf, MeetingManifest)> {
     let Ok(entries) = std::fs::read_dir(root) else {
@@ -149,10 +227,11 @@ pub fn list(root: &Path) -> Vec<(PathBuf, MeetingManifest)> {
         .filter_map(|dir| match load(&dir) {
             Ok(manifest) => Some((dir, manifest)),
             Err(error) => {
-                if manifest_path(&dir).exists() {
-                    log::warn!("Skipping unreadable meeting record in {:?}: {}", dir, error);
+                let salvaged = salvage(&dir);
+                if salvaged.is_some() || manifest_path(&dir).exists() {
+                    log::warn!("Meeting record in {:?} unreadable: {}", dir, error);
                 }
-                None
+                salvaged.map(|manifest| (dir, manifest))
             }
         })
         .collect();
@@ -168,16 +247,16 @@ pub fn recover(dir: &Path, manifest: &mut MeetingManifest) -> io::Result<bool> {
     if manifest.state != MeetingFileState::Recording {
         return Ok(false);
     }
-    let audio = manifest.audio_path(dir);
-    let samples = match wav::repair(&audio) {
-        Ok(samples) => samples,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => 0,
-        Err(error) => {
-            log::warn!("Could not repair {:?}: {}", audio, error);
-            0
+    let mut samples = 0;
+    for audio in manifest.audio_paths(dir) {
+        match wav::repair(&audio) {
+            Ok(part) => samples += part,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => log::warn!("Could not repair {:?}: {}", audio, error),
         }
-    };
-    let ended_at = std::fs::metadata(&audio)
+    }
+    let last_audio = manifest.audio_paths(dir).pop().unwrap_or_default();
+    let ended_at = std::fs::metadata(&last_audio)
         .and_then(|meta| meta.modified())
         .ok()
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
@@ -295,6 +374,68 @@ mod tests {
         assert!(recover(dir.path(), &mut manifest).unwrap());
         assert_eq!(manifest.duration_ms, 0);
         assert_eq!(manifest.ended_at, Some(1_000));
+    }
+
+    #[test]
+    fn recover_adds_up_follow_on_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut manifest = sample("a", 1_000);
+        manifest.extra_audio_files = vec![manifest.part_file_name(2)];
+        assert_eq!(manifest.extra_audio_files[0], "Meeting (part 2).wav");
+        for path in manifest.audio_paths(dir.path()) {
+            let mut audio = wav::DurableWav::create(&path).unwrap();
+            audio.write(&vec![0.25; 16_000]).unwrap();
+            audio.checkpoint().unwrap();
+            std::mem::forget(audio);
+        }
+        assert!(recover(dir.path(), &mut manifest).unwrap());
+        assert_eq!(manifest.duration_ms, 2_000);
+    }
+
+    #[test]
+    fn a_folder_with_audio_but_no_record_is_listed_for_recovery() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("2026-10-13_14-05-22");
+        std::fs::create_dir(&dir).unwrap();
+        for name in [
+            "Meeting 2026-10-13 14-05.wav",
+            "Meeting 2026-10-13 14-05 (part 2).wav",
+        ] {
+            let mut audio = wav::DurableWav::create(&dir.join(name)).unwrap();
+            audio.write(&vec![0.25; 16_000]).unwrap();
+            audio.checkpoint().unwrap();
+            std::mem::forget(audio);
+        }
+
+        let listed = list(root.path());
+        assert_eq!(listed.len(), 1);
+        let (dir, mut manifest) = listed.into_iter().next().unwrap();
+        assert_eq!(manifest.id, "2026-10-13_14-05-22");
+        assert_eq!(manifest.audio_file, "Meeting 2026-10-13 14-05.wav");
+        assert_eq!(
+            manifest.extra_audio_files,
+            ["Meeting 2026-10-13 14-05 (part 2).wav"]
+        );
+        assert!(manifest.started_at > 0);
+        assert_eq!(manifest.state, MeetingFileState::Recording);
+        assert!(recover(&dir, &mut manifest).unwrap());
+        assert_eq!(manifest.duration_ms, 2_000);
+        // Saved now, so it loads normally from here on.
+        assert_eq!(load(&dir).unwrap(), manifest);
+    }
+
+    #[test]
+    fn a_left_over_temporary_record_is_used() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("a");
+        std::fs::create_dir(&dir).unwrap();
+        let manifest = sample("a", 5);
+        std::fs::write(
+            dir.join(format!("{MANIFEST_FILE}.tmp-123")),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(list(root.path()), vec![(dir, manifest)]);
     }
 
     #[test]

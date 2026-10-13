@@ -171,7 +171,7 @@ export const LiveMeeting: React.FC<{ status: MeetingStatus }> = ({
             variant="secondary"
             size="md"
             onClick={() => void setPaused(!paused)}
-            disabled={busy || status.phase === "failed"}
+            disabled={busy}
             className="inline-flex items-center gap-2"
           >
             {paused ? (
