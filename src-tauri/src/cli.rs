@@ -42,7 +42,8 @@ pub struct CliArgs {
     #[arg(short = 'f', long, value_name = "FILE")]
     pub transcribe_file: Option<PathBuf>,
 
-    /// Model id to load for --transcribe-file (default: the selected model).
+    /// Model id to load for --transcribe-file (default: the Transcribe page's
+    /// model for recordings, else the selected model).
     #[arg(long)]
     pub model: Option<String>,
 
@@ -93,8 +94,8 @@ pub struct CliArgs {
     #[arg(short = 'q', long)]
     pub quiet: bool,
 
-    /// Engine for --transcribe-file: handy (the selected model) or lemonade
-    /// (Lemonade Server). Default: the app's setting.
+    /// Engine for --transcribe-file: handy (Handy's model for recordings) or
+    /// lemonade (Lemonade Server). Default: the app's setting.
     #[arg(long, value_enum, value_name = "ENGINE", requires = "engine_use")]
     pub engine: Option<crate::settings::FileTranscriptionEngine>,
 

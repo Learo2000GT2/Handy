@@ -164,6 +164,7 @@
       "description": "Bir transkripsiyon modeli seçin veya ek modeller indirin. Farklı modeller değişen doğruluk ve hız seviyeleri sunar.",
       "deleteConfirm": "{{modelName}} modelini silmek istediğinizden emin misiniz? Kullanmak için tekrar indirmeniz gerekecek.",
       "deleteActiveConfirm": "{{modelName}} aktif modelinizdir. Silmek, yeni bir model seçene kadar transkripsiyonları durduracaktır. Emin misiniz?",
+      "deleteRecordingsConfirm": "{{modelName}} kayıtlar için seçtiğiniz modeldir. Silerseniz kayıtlar sesle yazma modelinizi kullanır. Emin misiniz?",
       "deleteTitle": "Modeli Sil",
       "filters": {
         "allLanguages": "Tüm Diller",
@@ -469,10 +470,12 @@
       "description": "Mevcut kayıtları bu bilgisayarda metne dönüştürün. Dosyalarınız cihazınızdan asla çıkmaz.",
       "settingsNote": "Seçili modelinizi ve dil, çeviri, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
       "settingsNoteLemonade": "Dil, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
+      "settingsNoteOwnModel": "Kayıtlar için seçtiğiniz modeli ve dil, çeviri, özel kelime ve dolgu sözcüğü ayarlarınızı kullanır.",
       "model": "Model: {{model}}",
       "modelLemonade": "Model: Lemonade Server'daki {{model}}",
       "noModel": "Dosyaları transkribe etmek için Modeller sayfasından indirilmiş bir model seçin.",
       "noLemonadeModel": "Dosyaları transkribe etmek için bir Lemonade modeli seçin.",
+      "noRecordingsModel": "Kayıtlar için seçtiğiniz model indirilmemiş. Yukarıdan başka bir model seçin veya Modeller sayfasından indirin.",
       "dropzone": {
         "title": "Ses veya video dosyalarını buraya bırakın",
         "hint": "Her uzunlukta röportaj, toplantı, ders ve sesli not",
@@ -499,6 +502,14 @@
         "description": "Sesle yazma her zaman Handy'nin kendi modelini kullanır. Bu seçim yalnızca dosyalar içindir.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Kayıtlar için model",
+        "description": "Kayıtlar, sesle yazmadan daha yavaş ama daha doğru bir model kullanabilir. Bu model ayrı çalışır ve yalnızca dosyalar transkribe edilirken yüklenir; böylece sesle yazma modeliniz hazır kalır. İki modelin de belleğe sığması gerekir.",
+        "same": "Sesle yazmayla aynı ({{model}})",
+        "sameNoModel": "Sesle yazmayla aynı",
+        "switchWarning": "Bu dosya sesle yazma modelinizi kullanıyor; bu yüzden sesle yazma modelini şimdi değiştirmek onu durdurur. İkisini ayrı tutmak için kayıtlar için farklı bir model seçin.",
+        "onCpu": "Grafik belleği iki model için yetmediğinden kayıtlar işlemcide çalışıyor. Ekran kartını kullanmak için kayıtlar için daha küçük bir model seçin."
       },
       "lemonade": {
         "url": {

@@ -8,6 +8,7 @@ import type {
   FileJobErrorCode,
   FileJobSnapshot,
   LemonadeErrorKind,
+  ModelInfo,
   SpeakerJobState,
   SupportedAudioFormats,
   TranscriptSpeakers,
@@ -39,6 +40,8 @@ import {
   pickerExtensions,
   placeMenu,
   previewText,
+  recordingsModelId,
+  recordingsModelOptions,
   refocusTarget,
   runIfConfirmed,
   serverUrlHost,
@@ -572,12 +575,122 @@ assert.equal(refocusTarget(false, true, "download", "toggle"), null);
 
 // notReadyKey: each engine names what it is missing; the other engine's
 // model doesn't matter.
-assert.equal(notReadyKey("lemonade", "", true), "noLemonadeModel");
-assert.equal(notReadyKey("lemonade", "", false), "noLemonadeModel");
-assert.equal(notReadyKey("lemonade", "Whisper-Base", false), null);
-assert.equal(notReadyKey("handy", "", false), "noModel");
-assert.equal(notReadyKey("handy", "", true), null);
-assert.equal(notReadyKey("handy", "Whisper-Base", false), "noModel");
+assert.equal(notReadyKey("lemonade", "", true, false), "noLemonadeModel");
+assert.equal(notReadyKey("lemonade", "", false, false), "noLemonadeModel");
+assert.equal(notReadyKey("lemonade", "", true, true), "noLemonadeModel");
+assert.equal(notReadyKey("lemonade", "Whisper-Base", false, true), null);
+assert.equal(notReadyKey("handy", "", false, false), "noModel");
+assert.equal(notReadyKey("handy", "", true, false), null);
+assert.equal(notReadyKey("handy", "Whisper-Base", false, false), "noModel");
+// A model chosen for recordings that isn't ready says so instead.
+assert.equal(notReadyKey("handy", "", false, true), "noRecordingsModel");
+assert.equal(notReadyKey("handy", "", true, true), null);
+
+// recordingsModelId: the chosen model, else the dictation model.
+assert.equal(recordingsModelId("", "small"), "small");
+assert.equal(recordingsModelId("  ", "small"), "small");
+assert.equal(recordingsModelId("cohere", "small"), "cohere");
+assert.equal(recordingsModelId(" cohere ", ""), "cohere");
+
+// recordingsModelOptions: "Same as dictation" first, then the downloaded
+// transcribe-cpp models by name; ONNX and missing models are not offered.
+{
+  const model = (
+    id: string,
+    name: string,
+    engineType: ModelInfo["engine_type"],
+    isDownloaded: boolean,
+  ): ModelInfo => ({
+    id,
+    name,
+    description: `${name} description`,
+    filename: `${id}.gguf`,
+    source: "Local",
+    size_mb: 100,
+    is_downloaded: isDownloaded,
+    is_downloading: false,
+    partial_size: 0,
+    is_directory: false,
+    engine_type: engineType,
+    accuracy_score: 0.5,
+    speed_score: 0.5,
+    supports_translation: false,
+    is_recommended: false,
+    supported_languages: ["en"],
+    supports_language_selection: false,
+    is_custom: false,
+    supports_streaming: false,
+    supports_language_detection: false,
+  });
+  const models = [
+    model("zeta", "Zeta GGUF", "TranscribeCpp", true),
+    model("parakeet-tdt-0.6b-v3", "Parakeet V3", "Parakeet", true),
+    model("small", "Whisper Small", "TranscribeCpp", true),
+    model("alpha", "Alpha GGUF", "TranscribeCpp", true),
+    model("medium", "Whisper Medium", "TranscribeCpp", false),
+  ];
+  const en = localeI18n.getFixedT("en");
+
+  const options = recordingsModelOptions(
+    models,
+    "parakeet-tdt-0.6b-v3",
+    "",
+    en,
+  );
+  assert.deepEqual(
+    options.map((option) => option.value),
+    ["", "alpha", "small", "zeta"],
+  );
+  assert.equal(options[0].label, "Same as dictation (Parakeet V3)");
+  assert.equal(options[0].disabled, undefined);
+  // Catalog models use their translated name and description.
+  assert.equal(options[2].label, "Whisper Small");
+  assert.equal(options[2].description, "Fast and fairly accurate.");
+  assert.equal(options[1].description, "Alpha GGUF description");
+  assert.ok(options.every((option) => option.disabled !== true));
+
+  // No dictation model.
+  assert.equal(
+    recordingsModelOptions(models, "", "", en)[0].label,
+    "Same as dictation",
+  );
+  // The dictation model is offered like any other.
+  assert.ok(
+    recordingsModelOptions(models, "small", "small", en).some(
+      (option) => option.value === "small" && option.disabled !== true,
+    ),
+  );
+
+  // A chosen model that isn't usable (deleted, or edited to an ONNX model)
+  // stays listed, disabled, by name or by id.
+  const notDownloaded = recordingsModelOptions(models, "small", "medium", en);
+  assert.deepEqual(notDownloaded[notDownloaded.length - 1], {
+    value: "medium",
+    label: "Whisper Medium",
+    disabled: true,
+  });
+  const onnx = recordingsModelOptions(
+    models,
+    "small",
+    "parakeet-tdt-0.6b-v3",
+    en,
+  );
+  assert.equal(onnx[onnx.length - 1].label, "Parakeet V3");
+  assert.equal(onnx[onnx.length - 1].disabled, true);
+  const gone = recordingsModelOptions(models, "small", "gone-model", en);
+  assert.equal(gone.length, 5);
+  assert.deepEqual(gone[gone.length - 1], {
+    value: "gone-model",
+    label: "gone-model",
+    disabled: true,
+  });
+
+  // Labels follow the UI language.
+  const de = localeI18n.getFixedT("de");
+  const german = recordingsModelOptions(models, "small", "", de)[0].label;
+  assert.notEqual(german, "Same as dictation (Whisper Small)");
+  assert.ok(german.includes("Whisper Small"), german);
+}
 
 // speakerName: the given name (trimmed), else the default for that id.
 const transcriptSpeakers: TranscriptSpeakers = {

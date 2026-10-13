@@ -7,6 +7,7 @@ import {
   events,
   type FileJobSnapshot,
   type FileTranscriptionEvent,
+  type RecordingsEngineEvent,
   type SpeakerModelEvent,
   type SpeakerModelStatus,
   type SupportedAudioFormats,
@@ -64,6 +65,8 @@ interface FileTranscriptionState {
   speakerDownload: SpeakerDownload | null;
   /** Why the last speaker model download failed. */
   speakerDownloadError: string | null;
+  /** The recordings engine's state (its own model for recordings); null until loaded. */
+  recordingsEngine: RecordingsEngineEvent | null;
   initialized: boolean;
 
   initialize: () => Promise<void>;
@@ -296,6 +299,7 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
     speakerModel: null,
     speakerDownload: null,
     speakerDownloadError: null,
+    recordingsEngine: null,
     initialized: false,
 
     initialize: async () => {
@@ -317,6 +321,13 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
       } catch (error) {
         console.error("Failed to listen for speaker model events:", error);
       }
+      try {
+        await events.recordingsEngineEvent.listen((event) =>
+          set({ recordingsEngine: event.payload }),
+        );
+      } catch (error) {
+        console.error("Failed to listen for recordings engine events:", error);
+      }
 
       await Promise.all([
         (async () => {
@@ -336,6 +347,17 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
         })(),
         get().refreshFormats(),
         get().refreshSpeakerModel(),
+        (async () => {
+          try {
+            const result = await commands.getRecordingsEngineStatus();
+            // An event since the listener started is newer than this.
+            if (result.status === "ok" && get().recordingsEngine === null) {
+              set({ recordingsEngine: result.data });
+            }
+          } catch (error) {
+            console.error("Failed to read the recordings engine state:", error);
+          }
+        })(),
       ]);
     },
 

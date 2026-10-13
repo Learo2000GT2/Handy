@@ -218,6 +218,7 @@
       "availableModels": "Beschikbaar voor download",
       "deleteConfirm": "Weet je zeker dat je {{modelName}} wilt verwijderen? Je moet het model opnieuw downloaden om het weer te gebruiken.",
       "deleteActiveConfirm": "{{modelName}} is je actieve model. Als je dit verwijdert, stoppen de transcripties totdat je een nieuw model selecteert. Weet je het zeker?",
+      "deleteRecordingsConfirm": "{{modelName}} is je model voor opnames. Als je het verwijdert, gebruiken opnames je dicteermodel. Weet je het zeker?",
       "deleteTitle": "Model verwijderen",
       "filters": {
         "allLanguages": "Alle talen",
@@ -469,10 +470,12 @@
       "description": "Zet bestaande opnames om in tekst op deze computer. Je bestanden verlaten je apparaat nooit.",
       "settingsNote": "Gebruikt je geselecteerde model en je instellingen voor taal, vertaling, eigen woordenlijst en opvulwoorden.",
       "settingsNoteLemonade": "Gebruikt je instellingen voor taal, eigen woordenlijst en opvulwoorden.",
+      "settingsNoteOwnModel": "Gebruikt je model voor opnames en je instellingen voor taal, vertaling, eigen woordenlijst en opvulwoorden.",
       "model": "Model: {{model}}",
       "modelLemonade": "Model: {{model}} op Lemonade Server",
       "noModel": "Selecteer een gedownload model op de pagina Modellen om bestanden te transcriberen.",
       "noLemonadeModel": "Kies een Lemonade-model om bestanden te transcriberen.",
+      "noRecordingsModel": "Je model voor opnames is niet gedownload. Kies hierboven een ander of download het op de pagina Modellen.",
       "dropzone": {
         "title": "Sleep audio- of videobestanden hierheen",
         "hint": "Interviews, vergaderingen, colleges en spraakmemo's van elke lengte",
@@ -499,6 +502,14 @@
         "description": "Dicteren gebruikt altijd het eigen model van Handy. Deze keuze geldt alleen voor bestanden.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model voor opnames",
+        "description": "Opnames kunnen een trager maar nauwkeuriger model gebruiken dan dicteren. Het draait apart en wordt alleen geladen terwijl bestanden worden getranscribeerd, zodat je dicteermodel klaar blijft. Beide modellen moeten in het geheugen passen.",
+        "same": "Zelfde als dicteren ({{model}})",
+        "sameNoModel": "Zelfde als dicteren",
+        "switchWarning": "Dit bestand gebruikt je dicteermodel, dus als je nu van dicteermodel wisselt, stopt het. Kies een ander model voor opnames om ze gescheiden te houden.",
+        "onCpu": "Opnames draaien op de processor, omdat er niet genoeg grafisch geheugen is voor beide modellen. Kies een kleiner model voor opnames om de grafische kaart te gebruiken."
       },
       "lemonade": {
         "url": {

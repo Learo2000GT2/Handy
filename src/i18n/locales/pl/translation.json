@@ -164,6 +164,7 @@
       "description": "Wybierz model transkrypcji lub pobierz dodatkowe modele. Różne modele oferują różne poziomy dokładności i szybkości.",
       "deleteConfirm": "Czy na pewno chcesz usunąć {{modelName}}? Będziesz musiał pobrać go ponownie, aby go użyć.",
       "deleteActiveConfirm": "{{modelName}} jest Twoim aktywnym modelem. Usunięcie go zatrzyma transkrypcje, dopóki nie wybierzesz nowego modelu. Czy na pewno chcesz kontynuować?",
+      "deleteRecordingsConfirm": "{{modelName}} to Twój model do nagrań. Jeśli go usuniesz, nagrania będą używać modelu do dyktowania. Czy na pewno chcesz kontynuować?",
       "deleteTitle": "Usuń model",
       "filters": {
         "allLanguages": "Wszystkie języki",
@@ -469,10 +470,12 @@
       "description": "Zamieniaj istniejące nagrania na tekst na tym komputerze. Twoje pliki nigdy nie opuszczają urządzenia.",
       "settingsNote": "Używa wybranego modelu oraz Twoich ustawień języka, tłumaczenia, własnych słów i wyrazów wypełniających.",
       "settingsNoteLemonade": "Używa Twoich ustawień języka, własnych słów i wyrazów wypełniających.",
+      "settingsNoteOwnModel": "Używa modelu do nagrań oraz Twoich ustawień języka, tłumaczenia, własnych słów i wyrazów wypełniających.",
       "model": "Model: {{model}}",
       "modelLemonade": "Model: {{model}} na Lemonade Server",
       "noModel": "Wybierz pobrany model na stronie Modele, aby transkrybować pliki.",
       "noLemonadeModel": "Wybierz model Lemonade, aby transkrybować pliki.",
+      "noRecordingsModel": "Model do nagrań nie jest pobrany. Wybierz inny powyżej lub pobierz go na stronie Modele.",
       "dropzone": {
         "title": "Upuść tutaj pliki audio lub wideo",
         "hint": "Wywiady, spotkania, wykłady i notatki głosowe dowolnej długości",
@@ -499,6 +502,14 @@
         "description": "Dyktowanie zawsze używa własnego modelu Handy. Ten wybór dotyczy tylko plików.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model do nagrań",
+        "description": "Nagrania mogą używać wolniejszego, ale dokładniejszego modelu niż dyktowanie. Działa on osobno i jest wczytywany tylko podczas transkrypcji plików, więc model do dyktowania pozostaje gotowy. Oba modele muszą zmieścić się w pamięci.",
+        "same": "Taki sam jak do dyktowania ({{model}})",
+        "sameNoModel": "Taki sam jak do dyktowania",
+        "switchWarning": "Ten plik używa modelu do dyktowania, więc zmiana modelu do dyktowania teraz go zatrzyma. Aby je rozdzielić, wybierz inny model do nagrań.",
+        "onCpu": "Nagrania są przetwarzane przez procesor, ponieważ pamięć karty graficznej nie mieści obu modeli. Wybierz mniejszy model do nagrań, aby korzystać z karty graficznej."
       },
       "lemonade": {
         "url": {

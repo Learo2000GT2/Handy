@@ -5,6 +5,7 @@
  * `bun` (see transcript.test.ts). Export rendering (TXT, Markdown, SRT, VTT)
  * lives in Rust; these helpers only cover display and file-name concerns.
  */
+import type { TFunction } from "i18next";
 import type {
   FileJobErrorCode,
   FileJobSnapshot,
@@ -12,6 +13,7 @@ import type {
   FileTranscriptionEngine,
   LemonadeErrorKind,
   LemonadeSettings,
+  ModelInfo,
   SpeakerSkipReason,
   SupportedAudioFormats,
   TranscriptFormat,
@@ -19,6 +21,10 @@ import type {
   TranscriptSource,
   TranscriptSpeakers,
 } from "@/bindings";
+import {
+  getTranslatedModelDescription,
+  getTranslatedModelName,
+} from "./modelTranslation";
 
 /** Formats listed on the drop zone. The full list comes from the backend. */
 export const DISPLAY_FORMATS = [
@@ -174,18 +180,86 @@ export const errorKey = (code: FileJobErrorCode): JobErrorKey =>
 
 /**
  * Why files can't be transcribed with `engine` yet, as a key under
- * `settings.transcribeFiles`, or null when they can: Handy needs its selected
- * model downloaded, Lemonade needs a model chosen in the engine card.
+ * `settings.transcribeFiles`, or null when they can: Handy needs its model
+ * for recordings downloaded (the selected model, unless one is chosen for
+ * recordings: `explicitRecordingsModel`), Lemonade needs a model chosen in
+ * the engine card.
  */
 export const notReadyKey = (
   engine: FileTranscriptionEngine,
   lemonadeModel: string,
   handyModelReady: boolean,
-): "noModel" | "noLemonadeModel" | null => {
+  explicitRecordingsModel: boolean,
+): "noModel" | "noRecordingsModel" | "noLemonadeModel" | null => {
   if (engine === "lemonade") {
     return lemonadeModel === "" ? "noLemonadeModel" : null;
   }
-  return handyModelReady ? null : "noModel";
+  if (handyModelReady) return null;
+  return explicitRecordingsModel ? "noRecordingsModel" : "noModel";
+};
+
+/**
+ * The model Handy transcribes files with: the model for recordings setting
+ * when one is chosen, else the dictation model (as `recordings_model` in
+ * `settings.rs`).
+ */
+export const recordingsModelId = (
+  setting: string,
+  dictationModelId: string,
+): string => {
+  const chosen = setting.trim();
+  return chosen === "" ? dictationModelId : chosen;
+};
+
+export interface RecordingsModelOption {
+  value: string;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+}
+
+/**
+ * Choices for the model for recordings: "Same as dictation" (value ""),
+ * then the downloaded transcribe-cpp models by name (the only ones the
+ * recordings engine runs). A chosen model that is no longer among them stays
+ * listed, disabled, so the picker still names it.
+ */
+export const recordingsModelOptions = (
+  models: ModelInfo[],
+  dictationModelId: string,
+  selectedId: string,
+  t: TFunction,
+): RecordingsModelOption[] => {
+  const dictation = models.find((model) => model.id === dictationModelId);
+  const same: RecordingsModelOption = {
+    value: "",
+    label: dictation
+      ? t("settings.transcribeFiles.recordingsModel.same", {
+          model: getTranslatedModelName(dictation, t),
+        })
+      : t("settings.transcribeFiles.recordingsModel.sameNoModel"),
+  };
+  const usable = models
+    .filter(
+      (model) => model.is_downloaded && model.engine_type === "TranscribeCpp",
+    )
+    .map((model) => ({
+      value: model.id,
+      label: getTranslatedModelName(model, t),
+      description: getTranslatedModelDescription(model, t),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const options: RecordingsModelOption[] = [same, ...usable];
+  const selected = selectedId.trim();
+  if (selected !== "" && !usable.some((option) => option.value === selected)) {
+    const model = models.find((candidate) => candidate.id === selected);
+    options.push({
+      value: selected,
+      label: model ? getTranslatedModelName(model, t) : selected,
+      disabled: true,
+    });
+  }
+  return options;
 };
 
 /** Lemonade settings before the user changes them (as in `settings.rs`). */

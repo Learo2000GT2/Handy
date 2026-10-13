@@ -217,6 +217,7 @@
       "availableModels": "可供下載",
       "deleteConfirm": "確定要刪除 {{modelName}} 嗎？刪除後須重新下載才能使用",
       "deleteActiveConfirm": "{{modelName}} 是您目前使用的模型。刪除後將停止轉錄，直到您選擇新的模型。確定要刪除嗎？",
+      "deleteRecordingsConfirm": "{{modelName}} 是您的錄音模型。刪除後，錄音將使用您的聽寫模型。確定要刪除嗎？",
       "deleteTitle": "刪除模型",
       "filters": {
         "allLanguages": "所有語言",
@@ -469,10 +470,12 @@
       "description": "在這台電腦上將現有錄音轉為文字。您的檔案絕不會離開您的裝置。",
       "settingsNote": "使用您選擇的模型，以及您的語言、翻譯、自訂詞彙和語助詞設定。",
       "settingsNoteLemonade": "使用您的語言、自訂詞彙和語助詞設定。",
+      "settingsNoteOwnModel": "使用您的錄音模型，以及您的語言、翻譯、自訂詞彙和語助詞設定。",
       "model": "模型：{{model}}",
       "modelLemonade": "模型：Lemonade Server 上的 {{model}}",
       "noModel": "請在「模型」頁面選擇已下載的模型，以便轉錄檔案。",
       "noLemonadeModel": "請選擇 Lemonade 模型以轉錄檔案。",
+      "noRecordingsModel": "您的錄音模型尚未下載。請在上方選擇其他模型，或在「模型」頁面下載。",
       "dropzone": {
         "title": "將音訊或影片檔案拖放到這裡",
         "hint": "訪談、會議、講座和語音備忘錄，長度不限",
@@ -499,6 +502,14 @@
         "description": "聽寫一律使用 Handy 本身的模型。此選項僅適用於檔案。",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "錄音模型",
+        "description": "錄音可以使用比聽寫更慢但更準確的模型。它會獨立執行，僅在轉錄檔案時載入，因此您的聽寫模型隨時就緒。兩個模型都必須能放入記憶體。",
+        "same": "與聽寫相同（{{model}}）",
+        "sameNoModel": "與聽寫相同",
+        "switchWarning": "此檔案使用您的聽寫模型，因此現在更換聽寫模型會使其停止。若要將兩者分開，請為錄音選擇其他模型。",
+        "onCpu": "由於顯示記憶體不足以同時容納兩個模型，錄音正在處理器上執行。若要使用顯示卡，請為錄音選擇較小的模型。"
       },
       "lemonade": {
         "url": {

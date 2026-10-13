@@ -10,6 +10,10 @@ use crate::engine_supervisor::{
 use crate::file_transcription::types::{TimingGrain, TranscriptSegment};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::{EngineType, ModelManager};
+use crate::managers::recordings_engine::{
+    recordings_linger, should_unload_recordings, vram_need, FileModelSlot, RecordingsEngine,
+    RecordingsEngineEvent,
+};
 use crate::settings::{
     get_settings, AppSettings, ChineseScript, ModelUnloadTimeout, OrtAcceleratorSetting,
     TranscribeAcceleratorSetting,
@@ -49,7 +53,8 @@ const FILE_JOB_LOAD_POLL: Duration = Duration::from_millis(200);
 /// the dictation using it has finished.
 const FILE_JOB_DICTATION_POLL: Duration = Duration::from_millis(150);
 /// Times one file chunk is retried after a global cancel (Escape during a
-/// dictation) stopped it.
+/// dictation) stopped it, or, on the recordings engine, a dictation
+/// interrupted it.
 const FILE_CHUNK_FOREIGN_CANCEL_RETRIES: u32 = 2;
 /// Times the job's model is reloaded for one file chunk after it was
 /// unloaded or its engine was lost.
@@ -346,6 +351,9 @@ pub struct TranscriptionManager {
     /// Bumped by [`Self::cancel_transcription`], so a dictation still waiting
     /// for the run gate when the user cancels never starts its run.
     transcription_cancels: Arc<AtomicU64>,
+    /// The engine of file jobs whose model for recordings differs from the
+    /// dictation model (see [`crate::managers::recordings_engine`]).
+    recordings: Arc<RecordingsEngine>,
 }
 
 impl TranscriptionManager {
@@ -372,6 +380,7 @@ impl TranscriptionManager {
             dictation_holds: Arc::new(AtomicUsize::new(0)),
             unload_deferred: Arc::new(AtomicBool::new(false)),
             transcription_cancels: Arc::new(AtomicU64::new(0)),
+            recordings: Arc::new(RecordingsEngine::new(!transcribe_gpu_disabled_for_host())),
         };
 
         // Start the idle watcher
@@ -391,6 +400,9 @@ impl TranscriptionManager {
 
                     let settings = get_settings(&app_handle_cloned);
                     let timeout = settings.model_unload_timeout;
+
+                    // The recordings model keeps its own, shorter linger.
+                    manager_cloned.unload_idle_recordings(timeout);
 
                     // Skip Immediately — that variant is handled by
                     // maybe_unload_immediately() after each transcription.
@@ -489,6 +501,9 @@ impl TranscriptionManager {
     /// latest settings.
     pub fn reload_model_on_next_use(&self) {
         self.reload_model_on_next_use.store(true, Ordering::Release);
+        self.recordings
+            .reload_on_next_use
+            .store(true, Ordering::Release);
     }
 
     /// An explicit transcribe.cpp accelerator or GPU device change is the
@@ -497,6 +512,7 @@ impl TranscriptionManager {
     /// not affect this.
     pub fn retry_transcribe_gpu(&self, reason: &str) {
         self.engine.retry_gpu(reason);
+        self.recordings.engine.retry_gpu(reason);
     }
 
     /// The engine gives up on a model by itself when its worker can't be
@@ -560,9 +576,11 @@ impl TranscriptionManager {
 
     /// Unload the model without waiting for the transcribe-cpp worker to
     /// exit, so it never blocks the caller (e.g. the event loop) behind a
-    /// transcription in progress. The model reads as unloaded at once.
+    /// transcription in progress. The model reads as unloaded at once. An
+    /// explicit unload (tray, command) also frees an idle recordings model.
     pub fn request_unload(&self) {
         drop(self.begin_unload());
+        self.unload_recordings_if_idle();
     }
 
     /// Every state change of an unload, done now on the caller's thread: a
@@ -624,7 +642,9 @@ impl TranscriptionManager {
             && self.is_model_loaded()
         {
             info!("Immediately unloading model after {}", context);
-            self.request_unload();
+            // The dictation model only: the recordings model is freed when
+            // the file queue drains, not between its jobs.
+            drop(self.begin_unload());
         }
     }
 
@@ -718,31 +738,7 @@ impl TranscriptionManager {
 
         let loaded_onnx = match model_info.engine_type {
             EngineType::TranscribeCpp => {
-                // The backend is chosen at load time. With an explicit
-                // `device_index` (the --device-index flag) hard-select that
-                // registered device; otherwise re-read the persisted
-                // accelerator preference (so an accelerator change marked for
-                // reload takes effect here). The worker resolves the selector
-                // to a device handle, and rejects an index that isn't a
-                // loadable device (a host without GPU access lists none).
-                let (backend, device) = match device_index {
-                    Some(index) => (Backend::Auto, DeviceSelector::Index(index)),
-                    None => {
-                        let settings = get_settings(&self.app_handle);
-                        let accelerator = settings.transcribe_accelerator;
-                        match resolve_gpu_device(
-                            accelerator,
-                            settings.transcribe_gpu_device.as_deref(),
-                        ) {
-                            // Backend::Auto accepts an exact GPU device.
-                            Some(key) => (Backend::Auto, DeviceSelector::Key(key)),
-                            // Without a valid exact device, backend selection
-                            // handles the retired generic GPU state and host
-                            // CPU guard.
-                            None => (select_transcribe_backend(accelerator), DeviceSelector::Auto),
-                        }
-                    }
-                };
+                let (backend, device) = self.transcribe_cpp_target(device_index);
                 let requested_device = format!("{:?}", device);
                 let info = self
                     .engine
@@ -750,6 +746,7 @@ impl TranscriptionManager {
                         path: model_path.clone(),
                         backend,
                         device,
+                        min_gpu_free_bytes: None,
                     })
                     .map_err(|e| {
                         let error_msg = format!("Failed to load model {}: {}", model_id, e);
@@ -884,6 +881,31 @@ impl TranscriptionManager {
             load_duration.as_millis()
         );
         Ok(())
+    }
+
+    /// The backend and device a transcribe-cpp model loads on. The backend is
+    /// chosen at load time. With an explicit `device_index` (the
+    /// --device-index flag) hard-select that registered device; otherwise
+    /// re-read the persisted accelerator preference (so an accelerator change
+    /// marked for reload takes effect here). The worker resolves the selector
+    /// to a device handle, and rejects an index that isn't a loadable device
+    /// (a host without GPU access lists none).
+    fn transcribe_cpp_target(&self, device_index: Option<usize>) -> (Backend, DeviceSelector) {
+        match device_index {
+            Some(index) => (Backend::Auto, DeviceSelector::Index(index)),
+            None => {
+                let settings = get_settings(&self.app_handle);
+                let accelerator = settings.transcribe_accelerator;
+                match resolve_gpu_device(accelerator, settings.transcribe_gpu_device.as_deref()) {
+                    // Backend::Auto accepts an exact GPU device.
+                    Some(key) => (Backend::Auto, DeviceSelector::Key(key)),
+                    // Without a valid exact device, backend selection
+                    // handles the retired generic GPU state and host
+                    // CPU guard.
+                    None => (select_transcribe_backend(accelerator), DeviceSelector::Auto),
+                }
+            }
+        }
     }
 
     /// Kicks off the model loading in a background thread if it's not already loaded
@@ -1405,6 +1427,7 @@ impl TranscriptionManager {
     ) -> Result<RunOutcome> {
         match self.engine.loaded() {
             Some(info) => self.transcribe_cpp(
+                EngineSlot::Dictation,
                 info,
                 audio,
                 settings,
@@ -1421,9 +1444,12 @@ impl TranscriptionManager {
     /// capabilities (cheap GGUF-metadata reads) are the source of truth, not
     /// the ModelManager copy. The whisper run extension is kind-tagged, so
     /// non-whisper archs (parakeet, voxtral, …) reject it with INVALID_ARG;
-    /// attach it — and translate — only where supported.
+    /// attach it — and translate — only where supported. `slot` is the
+    /// engine `info` was read from.
+    #[allow(clippy::too_many_arguments)]
     fn transcribe_cpp(
         &self,
+        slot: EngineSlot,
         info: LoadedInfo,
         audio: Vec<f32>,
         settings: &AppSettings,
@@ -1443,7 +1469,7 @@ impl TranscriptionManager {
         let languages = info.capabilities.languages;
         debug!(
             "transcribe-cpp model '{}' on '{}': initial_prompt={}, translate={}, languages={:?}",
-            settings.selected_model,
+            active_model,
             info.backend,
             model_takes_initial_prompt,
             model_supports_translate,
@@ -1493,15 +1519,26 @@ impl TranscriptionManager {
             run_options.timestamps
         );
 
+        let engine = match slot {
+            EngineSlot::Dictation => &self.engine,
+            EngineSlot::Recordings => &self.recordings.engine,
+        };
         let result = match file {
-            Some(token) => self.engine.transcribe_scoped(audio, run_options, token),
-            None => self.engine.transcribe(audio, run_options),
+            Some(token) => engine.transcribe_scoped(audio, run_options, token),
+            None => engine.transcribe(audio, run_options),
         };
         let transcript = match result {
             Ok(transcript) => transcript,
             Err(EngineError::Cancelled) => return Err(EngineError::Cancelled.into()),
             Err(e) => {
-                self.forget_model_if_engine_dropped(active_model, &e.to_string());
+                match slot {
+                    EngineSlot::Dictation => {
+                        self.forget_model_if_engine_dropped(active_model, &e.to_string())
+                    }
+                    EngineSlot::Recordings => {
+                        self.forget_recordings_model_if_dropped(active_model, &e.to_string())
+                    }
+                }
                 return Err(anyhow::anyhow!(
                     "transcribe-cpp transcription failed: {}",
                     e
@@ -1724,6 +1761,15 @@ impl TranscriptionManager {
     }
 }
 
+/// The transcribe-cpp engine a run goes to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EngineSlot {
+    /// The dictation model's engine.
+    Dictation,
+    /// The recordings engine (file jobs with their own model).
+    Recordings,
+}
+
 /// What a batch transcription produced, plus what post-processing needs to
 /// know about how it was produced.
 struct RunOutcome {
@@ -1817,6 +1863,8 @@ impl std::error::Error for ChunkError {}
 
 /// Holds the model for a file job: while any lease exists the model is not
 /// unloaded by "Immediately", the idle watcher, or dictation's FinishGuard.
+/// A lease on the recordings engine holds the dictation model the same way,
+/// and its own model too.
 pub struct FileJobLease {
     tm: TranscriptionManager,
     model_id: String,
@@ -1827,6 +1875,8 @@ pub struct FileJobLease {
     /// whose own run gives no evidence.
     evidence: Mutex<Option<OutputLanguageEvidence>>,
     limits: ChunkLimits,
+    /// The engine the job runs on, fixed when it starts.
+    slot: FileModelSlot,
 }
 
 impl FileJobLease {
@@ -1855,6 +1905,9 @@ impl FileJobLease {
         offset_ms: u64,
         real_len_ms: u64,
     ) -> Result<ChunkTranscript, ChunkError> {
+        if self.slot == FileModelSlot::Own {
+            return self.transcribe_own_chunk(samples, offset_ms, real_len_ms);
+        }
         let tm = &self.tm;
         let mut foreign_cancels = 0;
         let mut reloads = 0;
@@ -1941,6 +1994,91 @@ impl FileJobLease {
         }
     }
 
+    /// [`transcribe_chunk`](Self::transcribe_chunk) on the recordings
+    /// engine. There is no run gate: a chunk never starts while a dictation
+    /// is active (it yields instead), and one a dictation interrupted (see
+    /// [`TranscriptionManager::hold_for_dictation`]) is redone once the
+    /// dictation is over. A global cancel (Escape) never reaches it. The
+    /// model is reloaded if it was unloaded or its engine was lost.
+    fn transcribe_own_chunk(
+        &self,
+        samples: &[f32],
+        offset_ms: u64,
+        real_len_ms: u64,
+    ) -> Result<ChunkTranscript, ChunkError> {
+        let tm = &self.tm;
+        let mut foreign_cancels = 0;
+        let mut reloads = 0;
+        loop {
+            if self.token.is_cancelled() {
+                return Err(ChunkError::Cancelled);
+            }
+            if tm.dictation_active() {
+                return Err(ChunkError::Yield);
+            }
+            tm.ensure_recordings_model(&self.model_id, self.device_index, &self.token, false)?;
+            let Some(info) = tm.recordings.engine.loaded() else {
+                // Unloaded since ensure_recordings_model.
+                reloads += 1;
+                if reloads > FILE_CHUNK_RELOADS {
+                    return Err(ChunkError::Failed(anyhow::anyhow!(
+                        "the model '{}' did not stay loaded",
+                        self.model_id
+                    )));
+                }
+                continue;
+            };
+            // Checked again right before the call: a dictation that began
+            // since makes this chunk wait instead.
+            if tm.dictation_active() {
+                return Err(ChunkError::Yield);
+            }
+            tm.recordings.touch();
+            let language =
+                effective_language_for_model(&self.settings, &tm.model_manager, &self.model_id);
+            let result = tm.transcribe_cpp(
+                EngineSlot::Recordings,
+                info,
+                samples.to_vec(),
+                &self.settings,
+                &language,
+                &self.model_id,
+                Some(&self.token),
+            );
+            tm.emit_recordings_state();
+
+            match result {
+                Ok(run) => return Ok(self.shape(run, offset_ms, real_len_ms)),
+                Err(error) if is_engine_cancel(&error) => {
+                    if self.token.is_cancelled() {
+                        return Err(ChunkError::Cancelled);
+                    }
+                    // A dictation interrupted it to have the GPU; the loop
+                    // top yields until that dictation is over.
+                    foreign_cancels += 1;
+                    if foreign_cancels > FILE_CHUNK_FOREIGN_CANCEL_RETRIES {
+                        return Err(ChunkError::Failed(error));
+                    }
+                    debug!(
+                        "File chunk at {}ms was stopped for a dictation; redoing it",
+                        offset_ms
+                    );
+                }
+                // The engine could not restart its worker: load it again.
+                Err(error)
+                    if tm.recordings.engine.loaded().is_none() && reloads < FILE_CHUNK_RELOADS =>
+                {
+                    reloads += 1;
+                    debug!(
+                        "File chunk at {}ms failed with the recordings model unloaded ({:#}); reloading",
+                        offset_ms, error
+                    );
+                }
+                Err(error) => return Err(ChunkError::Failed(error)),
+            }
+        }
+    }
+
     /// Post-process a finished run like a dictation, and place its timed
     /// segments in the file.
     fn shape(&self, run: RunOutcome, offset_ms: u64, real_len_ms: u64) -> ChunkTranscript {
@@ -2011,6 +2149,10 @@ fn shape_run(
 
 impl Drop for FileJobLease {
     fn drop(&mut self) {
+        if self.slot == FileModelSlot::Own {
+            self.tm.recordings.own_jobs.fetch_sub(1, Ordering::SeqCst);
+            self.tm.recordings.touch();
+        }
         let previous = self.tm.active_file_jobs.fetch_sub(1, Ordering::SeqCst);
         // An active dictation unloads the model itself when it finishes
         // (FinishGuard, see `release_dictation_hold`).
@@ -2102,14 +2244,22 @@ impl TranscriptionManager {
     /// failed load returns its own error (e.g. "Model not found: …" or
     /// "Model not downloaded"); a cancel of `token` while waiting returns
     /// [`ChunkError::Cancelled`] (downcast the error to tell).
+    ///
+    /// With [`FileModelSlot::Own`] the model loads on the recordings engine
+    /// instead (never while a dictation is active), and the dictation model
+    /// is loaded too if it isn't, so dictating during the job stays fast.
     pub fn begin_file_job(
         &self,
         model_id: &str,
         device_index: Option<usize>,
         token: WorkToken,
+        slot: FileModelSlot,
     ) -> anyhow::Result<FileJobLease> {
         self.active_file_jobs.fetch_add(1, Ordering::SeqCst);
-        // From here on the lease's Drop gives the count back, however this
+        if slot == FileModelSlot::Own {
+            self.recordings.own_jobs.fetch_add(1, Ordering::SeqCst);
+        }
+        // From here on the lease's Drop gives the counts back, however this
         // ends.
         let mut lease = FileJobLease {
             tm: self.clone(),
@@ -2119,17 +2269,30 @@ impl TranscriptionManager {
             token,
             evidence: Mutex::new(None),
             limits: compute_chunk_limits(false, None),
+            slot,
         };
-        self.ensure_file_model(model_id, device_index, &lease.token, true)
-            .map_err(|error| match error {
-                ChunkError::Failed(error) => error,
-                other => anyhow::Error::new(other),
-            })?;
-        lease.limits = self.chunk_limits_for(model_id);
-        self.touch_activity();
+        let to_load_error = |error| match error {
+            ChunkError::Failed(error) => error,
+            other => anyhow::Error::new(other),
+        };
+        match slot {
+            FileModelSlot::Dictation => {
+                self.ensure_file_model(model_id, device_index, &lease.token, true)
+                    .map_err(to_load_error)?;
+                lease.limits = self.chunk_limits_for(model_id);
+                self.touch_activity();
+            }
+            FileModelSlot::Own => {
+                self.keep_dictation_model_ready();
+                self.ensure_recordings_model(model_id, device_index, &lease.token, true)
+                    .map_err(to_load_error)?;
+                lease.limits = self.recordings_chunk_limits();
+                self.recordings.touch();
+            }
+        }
         debug!(
-            "File transcription started with model '{}' ({:?})",
-            model_id, lease.limits
+            "File transcription started with model '{}' ({:?}, {:?})",
+            model_id, slot, lease.limits
         );
         Ok(lease)
     }
@@ -2147,8 +2310,12 @@ impl TranscriptionManager {
                 .is_some_and(|audio| audio.is_recording())
     }
 
+    /// Marks a dictation as in progress (at key release) until the hold is
+    /// released. Counted first, so a recordings chunk this interrupts sees
+    /// the dictation and waits for it.
     pub fn hold_for_dictation(&self) -> DictationHold {
         self.dictation_holds.fetch_add(1, Ordering::SeqCst);
+        self.clear_gpu_for_dictation();
         DictationHold(Arc::clone(&self.dictation_holds))
     }
 
@@ -2173,6 +2340,7 @@ impl TranscriptionManager {
     /// token.cancel() plus kill only that token's in-flight transcribe-cpp call.
     pub fn cancel_file_work(&self, token: &WorkToken) {
         self.engine.cancel_work(token);
+        self.recordings.engine.cancel_work(token);
     }
 
     pub fn active_file_jobs(&self) -> usize {
@@ -2292,6 +2460,340 @@ impl TranscriptionManager {
             Some(engine_type) => onnx_chunk_cap(&engine_type),
         };
         compute_chunk_limits(is_gigaam, cap)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The recordings engine (see `crate::managers::recordings_engine`): file jobs
+// whose model for recordings differs from the dictation model run there, on
+// low-priority workers, beside the loaded dictation model. It never emits
+// `model-state-changed` (that is the dictation model's), only
+// `RecordingsEngineEvent`.
+// ---------------------------------------------------------------------------
+
+impl TranscriptionManager {
+    /// GPU memory to keep free for the dictation model when a recordings
+    /// model loads: its file size while it isn't loaded yet but will go to
+    /// the GPU (a downloaded transcribe-cpp model, accelerator not CPU).
+    /// Once loaded, the GPU's free memory already accounts for it.
+    fn dictation_reserve_bytes(&self) -> u64 {
+        if self.is_model_loaded() {
+            return 0;
+        }
+        let settings = get_settings(&self.app_handle);
+        let Some(info) = self.model_manager.get_model_info(&settings.selected_model) else {
+            return 0;
+        };
+        if !matches!(info.engine_type, EngineType::TranscribeCpp)
+            || !info.is_downloaded
+            || select_transcribe_backend(settings.transcribe_accelerator) == Backend::Cpu
+        {
+            return 0;
+        }
+        self.model_manager
+            .get_model_path(&settings.selected_model)
+            .ok()
+            .and_then(|path| std::fs::metadata(path).ok())
+            .map_or(0, |metadata| metadata.len())
+    }
+
+    /// Load `model_id` on the recordings engine, replacing what it holds.
+    /// Fails with "Model not found: …", "Model not downloaded" or "Model …
+    /// can't be used for recordings" (only transcribe-cpp models can) before
+    /// anything is unloaded. On a GPU, it loads on the CPU instead when the
+    /// GPU lacks the free memory for it beside the dictation model.
+    fn load_recordings_model(
+        &self,
+        model_id: &str,
+        device_index: Option<usize>,
+    ) -> anyhow::Result<LoadedInfo> {
+        let load_start = Instant::now();
+        let model_info = self
+            .model_manager
+            .get_model_info(model_id)
+            .ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
+        if !model_info.is_downloaded {
+            return Err(anyhow::anyhow!("Model not downloaded"));
+        }
+        if !matches!(model_info.engine_type, EngineType::TranscribeCpp) {
+            return Err(anyhow::anyhow!(
+                "Model {} can't be used for recordings",
+                model_id
+            ));
+        }
+        let path = self.model_manager.get_model_path(model_id)?;
+        let (backend, device) = self.transcribe_cpp_target(device_index);
+        let min_gpu_free_bytes =
+            if backend != Backend::Cpu && !matches!(device, DeviceSelector::Index(_)) {
+                std::fs::metadata(&path)
+                    .ok()
+                    .map(|metadata| vram_need(metadata.len(), self.dictation_reserve_bytes()))
+            } else {
+                None
+            };
+        let requested_device = format!("{:?}", device);
+
+        self.recordings.set_model_id(None);
+        let info = self
+            .recordings
+            .engine
+            .load(LoadSpec {
+                path,
+                backend,
+                device,
+                min_gpu_free_bytes,
+            })
+            .map_err(|e| anyhow::anyhow!("Failed to load model {}: {}", model_id, e));
+        let info = match info {
+            Ok(info) => info,
+            Err(error) => {
+                self.emit_recordings_state();
+                return Err(error);
+            }
+        };
+        let caps = &info.capabilities;
+        self.model_manager.set_runtime_capabilities(
+            model_id,
+            caps.supports_streaming,
+            caps.supports_translate,
+            caps.supports_language_detect,
+            caps.languages.clone(),
+        );
+        self.recordings.set_model_id(Some(model_id.to_string()));
+        self.recordings.touch();
+        self.emit_recordings_state();
+        info!(
+            "Loaded recordings model '{}' in {}ms (requested {:?}, requested device {}, \
+             bound backend '{}', bound device '{}', on_gpu={}, gpu_memory_fallback={}, \
+             min_gpu_free_mb={:?})",
+            model_id,
+            load_start.elapsed().as_millis(),
+            backend,
+            requested_device,
+            info.backend,
+            info.device,
+            info.on_gpu,
+            info.gpu_memory_fallback,
+            min_gpu_free_bytes.map(|bytes| bytes / (1024 * 1024))
+        );
+        Ok(info)
+    }
+
+    /// Make `model_id` the recordings engine's loaded model. Never loads
+    /// while a dictation is active: at a job's start (`at_start`) it waits
+    /// for the dictation, mid-job it yields. A pending accelerator change is
+    /// applied at a job's start.
+    fn ensure_recordings_model(
+        &self,
+        model_id: &str,
+        device_index: Option<usize>,
+        token: &WorkToken,
+        at_start: bool,
+    ) -> Result<(), ChunkError> {
+        let ready = || {
+            let reload = at_start && self.recordings.reload_on_next_use.load(Ordering::Acquire);
+            !reload
+                && self.recordings.model_id().as_deref() == Some(model_id)
+                && self.recordings.engine.loaded().is_some()
+        };
+        loop {
+            if token.is_cancelled() {
+                return Err(ChunkError::Cancelled);
+            }
+            if ready() {
+                return Ok(());
+            }
+            if self.dictation_active() {
+                if !at_start {
+                    return Err(ChunkError::Yield);
+                }
+                thread::sleep(FILE_JOB_DICTATION_POLL);
+                continue;
+            }
+            let _loading = self.recordings.hold_loads();
+            // Decide again under the lock: a load or a model deletion may
+            // have held it meanwhile, and a dictation may have begun.
+            if token.is_cancelled() || ready() || self.dictation_active() {
+                continue;
+            }
+            if at_start {
+                self.recordings
+                    .reload_on_next_use
+                    .store(false, Ordering::Release);
+            }
+            debug!("Loading model '{}' for recordings", model_id);
+            return self
+                .load_recordings_model(model_id, device_index)
+                .map(drop)
+                .map_err(ChunkError::Failed);
+        }
+    }
+
+    /// Chunk limits of the recordings engine's loaded model.
+    fn recordings_chunk_limits(&self) -> ChunkLimits {
+        let (is_gigaam, cap) = match self.recordings.engine.loaded() {
+            Some(info) => transcribe_cpp_chunk_cap(&info.arch, info.capabilities.max_audio_ms),
+            None => (false, None),
+        };
+        compute_chunk_limits(is_gigaam, cap)
+    }
+
+    /// Tell the frontend the recordings engine's state, if it changed.
+    fn emit_recordings_state(&self) {
+        if let Some(status) = self.recordings.take_changed_status() {
+            if let Err(e) = status.emit(&self.app_handle) {
+                warn!("Failed to emit the recordings engine state: {}", e);
+            }
+        }
+    }
+
+    /// The recordings engine gave up on its model by itself (its worker
+    /// can't be restarted): forget it, so the next use loads it again.
+    fn forget_recordings_model_if_dropped(&self, model_id: &str, error: &str) {
+        if self.recordings.engine.loaded().is_some()
+            || self.recordings.model_id().as_deref() != Some(model_id)
+        {
+            return;
+        }
+        self.recordings.set_model_id(None);
+        warn!(
+            "Recordings model '{}' is no longer loaded: {}",
+            model_id, error
+        );
+        self.emit_recordings_state();
+    }
+
+    /// Unload the recordings model without waiting for its worker to exit.
+    fn unload_recordings(&self) -> Unloading {
+        self.recordings.set_model_id(None);
+        let unloading = self.recordings.engine.unload();
+        self.emit_recordings_state();
+        unloading
+    }
+
+    /// Whether the recordings engine holds (or is meant to hold) a model.
+    fn recordings_loaded(&self) -> bool {
+        self.recordings.engine.loaded().is_some() || self.recordings.model_id().is_some()
+    }
+
+    /// Free the recordings model unless a job uses it.
+    fn unload_recordings_if_idle(&self) {
+        if self.recordings.own_jobs() == 0 && self.recordings_loaded() {
+            info!("Unloading the idle recordings model");
+            drop(self.unload_recordings());
+        }
+    }
+
+    /// The idle watcher's check: free the recordings model once it has been
+    /// unused for its linger (see [`recordings_linger`]).
+    fn unload_idle_recordings(&self, timeout: ModelUnloadTimeout) {
+        let linger = recordings_linger(timeout);
+        let idle = self.recordings.idle();
+        if should_unload_recordings(
+            self.recordings_loaded(),
+            self.recordings.own_jobs(),
+            idle,
+            linger,
+        ) {
+            info!(
+                "Recordings model idle for {}s (limit: {}s), unloading",
+                idle.as_secs(),
+                linger.as_secs()
+            );
+            drop(self.unload_recordings());
+        }
+    }
+
+    /// The file queue has no job left: the recordings model's linger starts
+    /// now, and with "Immediately" it is freed at once.
+    pub fn recordings_queue_drained(&self) {
+        self.recordings.touch();
+        if get_settings(&self.app_handle).model_unload_timeout == ModelUnloadTimeout::Immediately
+            && self.recordings.own_jobs() == 0
+            && self.recordings_loaded()
+        {
+            info!("Immediately unloading the recordings model: no file is left to transcribe");
+            drop(self.unload_recordings());
+        }
+    }
+
+    /// The model for recordings setting changed to `keep` ("" = Same as
+    /// dictation): free a recordings model that no longer matches, unless a
+    /// job is using it. Never loads anything.
+    pub fn release_recordings_model_unless(&self, keep: &str) {
+        if self.recordings.own_jobs() > 0 {
+            return;
+        }
+        let loaded = self.recordings.model_id();
+        let stale = match &loaded {
+            Some(model_id) => model_id != keep,
+            None => self.recordings.engine.loaded().is_some(),
+        };
+        if stale {
+            info!(
+                "Unloading recordings model {:?}: recordings now use {:?}",
+                loaded, keep
+            );
+            drop(self.unload_recordings());
+        }
+    }
+
+    /// Unload `model_id` from the recordings engine if it holds it, even
+    /// mid-job (its job then stops when the model can't be loaded again).
+    /// Wait on the result before deleting the model's file.
+    pub fn unload_recordings_model_if(&self, model_id: &str) -> Option<Unloading> {
+        if self.recordings.model_id().as_deref() != Some(model_id) {
+            return None;
+        }
+        info!("Unloading recordings model '{}'", model_id);
+        Some(self.unload_recordings())
+    }
+
+    /// Keep recordings model loads from starting while the guard lives
+    /// (after waiting for one in progress), e.g. while a model's file is
+    /// deleted, so a job can't reopen it in between.
+    pub fn hold_recordings_loads(&self) -> MutexGuard<'_, ()> {
+        self.recordings.hold_loads()
+    }
+
+    /// The recordings engine's state now.
+    pub fn recordings_engine_status(&self) -> RecordingsEngineEvent {
+        self.recordings.status()
+    }
+
+    /// Load the dictation model in the background if it isn't loaded, so a
+    /// dictation during a recordings job doesn't wait for a cold load.
+    fn keep_dictation_model_ready(&self) {
+        if self.is_model_loaded() {
+            return;
+        }
+        let settings = get_settings(&self.app_handle);
+        let downloaded = self
+            .model_manager
+            .get_model_info(&settings.selected_model)
+            .is_some_and(|info| info.is_downloaded);
+        if downloaded {
+            debug!("Loading the dictation model beside the recordings model");
+            self.initiate_model_load();
+        }
+    }
+
+    /// At a dictation's key release: stop a recordings chunk running on the
+    /// GPU, so the dictation's final decode never shares the GPU with it.
+    /// The chunk is redone after the dictation. On the CPU the recordings
+    /// worker's low priority is enough.
+    fn clear_gpu_for_dictation(&self) {
+        if self
+            .recordings
+            .engine
+            .loaded()
+            .is_some_and(|info| info.on_gpu)
+            && self.recordings.engine.interrupt_scoped_work()
+        {
+            info!(
+                "Stopped the recording chunk in flight so the dictation has the GPU; it will be redone"
+            );
+        }
     }
 }
 

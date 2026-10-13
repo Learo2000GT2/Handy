@@ -164,6 +164,7 @@
       "description": "Sélectionnez un modèle de transcription ou téléchargez des modèles supplémentaires. Différents modèles offrent différents niveaux de précision et de vitesse.",
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer {{modelName}} ? Vous devrez le télécharger à nouveau pour l'utiliser.",
       "deleteActiveConfirm": "{{modelName}} est votre modèle actif. Le supprimer arrêtera les transcriptions jusqu'à ce que vous sélectionniez un nouveau modèle. Êtes-vous sûr ?",
+      "deleteRecordingsConfirm": "{{modelName}} est votre modèle pour les enregistrements. Si vous le supprimez, les enregistrements utiliseront votre modèle de dictée. Êtes-vous sûr ?",
       "deleteTitle": "Supprimer le modèle",
       "filters": {
         "allLanguages": "Toutes les langues",
@@ -469,10 +470,12 @@
       "description": "Convertissez des enregistrements existants en texte sur cet ordinateur. Vos fichiers ne quittent jamais votre appareil.",
       "settingsNote": "Utilise le modèle sélectionné ainsi que vos paramètres de langue, de traduction, de mots personnalisés et de mots de remplissage.",
       "settingsNoteLemonade": "Utilise vos paramètres de langue, de mots personnalisés et de mots de remplissage.",
+      "settingsNoteOwnModel": "Utilise votre modèle pour les enregistrements ainsi que vos paramètres de langue, de traduction, de mots personnalisés et de mots de remplissage.",
       "model": "Modèle : {{model}}",
       "modelLemonade": "Modèle : {{model}} sur Lemonade Server",
       "noModel": "Sélectionnez un modèle téléchargé dans la page 'Modèles' pour transcrire des fichiers.",
       "noLemonadeModel": "Choisissez un modèle Lemonade pour transcrire des fichiers.",
+      "noRecordingsModel": "Votre modèle pour les enregistrements n'est pas téléchargé. Choisissez-en un autre ci-dessus ou téléchargez-le dans la page 'Modèles'.",
       "dropzone": {
         "title": "Déposez des fichiers audio ou vidéo ici",
         "hint": "Entretiens, réunions, cours et mémos vocaux de toute durée",
@@ -499,6 +502,14 @@
         "description": "La dictée utilise toujours le modèle propre à Handy. Ce choix ne concerne que les fichiers.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Modèle pour les enregistrements",
+        "description": "Les enregistrements peuvent utiliser un modèle plus lent et plus précis que celui de la dictée. Il fonctionne séparément et n'est chargé que pendant la transcription de fichiers, ce qui garde votre modèle de dictée prêt. Les deux modèles doivent tenir en mémoire.",
+        "same": "Identique à la dictée ({{model}})",
+        "sameNoModel": "Identique à la dictée",
+        "switchWarning": "Ce fichier utilise votre modèle de dictée : changer de modèle de dictée maintenant l'arrêtera. Pour les séparer, choisissez un autre modèle pour les enregistrements.",
+        "onCpu": "Les enregistrements sont traités par le processeur, car la mémoire graphique ne suffit pas pour les deux modèles. Choisissez un modèle plus petit pour les enregistrements afin d'utiliser la carte graphique."
       },
       "lemonade": {
         "url": {

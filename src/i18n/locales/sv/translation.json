@@ -217,6 +217,7 @@
       "availableModels": "Tillgängliga att ladda ner",
       "deleteConfirm": "Är du säker på att du vill ta bort {{modelName}}? Du måste ladda ner den igen för att använda den.",
       "deleteActiveConfirm": "{{modelName}} är din aktiva modell. Om du tar bort den avbryts transkriptioner tills du väljer en ny modell. Är du säker?",
+      "deleteRecordingsConfirm": "{{modelName}} är din modell för inspelningar. Om du tar bort den använder inspelningar din dikteringsmodell. Är du säker?",
       "deleteTitle": "Ta bort modell",
       "filters": {
         "allLanguages": "Alla språk",
@@ -469,10 +470,12 @@
       "description": "Gör om befintliga inspelningar till text på den här datorn. Dina filer lämnar aldrig din enhet.",
       "settingsNote": "Använder din valda modell och dina inställningar för språk, översättning, anpassade ord och utfyllnadsord.",
       "settingsNoteLemonade": "Använder dina inställningar för språk, anpassade ord och utfyllnadsord.",
+      "settingsNoteOwnModel": "Använder din modell för inspelningar och dina inställningar för språk, översättning, anpassade ord och utfyllnadsord.",
       "model": "Modell: {{model}}",
       "modelLemonade": "Modell: {{model}} på Lemonade Server",
       "noModel": "Välj en nedladdad modell på sidan Modeller för att transkribera filer.",
       "noLemonadeModel": "Välj en Lemonade-modell för att transkribera filer.",
+      "noRecordingsModel": "Din modell för inspelningar är inte nedladdad. Välj en annan ovan eller ladda ned den på sidan Modeller.",
       "dropzone": {
         "title": "Släpp ljud- eller videofiler här",
         "hint": "Intervjuer, möten, föreläsningar och röstmemon av valfri längd",
@@ -499,6 +502,14 @@
         "description": "Diktering använder alltid Handys egen modell. Det här valet gäller bara filer.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Modell för inspelningar",
+        "description": "Inspelningar kan använda en långsammare men mer exakt modell än diktering. Den körs separat och läses bara in medan filer transkriberas, så att din dikteringsmodell förblir redo. Båda modellerna måste få plats i minnet.",
+        "same": "Samma som diktering ({{model}})",
+        "sameNoModel": "Samma som diktering",
+        "switchWarning": "Den här filen använder din dikteringsmodell, så om du byter dikteringsmodell nu avbryts den. Välj en annan modell för inspelningar för att hålla isär dem.",
+        "onCpu": "Inspelningarna körs på processorn eftersom grafikminnet inte räcker till båda modellerna. Välj en mindre modell för inspelningar för att använda grafikkortet."
       },
       "lemonade": {
         "url": {

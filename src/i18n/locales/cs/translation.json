@@ -164,6 +164,7 @@
       "description": "Vyberte model přepisu nebo stáhněte další modely. Různé modely nabízejí různé úrovně přesnosti a rychlosti.",
       "deleteConfirm": "Opravdu chcete smazat {{modelName}}? Pro opětovné použití jej budete muset znovu stáhnout.",
       "deleteActiveConfirm": "{{modelName}} je váš aktivní model. Jeho smazáním se zastaví přepisy, dokud nevyberete nový model. Opravdu chcete pokračovat?",
+      "deleteRecordingsConfirm": "{{modelName}} je váš model pro nahrávky. Pokud ho smažete, nahrávky budou používat model pro diktování. Opravdu chcete pokračovat?",
       "deleteTitle": "Smazat model",
       "filters": {
         "allLanguages": "Všechny jazyky",
@@ -469,10 +470,12 @@
       "description": "Převeďte existující nahrávky na text přímo v tomto počítači. Vaše soubory nikdy neopustí vaše zařízení.",
       "settingsNote": "Používá vybraný model a vaše nastavení jazyka, překladu, vlastních slov a výplňových slov.",
       "settingsNoteLemonade": "Používá vaše nastavení jazyka, vlastních slov a výplňových slov.",
+      "settingsNoteOwnModel": "Používá model pro nahrávky a vaše nastavení jazyka, překladu, vlastních slov a výplňových slov.",
       "model": "Model: {{model}}",
       "modelLemonade": "Model: {{model}} přes Lemonade Server",
       "noModel": "Chcete-li přepisovat soubory, vyberte stažený model na stránce Modely.",
       "noLemonadeModel": "Chcete-li přepisovat soubory, vyberte model Lemonade.",
+      "noRecordingsModel": "Model pro nahrávky není stažený. Vyberte výše jiný nebo ho stáhněte na stránce Modely.",
       "dropzone": {
         "title": "Přetáhněte sem zvukové nebo video soubory",
         "hint": "Rozhovory, schůzky, přednášky a hlasové poznámky libovolné délky",
@@ -499,6 +502,14 @@
         "description": "Diktování vždy používá vlastní model aplikace Handy. Tato volba platí jen pro soubory.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model pro nahrávky",
+        "description": "Nahrávky mohou používat pomalejší, ale přesnější model než diktování. Běží samostatně a načítá se jen během přepisu souborů, takže model pro diktování zůstává připravený. Oba modely se musí vejít do paměti.",
+        "same": "Stejný jako pro diktování ({{model}})",
+        "sameNoModel": "Stejný jako pro diktování",
+        "switchWarning": "Tento soubor používá model pro diktování, takže změna modelu pro diktování ho teď zastaví. Chcete-li je oddělit, vyberte pro nahrávky jiný model.",
+        "onCpu": "Nahrávky se zpracovávají na procesoru, protože grafická paměť nestačí pro oba modely. Chcete-li využít grafickou kartu, vyberte pro nahrávky menší model."
       },
       "lemonade": {
         "url": {

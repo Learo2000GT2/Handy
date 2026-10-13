@@ -32,6 +32,7 @@ use crate::file_transcription::types::{
 };
 use crate::managers::history::{HistoryManager, TRANSCRIPT_CHANGED};
 use crate::managers::model::ModelManager;
+use crate::managers::recordings_engine::{choose_file_model_slot, FileModelSlot};
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings::{AppSettings, FileTranscriptionEngine};
 use chrono::Utc;
@@ -438,6 +439,9 @@ impl FileTranscriptionManager {
                 Some(request) => self.run_label_job(&job, request),
                 None => self.run_job(&job, &settings),
             }
+            if !self.lock_state().has_queued() {
+                self.tm.recordings_queue_drained();
+            }
 
             crate::memory::trim_freed_memory();
             let evicted = self.lock_state().evict_finished(MAX_FINISHED_JOBS);
@@ -453,7 +457,10 @@ impl FileTranscriptionManager {
             // Read outside the lock, and again after every wake-up.
             let settings = crate::settings::get_settings(&self.app);
             let mut state = self.lock_state();
-            if let Some(job) = state.start_next(settings.file_transcription_engine) {
+            if let Some(job) = state.start_next(
+                settings.file_transcription_engine,
+                shares_dictation_model(&settings),
+            ) {
                 return (job, settings);
             }
             // Re-check (with fresh settings) after a wake-up; a job queued in
@@ -937,16 +944,26 @@ fn refresh_snapshot(snapshot: &mut FileJobSnapshot, result: &FileTranscript, mov
 }
 
 /// The pipeline engine for a job started with `settings`, and the model id
-/// it reports ("small", "lemonade:Whisper-Base").
+/// it reports ("small", "lemonade:Whisper-Base"). Handy's engine uses the
+/// model for recordings, on the recordings engine when it isn't the
+/// dictation model.
 fn job_engine(settings: &AppSettings) -> (PipelineEngine, String) {
     match settings.file_transcription_engine {
-        FileTranscriptionEngine::Handy => (
-            PipelineEngine::Handy {
-                model_id: settings.selected_model.clone(),
-                device_index: None,
-            },
-            settings.selected_model.clone(),
-        ),
+        FileTranscriptionEngine::Handy => {
+            let slot = choose_file_model_slot(
+                &settings.file_transcription_model,
+                &settings.selected_model,
+            );
+            let model_id = settings.recordings_model().to_string();
+            (
+                PipelineEngine::Handy {
+                    model_id: model_id.clone(),
+                    device_index: None,
+                    slot,
+                },
+                model_id,
+            )
+        }
         FileTranscriptionEngine::Lemonade => {
             let config = LemonadeJobConfig::from_settings(&settings.lemonade);
             let model_id = format!("{}{}", LEMONADE_MODEL_PREFIX, config.model);
@@ -959,6 +976,14 @@ fn job_engine(settings: &AppSettings) -> (PipelineEngine, String) {
             )
         }
     }
+}
+
+/// Whether a transcription job started with `settings` runs on dictation's
+/// loaded model, so switching the dictation model stops it.
+fn shares_dictation_model(settings: &AppSettings) -> bool {
+    settings.file_transcription_engine == FileTranscriptionEngine::Handy
+        && choose_file_model_slot(&settings.file_transcription_model, &settings.selected_model)
+            == FileModelSlot::Dictation
 }
 
 /// `Ok` when `path` is an existing regular file whose type `is_supported`
@@ -1134,6 +1159,7 @@ impl JobTable {
             history_id: None,
             enqueued_at,
             labels_for: None,
+            shares_dictation_model: false,
         };
         self.jobs.push(JobRecord {
             snapshot: snapshot.clone(),
@@ -1186,6 +1212,7 @@ impl JobTable {
             history_id: None,
             enqueued_at,
             labels_for: Some(request.target),
+            shares_dictation_model: false,
         };
         self.jobs.push(JobRecord {
             snapshot: snapshot.clone(),
@@ -1226,9 +1253,21 @@ impl JobTable {
             .history_id
     }
 
+    /// Whether a job is waiting to start.
+    fn has_queued(&self) -> bool {
+        self.jobs
+            .iter()
+            .any(|job| job.snapshot.status == FileJobStatus::Queued)
+    }
+
     /// Takes the oldest queued job (of either kind) and marks it
-    /// `Preparing`; a transcription job on `engine`.
-    fn start_next(&mut self, engine: FileTranscriptionEngine) -> Option<StartedJob> {
+    /// `Preparing`; a transcription job on `engine`, which
+    /// `shares_dictation_model` when it runs on dictation's loaded model.
+    fn start_next(
+        &mut self,
+        engine: FileTranscriptionEngine,
+        shares_dictation_model: bool,
+    ) -> Option<StartedJob> {
         let record = self
             .jobs
             .iter_mut()
@@ -1236,6 +1275,7 @@ impl JobTable {
         record.snapshot.status = FileJobStatus::Preparing;
         if record.label.is_none() {
             record.snapshot.engine = engine;
+            record.snapshot.shares_dictation_model = shares_dictation_model;
         }
         record.last_progress_emit = None;
         Some(StartedJob {
@@ -1780,7 +1820,7 @@ mod tests {
         table.cancel(1).expect("cancel queued job");
 
         let first = table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("job 2 starts");
         assert_eq!(first.job_id, 2);
         assert_eq!(first.path, "/audio/file-2.mp3");
@@ -1789,10 +1829,69 @@ mod tests {
         assert_eq!(status(&table, 2), FileJobStatus::Preparing);
 
         let second = table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("job 3 starts");
         assert_eq!(second.job_id, 3);
-        assert!(table.start_next(FileTranscriptionEngine::Handy).is_none());
+        assert!(table
+            .start_next(FileTranscriptionEngine::Handy, true)
+            .is_none());
+    }
+
+    #[test]
+    fn only_queued_jobs_count_as_queued() {
+        let mut table = table_with_queued(2);
+        assert!(table.has_queued());
+        table.start_next(FileTranscriptionEngine::Handy, true);
+        assert!(table.has_queued(), "job 2 still waits");
+        table.cancel(2).expect("cancel queued job");
+        assert!(!table.has_queued(), "a running job isn't queued");
+
+        let mut table = JobTable::default();
+        assert!(!table.has_queued());
+        table.add(
+            1,
+            "/audio/missing.mp3".to_string(),
+            WITH_HISTORY,
+            FileTranscriptionEngine::Handy,
+            Err(FileJobError {
+                code: FileJobErrorCode::NotFound,
+                message: "missing".to_string(),
+            }),
+            1_000,
+        );
+        assert!(!table.has_queued(), "a failed job isn't queued");
+    }
+
+    #[test]
+    fn a_started_job_says_whether_it_shares_the_dictation_model() {
+        let mut table = table_with_queued(2);
+        let queued = table.record(1).expect("job").snapshot.clone();
+        assert!(!queued.shares_dictation_model);
+
+        let shared = table
+            .start_next(FileTranscriptionEngine::Handy, true)
+            .expect("job 1 starts");
+        assert!(shared.snapshot.shares_dictation_model);
+        assert!(
+            table
+                .record(1)
+                .expect("job")
+                .snapshot
+                .shares_dictation_model
+        );
+
+        let own = table
+            .start_next(FileTranscriptionEngine::Handy, false)
+            .expect("job 2 starts");
+        assert!(!own.snapshot.shares_dictation_model);
+
+        // A speaker-label job never uses the dictation model.
+        let target = TranscriptSource::History { history_id: 4 };
+        table.add_label(3, label_request(target), Ok(()), 5_000);
+        let label = table
+            .start_next(FileTranscriptionEngine::Handy, true)
+            .expect("label job starts");
+        assert!(!label.snapshot.shares_dictation_model);
     }
 
     #[test]
@@ -1815,7 +1914,7 @@ mod tests {
     fn cancelling_a_running_job_cancels_its_token() {
         let mut table = table_with_queued(1);
         let started = table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
 
         match table.cancel(1).expect("cancel") {
@@ -1832,11 +1931,11 @@ mod tests {
     fn cancel_all_dequeues_and_collects_running_tokens() {
         let mut table = table_with_queued(3);
         let running = table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         table.finish(1, finished(FileJobStatus::Completed, None));
         let next = table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start job 2");
         assert_eq!(next.job_id, 2);
         assert!(!running.token.is_cancelled());
@@ -1857,7 +1956,7 @@ mod tests {
     fn dismiss_only_removes_finished_jobs() {
         let mut table = table_with_queued(2);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
 
         assert!(table.dismiss(1).is_err(), "running");
@@ -1875,13 +1974,13 @@ mod tests {
         let mut table = table_with_queued(25);
         for _ in 0..23 {
             let job = table
-                .start_next(FileTranscriptionEngine::Handy)
+                .start_next(FileTranscriptionEngine::Handy, true)
                 .expect("start");
             table.finish(job.job_id, finished(FileJobStatus::Completed, None));
         }
         // Job 24 is running and job 25 is queued; neither may be evicted.
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start job 24");
 
         let evicted = table.evict_finished(MAX_FINISHED_JOBS);
@@ -1896,7 +1995,7 @@ mod tests {
     fn events_update_the_snapshot() {
         let mut table = table_with_queued(1);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         let start = Instant::now();
 
@@ -1951,7 +2050,7 @@ mod tests {
     fn progress_updates_are_throttled_but_status_changes_are_not() {
         let mut table = table_with_queued(1);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         let start = Instant::now();
         let transcribing = |processed_ms| PipelineEvent::Transcribing {
@@ -2012,7 +2111,7 @@ mod tests {
         assert_eq!(table.record(1).expect("job").snapshot.speakers, None);
 
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         let now = Instant::now();
         table.apply(1, "tiny", PipelineEvent::ModelReady, now);
@@ -2042,7 +2141,7 @@ mod tests {
     fn running_transcript_is_partial_and_in_progress() {
         let mut table = table_with_queued(1);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         let now = Instant::now();
         assert!(table.transcript(1, 5).is_none(), "nothing transcribed yet");
@@ -2091,7 +2190,7 @@ mod tests {
     fn finish_records_the_result() {
         let mut table = table_with_queued(1);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         table.apply(
             1,
@@ -2125,7 +2224,7 @@ mod tests {
     fn failed_job_without_result_has_no_transcript() {
         let mut table = table_with_queued(1);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         table.apply(
             1,
@@ -2171,7 +2270,7 @@ mod tests {
         );
 
         let started = table
-            .start_next(FileTranscriptionEngine::Lemonade)
+            .start_next(FileTranscriptionEngine::Lemonade, false)
             .expect("start");
 
         assert_eq!(started.snapshot.engine, FileTranscriptionEngine::Lemonade);
@@ -2190,7 +2289,7 @@ mod tests {
     fn queued_jobs_show_the_engine_selected_now() {
         let mut table = table_with_queued(3);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         table.cancel(3).expect("cancel");
 
@@ -2224,10 +2323,44 @@ mod tests {
         assert_eq!(model_id, "small");
         assert!(matches!(
             engine,
-            PipelineEngine::Handy { model_id, device_index: None } if model_id == "small"
+            PipelineEngine::Handy {
+                model_id,
+                device_index: None,
+                slot: FileModelSlot::Dictation,
+            } if model_id == "small"
         ));
+        assert!(shares_dictation_model(&settings));
 
+        // A different model for recordings runs on its own engine.
+        settings.file_transcription_model = "tiny".to_string();
+        let (engine, model_id) = job_engine(&settings);
+        assert_eq!(model_id, "tiny");
+        assert!(matches!(
+            engine,
+            PipelineEngine::Handy {
+                model_id,
+                slot: FileModelSlot::Own,
+                ..
+            } if model_id == "tiny"
+        ));
+        assert!(!shares_dictation_model(&settings));
+
+        // Choosing the dictation model itself is the same as "Same as dictation".
+        settings.file_transcription_model = " small ".to_string();
+        let (engine, model_id) = job_engine(&settings);
+        assert_eq!(model_id, "small");
+        assert!(matches!(
+            engine,
+            PipelineEngine::Handy {
+                slot: FileModelSlot::Dictation,
+                ..
+            }
+        ));
+        assert!(shares_dictation_model(&settings));
+
+        settings.file_transcription_model = "tiny".to_string();
         settings.file_transcription_engine = FileTranscriptionEngine::Lemonade;
+        assert!(!shares_dictation_model(&settings));
         let (engine, model_id) = job_engine(&settings);
         assert_eq!(model_id, "lemonade:Whisper-Base");
         match engine {
@@ -2251,7 +2384,7 @@ mod tests {
         assert!(table.edit_result(42, rename).is_err(), "unknown job");
         assert!(table.edit_result(1, rename).is_err(), "queued");
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         let err = table.edit_result(1, rename).unwrap_err();
         assert!(err.contains("still running"), "{err}");
@@ -2276,7 +2409,7 @@ mod tests {
 
         // A finished job without a result has nothing to edit.
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         table.finish(2, finished(FileJobStatus::Cancelled, None));
         let err = table.edit_result(2, rename).unwrap_err();
@@ -2289,7 +2422,7 @@ mod tests {
         assert!(table.result_mut(42).is_err(), "unknown job");
         assert!(table.result_mut(1).is_err(), "queued");
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         table.finish(
             1,
@@ -2303,14 +2436,14 @@ mod tests {
         let mut table = table_with_queued(3);
         for job_id in 1..=2 {
             table
-                .start_next(FileTranscriptionEngine::Handy)
+                .start_next(FileTranscriptionEngine::Handy, true)
                 .expect("start");
             let mut result = transcript("Speaker 1: Hi.");
             result.history_id = Some(8 + job_id as i64);
             table.finish(job_id, finished(FileJobStatus::Completed, Some(result)));
         }
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
 
         let stored = FileTranscript {
@@ -2348,7 +2481,7 @@ mod tests {
     fn sync_history_transcript_copies_turns() {
         let mut table = table_with_queued(1);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         table.finish(
             1,
@@ -2479,7 +2612,7 @@ mod tests {
 
         // One queue, in the order jobs were added, of both kinds.
         let order: Vec<(u64, bool)> = std::iter::from_fn(|| {
-            let started = table.start_next(FileTranscriptionEngine::Lemonade)?;
+            let started = table.start_next(FileTranscriptionEngine::Lemonade, false)?;
             let finish = finished(FileJobStatus::Completed, None);
             table.finish(started.job_id, finish);
             Some((started.job_id, started.label.is_some()))
@@ -2502,7 +2635,7 @@ mod tests {
             1,
         );
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         let start = Instant::now();
         let mut through_ms = 0;
@@ -2590,7 +2723,7 @@ mod tests {
         let mut table = table_with_queued(2);
         for _ in 0..2 {
             let started = table
-                .start_next(FileTranscriptionEngine::Handy)
+                .start_next(FileTranscriptionEngine::Handy, true)
                 .expect("start");
             let mut result = transcript("Hi.");
             result.history_id = None;
@@ -2640,7 +2773,7 @@ mod tests {
         let mut table = table_with_queued(2);
         assert_eq!(table.saved_history_id(1), None);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         table.finish(
             1,
@@ -2655,7 +2788,7 @@ mod tests {
         // Job 1 was saved as History entry 9, which still exists.
         let mut table = table_with_queued(1);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         table.finish(
             1,
@@ -2681,7 +2814,7 @@ mod tests {
         assert!(!table.label_job_active(TranscriptSource::History { history_id: 10 }));
         // Running counts too; finished does not.
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start the label job");
         assert!(table.label_job_active(from_entry));
         table.finish(2, JobFinish::label_cancelled());
@@ -2692,7 +2825,7 @@ mod tests {
     fn replace_result_if() {
         let mut table = table_with_queued(2);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         let (labelled, _) = labelled_transcript(3);
         let mut expected = labelled.clone();
@@ -2766,7 +2899,7 @@ mod tests {
         use crate::file_transcription::speakers::{merge_speakers, rename_speaker};
         let mut table = table_with_queued(1);
         table
-            .start_next(FileTranscriptionEngine::Handy)
+            .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         let (labelled, _) = labelled_transcript(3);
         table.finish(

@@ -175,26 +175,26 @@ Handy supports command-line parameters on all platforms for integration with scr
 
 **Implementation:** `cli.rs` (definitions), `main.rs` (parsing), `lib.rs` (applying), `signal_handle.rs` (shared logic), `headless.rs` (file transcription and listings)
 
-| Flag                        | Description                                                                                                              |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `--toggle-transcription`    | Toggle recording on/off on a running instance                                                                            |
-| `--toggle-post-process`     | Toggle recording with post-processing on/off                                                                             |
-| `--cancel`                  | Cancel the current operation on a running instance                                                                       |
-| `--start-hidden`            | Launch without showing the main window (tray icon visible)                                                               |
-| `--no-tray`                 | Launch without system tray (closing window quits the app)                                                                |
-| `--debug`                   | Enable debug mode with verbose (Trace) logging                                                                           |
-| `-f`, `--transcribe-file F` | Transcribe an audio/video file headlessly and exit (`handy -f talk.m4a -o talk.srt`)                                     |
-| `-o`, `--output PATH`       | Write the transcript to a file (atomically) instead of stdout                                                            |
-| `--format FMT`              | `txt`, `md`, `srt`, `vtt`, `json` or `docx` (Word document; needs `--output`). Default: `--output` extension, else `txt` |
-| `--chunk-secs N`            | Longest chunk per engine call: `0` = whole file, else ≥ 5 (default: model limit, at most 28)                             |
-| `--ffmpeg PATH`             | ffmpeg for formats symphonia can't decode (default: `$HANDY_FFMPEG`, `PATH`, common folders)                             |
-| `-q`, `--quiet`             | No progress (or `--format` metrics line) on stderr                                                                       |
-| `--model ID`                | Model for `--transcribe-file` (default: the selected model; must be downloaded)                                          |
-| `--device-index N`          | Hard-select a transcribe-cpp compute device by its `--list-devices` index                                                |
-| `--repeat N`                | Run the transcription N times; `best_ms` reports the fastest                                                             |
-| `--json`                    | JSON output for `--transcribe-file` and `--list-models` (legacy keys are kept, others only added)                        |
-| `--list-models`             | List model ids and exit (`handy --list-models --json`)                                                                   |
-| `--list-devices`            | List transcribe-cpp compute devices with their indices and exit                                                          |
+| Flag                        | Description                                                                                                                      |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `--toggle-transcription`    | Toggle recording on/off on a running instance                                                                                    |
+| `--toggle-post-process`     | Toggle recording with post-processing on/off                                                                                     |
+| `--cancel`                  | Cancel the current operation on a running instance                                                                               |
+| `--start-hidden`            | Launch without showing the main window (tray icon visible)                                                                       |
+| `--no-tray`                 | Launch without system tray (closing window quits the app)                                                                        |
+| `--debug`                   | Enable debug mode with verbose (Trace) logging                                                                                   |
+| `-f`, `--transcribe-file F` | Transcribe an audio/video file headlessly and exit (`handy -f talk.m4a -o talk.srt`)                                             |
+| `-o`, `--output PATH`       | Write the transcript to a file (atomically) instead of stdout                                                                    |
+| `--format FMT`              | `txt`, `md`, `srt`, `vtt`, `json` or `docx` (Word document; needs `--output`). Default: `--output` extension, else `txt`         |
+| `--chunk-secs N`            | Longest chunk per engine call: `0` = whole file, else ≥ 5 (default: model limit, at most 28)                                     |
+| `--ffmpeg PATH`             | ffmpeg for formats symphonia can't decode (default: `$HANDY_FFMPEG`, `PATH`, common folders)                                     |
+| `-q`, `--quiet`             | No progress (or `--format` metrics line) on stderr                                                                               |
+| `--model ID`                | Model for `--transcribe-file` (default: the Transcribe page's model for recordings, else the selected model; must be downloaded) |
+| `--device-index N`          | Hard-select a transcribe-cpp compute device by its `--list-devices` index                                                        |
+| `--repeat N`                | Run the transcription N times; `best_ms` reports the fastest                                                                     |
+| `--json`                    | JSON output for `--transcribe-file` and `--list-models` (legacy keys are kept, others only added)                                |
+| `--list-models`             | List model ids and exit (`handy --list-models --json`)                                                                           |
+| `--list-devices`            | List transcribe-cpp compute devices with their indices and exit                                                                  |
 
 **Key design decisions:**
 

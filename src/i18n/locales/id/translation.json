@@ -218,6 +218,7 @@
       "availableModels": "Tersedia untuk Diunduh",
       "deleteConfirm": "Yakin ingin menghapus {{modelName}}? Anda harus mengunduhnya lagi untuk menggunakannya.",
       "deleteActiveConfirm": "{{modelName}} adalah model aktif Anda. Menghapusnya akan menghentikan transkripsi sampai Anda memilih model baru. Yakin ingin melanjutkan?",
+      "deleteRecordingsConfirm": "{{modelName}} adalah model untuk rekaman Anda. Jika dihapus, rekaman akan menggunakan model dikte Anda. Yakin ingin melanjutkan?",
       "deleteTitle": "Hapus Model",
       "filters": {
         "allLanguages": "Semua Bahasa",
@@ -469,10 +470,12 @@
       "description": "Ubah rekaman yang sudah ada menjadi teks di komputer ini. File Anda tidak pernah keluar dari perangkat Anda.",
       "settingsNote": "Menggunakan model yang Anda pilih serta pengaturan bahasa, terjemahan, kata khusus, dan kata pengisi Anda.",
       "settingsNoteLemonade": "Menggunakan pengaturan bahasa, kata khusus, dan kata pengisi Anda.",
+      "settingsNoteOwnModel": "Menggunakan model untuk rekaman serta pengaturan bahasa, terjemahan, kata khusus, dan kata pengisi Anda.",
       "model": "Model: {{model}}",
       "modelLemonade": "Model: {{model}} di Lemonade Server",
       "noModel": "Pilih model yang sudah diunduh di halaman Model untuk mentranskripsikan file.",
       "noLemonadeModel": "Pilih model Lemonade untuk mentranskripsikan file.",
+      "noRecordingsModel": "Model untuk rekaman Anda belum diunduh. Pilih model lain di atas atau unduh di halaman Model.",
       "dropzone": {
         "title": "Letakkan file audio atau video di sini",
         "hint": "Wawancara, rapat, kuliah, dan memo suara dengan durasi berapa pun",
@@ -499,6 +502,14 @@
         "description": "Dikte selalu menggunakan model milik Handy sendiri. Pilihan ini hanya berlaku untuk file.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model untuk rekaman",
+        "description": "Rekaman dapat menggunakan model yang lebih lambat tetapi lebih akurat daripada model dikte. Model ini berjalan terpisah dan hanya dimuat saat file ditranskripsikan, sehingga model dikte Anda tetap siap. Kedua model harus muat di memori.",
+        "same": "Sama seperti dikte ({{model}})",
+        "sameNoModel": "Sama seperti dikte",
+        "switchWarning": "File ini menggunakan model dikte Anda, jadi mengganti model dikte sekarang akan menghentikannya. Agar keduanya terpisah, pilih model lain untuk rekaman.",
+        "onCpu": "Rekaman berjalan di prosesor karena memori grafis tidak cukup untuk kedua model. Pilih model yang lebih kecil untuk rekaman agar kartu grafis dapat digunakan."
       },
       "lemonade": {
         "url": {

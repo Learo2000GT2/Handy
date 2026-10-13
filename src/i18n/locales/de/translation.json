@@ -164,6 +164,7 @@
       "description": "Wähle ein Transkriptionsmodell aus oder lade zusätzliche Modelle herunter. Verschiedene Modelle bieten unterschiedliche Genauigkeits- und Geschwindigkeitsstufen.",
       "deleteConfirm": "Bist du sicher, dass du {{modelName}} löschen möchtest? Du musst es erneut herunterladen, um es zu verwenden.",
       "deleteActiveConfirm": "{{modelName}} ist dein aktives Modell. Das Löschen stoppt Transkriptionen, bis du ein neues Modell auswählst. Bist du sicher?",
+      "deleteRecordingsConfirm": "{{modelName}} ist dein Modell für Aufnahmen. Wenn du es löschst, verwenden Aufnahmen dein Diktiermodell. Bist du sicher?",
       "deleteTitle": "Modell löschen",
       "filters": {
         "allLanguages": "Alle Sprachen",
@@ -469,10 +470,12 @@
       "description": "Wandle vorhandene Aufnahmen direkt auf diesem Computer in Text um. Deine Dateien verlassen nie dein Gerät.",
       "settingsNote": "Verwendet dein ausgewähltes Modell sowie deine Einstellungen für Sprache, Übersetzung, benutzerdefinierte Wörter und Füllwörter.",
       "settingsNoteLemonade": "Verwendet deine Einstellungen für Sprache, benutzerdefinierte Wörter und Füllwörter.",
+      "settingsNoteOwnModel": "Verwendet dein Modell für Aufnahmen sowie deine Einstellungen für Sprache, Übersetzung, benutzerdefinierte Wörter und Füllwörter.",
       "model": "Modell: {{model}}",
       "modelLemonade": "Modell: {{model}} auf Lemonade Server",
       "noModel": "Wähle auf der Seite 'Modelle' ein heruntergeladenes Modell aus, um Dateien zu transkribieren.",
       "noLemonadeModel": "Wähle ein Lemonade-Modell aus, um Dateien zu transkribieren.",
+      "noRecordingsModel": "Dein Modell für Aufnahmen ist nicht heruntergeladen. Wähle oben ein anderes aus oder lade es auf der Seite 'Modelle' herunter.",
       "dropzone": {
         "title": "Audio- oder Videodateien hier ablegen",
         "hint": "Interviews, Meetings, Vorlesungen und Sprachmemos beliebiger Länge",
@@ -499,6 +502,14 @@
         "description": "Beim Diktieren verwendet Handy immer sein eigenes Modell. Diese Auswahl gilt nur für Dateien.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Modell für Aufnahmen",
+        "description": "Aufnahmen können ein langsameres, genaueres Modell als das Diktieren verwenden. Es läuft separat und wird nur geladen, während Dateien transkribiert werden, sodass dein Diktiermodell bereit bleibt. Beide Modelle müssen in den Speicher passen.",
+        "same": "Wie beim Diktieren ({{model}})",
+        "sameNoModel": "Wie beim Diktieren",
+        "switchWarning": "Diese Datei verwendet dein Diktiermodell. Wenn du das Diktiermodell jetzt wechselst, wird sie abgebrochen. Um beides zu trennen, wähle ein anderes Modell für Aufnahmen.",
+        "onCpu": "Aufnahmen laufen auf dem Prozessor, weil der Grafikspeicher nicht für beide Modelle reicht. Wähle ein kleineres Modell für Aufnahmen, um die Grafikkarte zu nutzen."
       },
       "lemonade": {
         "url": {

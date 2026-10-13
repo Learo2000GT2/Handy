@@ -183,6 +183,7 @@ pub fn diarize_samples(
             path: model_path.to_path_buf(),
             backend: Backend::Cpu,
             device: DeviceSelector::Auto,
+            min_gpu_free_bytes: None,
         })?;
         if info.arch != SORTFORMER_ARCH {
             // Free it now; the next call would load it again and fail the same way.

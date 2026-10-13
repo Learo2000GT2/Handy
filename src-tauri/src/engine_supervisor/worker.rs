@@ -323,6 +323,7 @@ fn load(
             .unwrap_or_else(|| "unknown".to_string()),
         capabilities: model.capabilities(),
         supports_initial_prompt: model.supports(Feature::InitialPrompt),
+        gpu_memory_fallback: false,
     };
     Ok((session, info))
 }

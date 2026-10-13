@@ -164,6 +164,7 @@
       "description": "Seleziona un modello di trascrizione o scarica modelli aggiuntivi. Diversi modelli offrono diversi livelli di accuratezza e velocità.",
       "deleteConfirm": "Sei sicuro di voler eliminare {{modelName}}? Dovrai scaricarlo di nuovo per usarlo.",
       "deleteActiveConfirm": "{{modelName}} è il tuo modello attivo. Eliminarlo interromperà le trascrizioni fino a quando non selezionerai un nuovo modello. Sei sicuro?",
+      "deleteRecordingsConfirm": "{{modelName}} è il tuo modello per le registrazioni. Se lo elimini, le registrazioni useranno il modello di dettatura. Sei sicuro?",
       "deleteTitle": "Elimina modello",
       "filters": {
         "allLanguages": "Tutte le lingue",
@@ -469,10 +470,12 @@
       "description": "Trasforma le registrazioni esistenti in testo su questo computer. I tuoi file non lasciano mai il dispositivo.",
       "settingsNote": "Usa il modello selezionato e le tue impostazioni di lingua, traduzione, parole personalizzate e parole riempitive.",
       "settingsNoteLemonade": "Usa le tue impostazioni di lingua, parole personalizzate e parole riempitive.",
+      "settingsNoteOwnModel": "Usa il modello per le registrazioni e le tue impostazioni di lingua, traduzione, parole personalizzate e parole riempitive.",
       "model": "Modello: {{model}}",
       "modelLemonade": "Modello: {{model}} su Lemonade Server",
       "noModel": "Seleziona un modello scaricato nella pagina Modelli per trascrivere i file.",
       "noLemonadeModel": "Scegli un modello Lemonade per trascrivere i file.",
+      "noRecordingsModel": "Il modello per le registrazioni non è scaricato. Scegline un altro qui sopra o scaricalo nella pagina Modelli.",
       "dropzone": {
         "title": "Trascina qui file audio o video",
         "hint": "Interviste, riunioni, lezioni e memo vocali di qualsiasi durata",
@@ -499,6 +502,14 @@
         "description": "La dettatura usa sempre il modello di Handy. Questa scelta vale solo per i file.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Modello per le registrazioni",
+        "description": "Le registrazioni possono usare un modello più lento e più preciso di quello della dettatura. Funziona separatamente e viene caricato solo durante la trascrizione dei file, così il modello di dettatura resta pronto. Entrambi i modelli devono entrare in memoria.",
+        "same": "Uguale alla dettatura ({{model}})",
+        "sameNoModel": "Uguale alla dettatura",
+        "switchWarning": "Questo file usa il modello di dettatura, quindi cambiarlo ora lo interromperà. Per tenerli separati, scegli un modello diverso per le registrazioni.",
+        "onCpu": "Le registrazioni vengono eseguite sul processore perché la memoria grafica non basta per entrambi i modelli. Scegli un modello più piccolo per le registrazioni per usare la scheda grafica."
       },
       "lemonade": {
         "url": {

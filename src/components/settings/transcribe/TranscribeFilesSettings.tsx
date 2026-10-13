@@ -5,7 +5,11 @@ import { useSettings } from "@/hooks/useSettings";
 import { useModelStore } from "@/stores/modelStore";
 import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
 import { getTranslatedModelName } from "@/lib/utils/modelTranslation";
-import { isFinishedStatus, notReadyKey } from "@/lib/utils/transcript";
+import {
+  isFinishedStatus,
+  notReadyKey,
+  recordingsModelId,
+} from "@/lib/utils/transcript";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { SettingsGroup } from "../../ui/SettingsGroup";
@@ -37,6 +41,9 @@ export const TranscribeFilesSettings: React.FC = () => {
   const refreshFormats = useFileTranscriptionStore(
     (state) => state.refreshFormats,
   );
+  const recordingsEngine = useFileTranscriptionStore(
+    (state) => state.recordingsEngine,
+  );
   const cancelAll = useFileTranscriptionStore((state) => state.cancelAll);
   const clearFinished = useFileTranscriptionStore(
     (state) => state.clearFinished,
@@ -48,16 +55,24 @@ export const TranscribeFilesSettings: React.FC = () => {
     void refreshFormats();
   }, [refreshFormats]);
 
+  // Handy transcribes files with the model for recordings: the dictation
+  // model unless another one is chosen, which must be a transcribe-cpp model.
+  const recordingsSetting = settings?.file_transcription_model ?? "";
+  const explicitModel = recordingsSetting.trim() !== "";
+  const recordingsId = recordingsModelId(recordingsSetting, currentModel);
   const modelInfo = models.find(
-    (model: ModelInfo) => model.id === currentModel,
+    (model: ModelInfo) => model.id === recordingsId,
   );
-  const modelReady = modelInfo?.is_downloaded ?? false;
+  const modelReady =
+    (modelInfo?.is_downloaded ?? false) &&
+    (!explicitModel || modelInfo?.engine_type === "TranscribeCpp");
   const lemonade = settings?.file_transcription_engine === "lemonade";
   const lemonadeModel = settings?.lemonade?.model ?? "";
   const notReady = notReadyKey(
     lemonade ? "lemonade" : "handy",
     lemonadeModel,
     modelReady,
+    explicitModel,
   );
   const notReadyText =
     notReady === null ? null : t(`settings.transcribeFiles.${notReady}`);
@@ -71,6 +86,14 @@ export const TranscribeFilesSettings: React.FC = () => {
     .filter((job): job is FileJobSnapshot => job !== undefined);
   const hasActive = queue.some((job) => !isFinishedStatus(job.status));
   const hasFinished = queue.some((job) => isFinishedStatus(job.status));
+  const sharesDictationModel = queue.some(
+    (job) =>
+      !isFinishedStatus(job.status) && job.shares_dictation_model === true,
+  );
+  const onCpu =
+    !lemonade &&
+    recordingsEngine?.gpu_memory_fallback === true &&
+    recordingsEngine.model_id === recordingsId;
 
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
@@ -84,7 +107,9 @@ export const TranscribeFilesSettings: React.FC = () => {
         <p className="mt-2 text-xs text-text/50">
           {lemonade
             ? t("settings.transcribeFiles.settingsNoteLemonade")
-            : t("settings.transcribeFiles.settingsNote")}
+            : explicitModel
+              ? t("settings.transcribeFiles.settingsNoteOwnModel")
+              : t("settings.transcribeFiles.settingsNote")}
         </p>
         {lemonade
           ? lemonadeModel !== "" && (
@@ -109,6 +134,11 @@ export const TranscribeFilesSettings: React.FC = () => {
       {notReadyMessage !== null && (
         <Alert variant="warning">{notReadyMessage}</Alert>
       )}
+      {onCpu && (
+        <Alert variant="info">
+          {t("settings.transcribeFiles.recordingsModel.onCpu")}
+        </Alert>
+      )}
 
       <FileDropZone disabledReason={notReadyText} />
 
@@ -126,6 +156,11 @@ export const TranscribeFilesSettings: React.FC = () => {
 
       {queue.length > 0 && (
         <div className="space-y-2">
+          {sharesDictationModel && (
+            <p className="px-4 text-xs text-text/60">
+              {t("settings.transcribeFiles.recordingsModel.switchWarning")}
+            </p>
+          )}
           <div className="px-4 flex items-center justify-between gap-2">
             <h2 className="text-xs font-medium text-mid-gray uppercase tracking-wide">
               {t("settings.transcribeFiles.queue.title")}

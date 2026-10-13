@@ -16,6 +16,7 @@ use crate::file_transcription::pipeline::{
 use crate::file_transcription::speaker_model;
 use crate::file_transcription::types::{SpeakerJobState, SpeakerSkipReason, TranscriptFormat};
 use crate::managers::model::ModelManager;
+use crate::managers::recordings_engine::FileModelSlot;
 use crate::managers::transcription::{FileJobLease, TranscriptionManager};
 use crate::settings::{
     get_settings, AppSettings, FileTranscriptionEngine, LemonadeSettings, DEFAULT_LEMONADE_URL,
@@ -269,10 +270,12 @@ fn cli_engine(
                         .to_string(),
                 );
             }
+            // One engine here: the model for recordings loads in
+            // dictation's slot.
             let model_id = args
                 .model
                 .clone()
-                .unwrap_or_else(|| settings.selected_model.clone());
+                .unwrap_or_else(|| settings.recordings_model().to_string());
             if model_id.is_empty() {
                 return Err("no model selected (pass --model or pick one in the app)".to_string());
             }
@@ -578,7 +581,12 @@ fn prepare_engine(
             // Hold the model for the whole command, so an "Immediately" unload timeout
             // doesn't unload (and the next run reload) it between --repeat runs. The
             // lease also reports the model's chunk limits.
-            let lease = match tm.begin_file_job(&model_id, device_index, WorkToken::new()) {
+            let lease = match tm.begin_file_job(
+                &model_id,
+                device_index,
+                WorkToken::new(),
+                FileModelSlot::Dictation,
+            ) {
                 Ok(lease) => lease,
                 Err(e) => {
                     eprintln!("error: preparing model '{}' failed: {}", model_id, e);
@@ -594,6 +602,7 @@ fn prepare_engine(
                 engine: PipelineEngine::Handy {
                     model_id: model_id.clone(),
                     device_index,
+                    slot: FileModelSlot::Dictation,
                 },
                 model_id,
                 requested_device,
@@ -1386,6 +1395,30 @@ mod tests {
     }
 
     #[test]
+    fn the_model_defaults_to_the_model_for_recordings() {
+        let model_of =
+            |args: &CliArgs, settings: &AppSettings| match cli_engine(args, settings, None)
+                .unwrap()
+                .0
+            {
+                CliEngine::Handy { model_id, .. } => model_id,
+                other => panic!("expected Handy, got {other:?}"),
+            };
+        let mut settings = settings_with(FileTranscriptionEngine::Handy);
+        settings.file_transcription_model = "tiny".to_string();
+        assert_eq!(model_of(&args(&[]), &settings), "tiny");
+        // --model still wins.
+        assert_eq!(model_of(&args(&["--model", "medium"]), &settings), "medium");
+        // "Same as dictation".
+        settings.file_transcription_model = String::new();
+        assert_eq!(model_of(&args(&[]), &settings), "small");
+        // A model for recordings even without a dictation model.
+        settings.selected_model = String::new();
+        settings.file_transcription_model = "tiny".to_string();
+        assert_eq!(model_of(&args(&[]), &settings), "tiny");
+    }
+
+    #[test]
     fn engine_usage_errors_and_warnings() {
         let handy = settings_with(FileTranscriptionEngine::Handy);
         for flags in [
@@ -1429,6 +1462,11 @@ mod tests {
 
         let mut unselected = settings_with(FileTranscriptionEngine::Handy);
         unselected.selected_model = String::new();
+        assert_eq!(
+            cli_engine(&args(&[]), &unselected, None).unwrap_err(),
+            "no model selected (pass --model or pick one in the app)"
+        );
+        unselected.file_transcription_model = "  ".to_string();
         assert_eq!(
             cli_engine(&args(&[]), &unselected, None).unwrap_err(),
             "no model selected (pass --model or pick one in the app)"

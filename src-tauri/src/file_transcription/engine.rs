@@ -3,6 +3,7 @@
 //! `ChunkTranscriber`; only Handy's implementation takes the lease and the
 //! run gate, or waits for dictation.
 
+use crate::file_transcription::pipeline;
 use crate::file_transcription::types::FileJobErrorCode;
 use crate::managers::transcription::{ChunkError, ChunkLimits, ChunkTranscript, FileJobLease};
 
@@ -60,20 +61,89 @@ impl ChunkTranscriber for FileJobLease {
         offset_ms: u64,
         real_len_ms: u64,
     ) -> Result<ChunkTranscript, TranscribeError> {
-        FileJobLease::transcribe_chunk(self, samples, offset_ms, real_len_ms).map_err(|e| match e {
-            ChunkError::Yield => TranscribeError::Yield,
-            ChunkError::Cancelled => TranscribeError::Cancelled,
-            ChunkError::ModelChanged {
-                job_model,
-                current_model,
-            } => TranscribeError::Stop {
+        FileJobLease::transcribe_chunk(self, samples, offset_ms, real_len_ms)
+            .map_err(chunk_error_to_transcribe)
+    }
+}
+
+/// What the pipeline does with a chunk's error. A model that can't be loaded
+/// because it is gone (deleted mid-job) stops the job at once: retrying the
+/// next chunks would only fail the same way.
+fn chunk_error_to_transcribe(error: ChunkError) -> TranscribeError {
+    match error {
+        ChunkError::Yield => TranscribeError::Yield,
+        ChunkError::Cancelled => TranscribeError::Cancelled,
+        ChunkError::ModelChanged {
+            job_model,
+            current_model,
+        } => TranscribeError::Stop {
+            code: FileJobErrorCode::ModelChanged,
+            message: format!(
+                "The model changed from {} to {} during transcription",
+                job_model, current_model
+            ),
+        },
+        ChunkError::Failed(error)
+            if pipeline::model_load_error_code(&error) == FileJobErrorCode::NoModel =>
+        {
+            TranscribeError::Stop {
+                code: FileJobErrorCode::NoModel,
+                message: format!("{:#}", error),
+            }
+        }
+        ChunkError::Failed(error) => TranscribeError::Failed(error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::anyhow;
+
+    #[test]
+    fn a_missing_model_stops_the_job() {
+        for error in [
+            anyhow!("Model not downloaded"),
+            anyhow!("Model not found: cohere"),
+        ] {
+            match chunk_error_to_transcribe(ChunkError::Failed(error)) {
+                TranscribeError::Stop { code, message } => {
+                    assert_eq!(code, FileJobErrorCode::NoModel);
+                    assert!(message.starts_with("Model not"), "{message}");
+                }
+                other => panic!("expected a stop, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn other_failures_are_retried() {
+        for error in [
+            anyhow!("transcribe-cpp transcription failed: worker crashed"),
+            anyhow!("Model cohere can't be used for recordings"),
+        ] {
+            assert!(matches!(
+                chunk_error_to_transcribe(ChunkError::Failed(error)),
+                TranscribeError::Failed(_)
+            ));
+        }
+        assert!(matches!(
+            chunk_error_to_transcribe(ChunkError::Yield),
+            TranscribeError::Yield
+        ));
+        assert!(matches!(
+            chunk_error_to_transcribe(ChunkError::Cancelled),
+            TranscribeError::Cancelled
+        ));
+        assert!(matches!(
+            chunk_error_to_transcribe(ChunkError::ModelChanged {
+                job_model: "a".to_string(),
+                current_model: "b".to_string(),
+            }),
+            TranscribeError::Stop {
                 code: FileJobErrorCode::ModelChanged,
-                message: format!(
-                    "The model changed from {} to {} during transcription",
-                    job_model, current_model
-                ),
-            },
-            ChunkError::Failed(error) => TranscribeError::Failed(error),
-        })
+                ..
+            }
+        ));
     }
 }

@@ -9,6 +9,7 @@ import {
   type LemonadeSettings,
 } from "@/bindings";
 import { useSettings } from "@/hooks/useSettings";
+import { useModelStore } from "@/stores/modelStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import {
   DEFAULT_LEMONADE_SETTINGS,
@@ -16,6 +17,7 @@ import {
   isolateLtr,
   isValidServerUrl,
   lemonadeErrorKey,
+  recordingsModelOptions,
 } from "@/lib/utils/transcript";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
@@ -36,13 +38,17 @@ const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 /**
- * Chooses the engine for file transcription: Handy's selected model or a
- * Lemonade Server, with the server's address, API key and model. Dictation is
- * not affected.
+ * Chooses the engine for file transcription: Handy, with its model for
+ * recordings (the dictation model, or another one that runs on its own
+ * beside it), or a Lemonade Server, with the server's address, API key and
+ * model. Dictation is not affected.
  */
 export const EngineCard: React.FC = () => {
   const { t } = useTranslation();
   const { settings, updateSetting } = useSettings();
+  const handyModels = useModelStore((state) => state.models);
+  const dictationModel = useModelStore((state) => state.currentModel);
+  const recordingsModel = (settings?.file_transcription_model ?? "").trim();
   const engine: FileTranscriptionEngine =
     settings?.file_transcription_engine ?? "handy";
   const lemonade = settings?.lemonade ?? DEFAULT_LEMONADE_SETTINGS;
@@ -184,6 +190,28 @@ export const EngineCard: React.FC = () => {
     return (
       <SettingsGroup title={t("settings.transcribeFiles.engine.title")}>
         {engineRow}
+        <SettingContainer
+          title={t("settings.transcribeFiles.recordingsModel.label")}
+          description={t(
+            "settings.transcribeFiles.recordingsModel.description",
+          )}
+          descriptionMode="tooltip"
+          grouped={true}
+        >
+          <Dropdown
+            options={recordingsModelOptions(
+              handyModels,
+              dictationModel,
+              recordingsModel,
+              t,
+            )}
+            selectedValue={recordingsModel}
+            onSelect={(value) =>
+              void updateSetting("file_transcription_model", value)
+            }
+            disabled={settings === null}
+          />
+        </SettingContainer>
       </SettingsGroup>
     );
   }

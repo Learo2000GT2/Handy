@@ -6,9 +6,13 @@ use crate::file_transcription::types::{
 };
 use crate::file_transcription::FileTranscriptionManager;
 use crate::managers::history::HistoryManager;
+use crate::managers::model::{EngineType, ModelInfo, ModelManager};
+use crate::managers::recordings_engine::RecordingsEngineEvent;
+use crate::managers::transcription::TranscriptionManager;
+use crate::settings;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 #[specta::specta]
@@ -106,6 +110,57 @@ pub async fn export_file_transcript(
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// Sets the model for recordings (Transcribe page; "" = Same as dictation).
+/// Only a downloaded transcribe-cpp model is accepted. A recordings model
+/// that no longer matches is freed unless a job is using it (a running job
+/// keeps its model); nothing is loaded.
+#[tauri::command]
+#[specta::specta]
+pub fn change_file_transcription_model_setting(
+    app: AppHandle,
+    model_manager: State<'_, Arc<ModelManager>>,
+    transcription_manager: State<'_, Arc<TranscriptionManager>>,
+    model_id: String,
+) -> Result<(), String> {
+    let model_id = model_id.trim().to_string();
+    let info = if model_id.is_empty() {
+        None
+    } else {
+        model_manager.get_model_info(&model_id)
+    };
+    validate_recordings_model(info.as_ref(), &model_id)?;
+    let mut settings = settings::get_settings(&app);
+    settings.file_transcription_model = model_id.clone();
+    settings::write_settings(&app, settings);
+    transcription_manager.release_recordings_model_unless(&model_id);
+    Ok(())
+}
+
+/// The recordings engine's state now (see `RecordingsEngineEvent`).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_recordings_engine_status(
+    transcription_manager: State<'_, Arc<TranscriptionManager>>,
+) -> Result<RecordingsEngineEvent, String> {
+    Ok(transcription_manager.recordings_engine_status())
+}
+
+/// `Ok` for "" (Same as dictation) or a downloaded transcribe-cpp model;
+/// in-process ONNX models can't run on the recordings engine.
+fn validate_recordings_model(info: Option<&ModelInfo>, model_id: &str) -> Result<(), String> {
+    if model_id.is_empty() {
+        return Ok(());
+    }
+    let info = info.ok_or_else(|| format!("Model not found: {}", model_id))?;
+    if !info.is_downloaded {
+        return Err(format!("Model not downloaded: {}", model_id));
+    }
+    if !matches!(info.engine_type, EngineType::TranscribeCpp) {
+        return Err(format!("Model can't be used for recordings: {}", model_id));
+    }
+    Ok(())
+}
+
 async fn resolve_transcript(
     manager: &FileTranscriptionManager,
     history: &Arc<HistoryManager>,
@@ -168,6 +223,59 @@ fn export_path(path: &str, format: TranscriptFormat) -> Result<PathBuf, String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::managers::model::ModelSource;
+
+    fn model(engine_type: EngineType, is_downloaded: bool) -> ModelInfo {
+        ModelInfo {
+            id: "m".to_string(),
+            name: "M".to_string(),
+            description: String::new(),
+            filename: "m.gguf".to_string(),
+            source: ModelSource::Local,
+            size_mb: 1,
+            is_downloaded,
+            is_downloading: false,
+            partial_size: 0,
+            is_directory: false,
+            engine_type,
+            accuracy_score: 0.5,
+            speed_score: 0.5,
+            supports_translation: false,
+            is_recommended: false,
+            supported_languages: Vec::new(),
+            supports_language_selection: false,
+            is_custom: false,
+            supports_streaming: false,
+            supports_language_detection: false,
+        }
+    }
+
+    #[test]
+    fn recordings_model_must_be_a_downloaded_transcribe_cpp_model() {
+        assert_eq!(validate_recordings_model(None, ""), Ok(()));
+        assert_eq!(
+            validate_recordings_model(Some(&model(EngineType::TranscribeCpp, true)), "m"),
+            Ok(())
+        );
+        assert_eq!(
+            validate_recordings_model(None, "gone"),
+            Err("Model not found: gone".to_string())
+        );
+        assert_eq!(
+            validate_recordings_model(Some(&model(EngineType::TranscribeCpp, false)), "m"),
+            Err("Model not downloaded: m".to_string())
+        );
+        for onnx in [
+            EngineType::Parakeet,
+            EngineType::Moonshine,
+            EngineType::Cohere,
+        ] {
+            assert_eq!(
+                validate_recordings_model(Some(&model(onnx, true)), "m"),
+                Err("Model can't be used for recordings: m".to_string())
+            );
+        }
+    }
 
     #[test]
     fn export_path_requires_an_absolute_path_in_an_existing_folder() {

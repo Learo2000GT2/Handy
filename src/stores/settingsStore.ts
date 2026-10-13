@@ -209,6 +209,14 @@ const settingUpdaters: {
       throw new Error(result.error);
     }
   },
+  file_transcription_model: async (value) => {
+    const result = await commands.changeFileTranscriptionModelSetting(
+      value as string,
+    );
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
+  },
   lemonade: async (value) => {
     const result = await commands.changeLemonadeSettings(
       value as LemonadeSettings,

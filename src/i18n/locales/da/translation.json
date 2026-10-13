@@ -218,6 +218,7 @@
       "availableModels": "Tilgængelig til download",
       "deleteConfirm": "Er du sikker på, at du vil slette {{modelName}}? Du skal downloade den igen for at bruge den.",
       "deleteActiveConfirm": "{{modelName}} er din aktive model. Sletning af den vil stoppe transskriptioner, indtil du vælger en ny model. Er du sikker?",
+      "deleteRecordingsConfirm": "{{modelName}} er din model til optagelser. Hvis du sletter den, bruger optagelser din dikteringsmodel. Er du sikker?",
       "deleteTitle": "Slet model",
       "filters": {
         "allLanguages": "Alle sprog",
@@ -469,10 +470,12 @@
       "description": "Gør eksisterende optagelser til tekst på denne computer. Dine filer forlader aldrig din enhed.",
       "settingsNote": "Bruger din valgte model og dine indstillinger for sprog, oversættelse, brugerdefinerede ord og fyldord.",
       "settingsNoteLemonade": "Bruger dine indstillinger for sprog, brugerdefinerede ord og fyldord.",
+      "settingsNoteOwnModel": "Bruger din model til optagelser og dine indstillinger for sprog, oversættelse, brugerdefinerede ord og fyldord.",
       "model": "Model: {{model}}",
       "modelLemonade": "Model: {{model}} på Lemonade Server",
       "noModel": "Vælg en downloadet model på siden Modeller for at transskribere filer.",
       "noLemonadeModel": "Vælg en Lemonade-model for at transskribere filer.",
+      "noRecordingsModel": "Din model til optagelser er ikke downloadet. Vælg en anden ovenfor, eller download den på siden Modeller.",
       "dropzone": {
         "title": "Slip lyd- eller videofiler her",
         "hint": "Interviews, møder, forelæsninger og talememoer af enhver længde",
@@ -499,6 +502,14 @@
         "description": "Diktering bruger altid Handys egen model. Dette valg gælder kun filer.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model til optagelser",
+        "description": "Optagelser kan bruge en langsommere og mere præcis model end diktering. Den kører for sig selv og indlæses kun, mens filer transskriberes, så din dikteringsmodel forbliver klar. Begge modeller skal kunne være i hukommelsen.",
+        "same": "Samme som diktering ({{model}})",
+        "sameNoModel": "Samme som diktering",
+        "switchWarning": "Denne fil bruger din dikteringsmodel, så hvis du skifter dikteringsmodel nu, stoppes den. Vælg en anden model til optagelser for at holde dem adskilt.",
+        "onCpu": "Optagelserne kører på processoren, fordi der ikke er nok grafikhukommelse til begge modeller. Vælg en mindre model til optagelser for at bruge grafikkortet."
       },
       "lemonade": {
         "url": {

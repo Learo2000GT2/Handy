@@ -313,6 +313,9 @@ pub struct FileJobSnapshot {
     /// Set for a speaker-label job: the transcript it labels. Such a job
     /// transcribes nothing and never has a transcript of its own.
     pub labels_for: Option<TranscriptSource>,
+    /// Runs on dictation's loaded model; switching the dictation model stops it.
+    #[serde(default)]
+    pub shares_dictation_model: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, tauri_specta::Event)]
@@ -435,9 +438,11 @@ mod tests {
             history_id: None,
             enqueued_at: 1,
             labels_for: None,
+            shares_dictation_model: true,
         };
         let value = serde_json::to_value(&snapshot).expect("serialize");
         assert_eq!(value["labels_for"], serde_json::Value::Null);
+        assert_eq!(value["shares_dictation_model"], json!(true));
 
         let label_job = FileJobSnapshot {
             labels_for: Some(TranscriptSource::History { history_id: 7 }),

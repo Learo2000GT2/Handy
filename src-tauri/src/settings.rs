@@ -373,7 +373,8 @@ impl std::ops::DerefMut for SecretMap {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum FileTranscriptionEngine {
-    /// Handy's selected model (dictation's engine).
+    /// Handy's model for recordings (the dictation model unless one is
+    /// chosen on the Transcribe page).
     #[default]
     Handy,
     /// A local Lemonade Server over HTTP.
@@ -591,6 +592,10 @@ pub struct AppSettings {
     /// Engine for file transcription (Transcribe page); dictation is unaffected.
     #[serde(default)]
     pub file_transcription_engine: FileTranscriptionEngine,
+    /// Handy model for file transcription (Transcribe page; default of the CLI's --model).
+    /// "" = the dictation model (`selected_model`), today's behaviour. transcribe-cpp models only.
+    #[serde(default)]
+    pub file_transcription_model: String,
     #[serde(default)]
     pub lemonade: LemonadeSettings,
 }
@@ -1057,6 +1062,7 @@ pub fn get_default_settings() -> AppSettings {
         vad_backend: VadBackend::default(),
         overlay_style: default_overlay_style(),
         file_transcription_engine: FileTranscriptionEngine::Handy,
+        file_transcription_model: String::new(),
         lemonade: LemonadeSettings::default(),
     }
 }
@@ -1087,6 +1093,15 @@ impl AppSettings {
         self.post_process_providers
             .iter_mut()
             .find(|provider| provider.id == provider_id)
+    }
+
+    /// The Handy model files are transcribed with: the Transcribe page's model
+    /// for recordings when one is chosen, else the dictation model.
+    pub fn recordings_model(&self) -> &str {
+        match self.file_transcription_model.trim() {
+            "" => &self.selected_model,
+            chosen => chosen,
+        }
     }
 }
 
@@ -1528,6 +1543,10 @@ mod tests {
             serde_json::json!("parakeet-tdt-0.6b-v3"),
         );
         map.insert("onboarding_completed".into(), serde_json::json!(true));
+        map.insert(
+            "file_transcription_model".into(),
+            serde_json::json!("cohere-transcribe"),
+        );
         // An enum variant this build doesn't know, e.g. written by a newer
         // version before a downgrade.
         map.insert("sound_theme".into(), serde_json::json!("theremin"));
@@ -1542,6 +1561,35 @@ mod tests {
         assert!(salvaged.onboarding_completed);
         assert_eq!(salvaged.bindings["transcribe"].current_binding, "f13");
         assert_eq!(salvaged.sound_theme, default_sound_theme());
+        assert_eq!(salvaged.file_transcription_model, "cohere-transcribe");
+    }
+
+    #[test]
+    fn recordings_model_defaults_to_the_dictation_model() {
+        let defaults = get_default_settings();
+        assert_eq!(defaults.file_transcription_model, "");
+
+        // A store written before the setting existed reads as "Same as dictation".
+        let mut stored = default_settings_json();
+        stored
+            .as_object_mut()
+            .unwrap()
+            .remove("file_transcription_model");
+        let settings: AppSettings = serde_json::from_value(stored).unwrap();
+        assert_eq!(settings.file_transcription_model, "");
+
+        let mut settings = AppSettings {
+            selected_model: "small".to_string(),
+            ..defaults
+        };
+        for same in ["", "  "] {
+            settings.file_transcription_model = same.to_string();
+            assert_eq!(settings.recordings_model(), "small", "{same:?}");
+        }
+        settings.file_transcription_model = "x".to_string();
+        assert_eq!(settings.recordings_model(), "x");
+        settings.file_transcription_model = " x ".to_string();
+        assert_eq!(settings.recordings_model(), "x");
     }
 
     #[test]

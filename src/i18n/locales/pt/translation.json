@@ -215,6 +215,7 @@
       "description": "Selecione um modelo de transcrição ou baixe modelos adicionais. Diferentes modelos oferecem diferentes níveis de precisão e velocidade.",
       "deleteConfirm": "Tem certeza de que deseja excluir {{modelName}}? Você precisará baixá-lo novamente para usá-lo.",
       "deleteActiveConfirm": "{{modelName}} é o seu modelo ativo. Excluí-lo interromperá as transcrições até que você selecione um novo modelo. Tem certeza?",
+      "deleteRecordingsConfirm": "{{modelName}} é o seu modelo para gravações. Se você excluí-lo, as gravações usarão seu modelo de ditado. Tem certeza?",
       "deleteTitle": "Excluir Modelo",
       "filters": {
         "allLanguages": "Todos os Idiomas",
@@ -469,10 +470,12 @@
       "description": "Transforme gravações existentes em texto neste computador. Seus arquivos nunca saem do seu dispositivo.",
       "settingsNote": "Usa o modelo selecionado e suas configurações de idioma, tradução, palavras personalizadas e palavras de preenchimento.",
       "settingsNoteLemonade": "Usa suas configurações de idioma, palavras personalizadas e palavras de preenchimento.",
+      "settingsNoteOwnModel": "Usa seu modelo para gravações e suas configurações de idioma, tradução, palavras personalizadas e palavras de preenchimento.",
       "model": "Modelo: {{model}}",
       "modelLemonade": "Modelo: {{model}} no Lemonade Server",
       "noModel": "Selecione um modelo baixado na página Modelos para transcrever arquivos.",
       "noLemonadeModel": "Escolha um modelo do Lemonade para transcrever arquivos.",
+      "noRecordingsModel": "Seu modelo para gravações não foi baixado. Escolha outro acima ou baixe-o na página Modelos.",
       "dropzone": {
         "title": "Solte arquivos de áudio ou vídeo aqui",
         "hint": "Entrevistas, reuniões, aulas e notas de voz de qualquer duração",
@@ -499,6 +502,14 @@
         "description": "O ditado sempre usa o próprio modelo do Handy. Esta escolha vale apenas para arquivos.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Modelo para gravações",
+        "description": "As gravações podem usar um modelo mais lento e mais preciso que o do ditado. Ele funciona separadamente e só é carregado enquanto arquivos são transcritos, então seu modelo de ditado continua pronto. Os dois modelos precisam caber na memória.",
+        "same": "O mesmo do ditado ({{model}})",
+        "sameNoModel": "O mesmo do ditado",
+        "switchWarning": "Este arquivo usa seu modelo de ditado, então trocar o modelo de ditado agora vai interrompê-lo. Para mantê-los separados, escolha outro modelo para gravações.",
+        "onCpu": "As gravações estão rodando no processador porque não há memória gráfica suficiente para os dois modelos. Escolha um modelo menor para gravações para usar a placa de vídeo."
       },
       "lemonade": {
         "url": {

@@ -985,6 +985,31 @@ async exportFileTranscript(source: TranscriptSource, format: TranscriptFormat, p
 }
 },
 /**
+ * Sets the model for recordings (Transcribe page; "" = Same as dictation).
+ * Only a downloaded transcribe-cpp model is accepted. A recordings model
+ * that no longer matches is freed unless a job is using it (a running job
+ * keeps its model); nothing is loaded.
+ */
+async changeFileTranscriptionModelSetting(modelId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_file_transcription_model_setting", { modelId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The recordings engine's state now (see `RecordingsEngineEvent`).
+ */
+async getRecordingsEngineStatus() : Promise<Result<RecordingsEngineEvent, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_recordings_engine_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Lists the server's transcription models. Server problems are reported in
  * `LemonadeCheck.error`; Err only for internal failures.
  */
@@ -1141,12 +1166,14 @@ async isLaptop() : Promise<Result<boolean, string>> {
 export const events = __makeEvents__<{
 fileTranscriptionEvent: FileTranscriptionEvent,
 historyUpdatePayload: HistoryUpdatePayload,
+recordingsEngineEvent: RecordingsEngineEvent,
 speakerModelEvent: SpeakerModelEvent,
 streamPhaseEvent: StreamPhaseEvent,
 streamTextEvent: StreamTextEvent
 }>({
 fileTranscriptionEvent: "file-transcription-event",
 historyUpdatePayload: "history-update-payload",
+recordingsEngineEvent: "recordings-engine-event",
 speakerModelEvent: "speaker-model-event",
 streamPhaseEvent: "stream-phase-event",
 streamTextEvent: "stream-text-event"
@@ -1229,7 +1256,12 @@ overlay_style?: OverlayStyle;
 /**
  * Engine for file transcription (Transcribe page); dictation is unaffected.
  */
-file_transcription_engine?: FileTranscriptionEngine; lemonade?: LemonadeSettings }
+file_transcription_engine?: FileTranscriptionEngine; 
+/**
+ * Handy model for file transcription (Transcribe page; default of the CLI's --model).
+ * "" = the dictation model (`selected_model`), today's behaviour. transcribe-cpp models only.
+ */
+file_transcription_model?: string; lemonade?: LemonadeSettings }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }
@@ -1321,7 +1353,11 @@ enqueued_at: number;
  * Set for a speaker-label job: the transcript it labels. Such a job
  * transcribes nothing and never has a transcript of its own.
  */
-labels_for: TranscriptSource | null }
+labels_for: TranscriptSource | null; 
+/**
+ * Runs on dictation's loaded model; switching the dictation model stops it.
+ */
+shares_dictation_model?: boolean }
 export type FileJobStatus = "queued" | 
 /**
  * Probing the file and loading the model.
@@ -1371,7 +1407,8 @@ speakers?: TranscriptSpeakers | null }
  */
 export type FileTranscriptionEngine = 
 /**
- * Handy's selected model (dictation's engine).
+ * Handy's model for recordings (the dictation model unless one is
+ * chosen on the Transcribe page).
  */
 "handy" | 
 /**
@@ -1493,6 +1530,25 @@ export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_
 export type PermissionAccess = "allowed" | "denied" | "unknown"
 export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean }
 export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"
+/**
+ * The recordings engine's state, for the Transcribe page. Emitted when it
+ * changes; the dictation model's `model-state-changed` events never carry
+ * it, so the footer keeps showing the dictation model.
+ */
+export type RecordingsEngineEvent = { 
+/**
+ * The loaded model for recordings, if any.
+ */
+model_id: string | null; 
+/**
+ * Whether it runs on a GPU.
+ */
+on_gpu: boolean; 
+/**
+ * It was meant for the GPU, but the GPU had too little free memory for
+ * both models, so it runs on the processor.
+ */
+gpu_memory_fallback: boolean }
 export type SecretMap = Partial<{ [key in string]: string }>
 export type SecureInputStatus = { 
 /**

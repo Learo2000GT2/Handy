@@ -218,6 +218,7 @@
       "availableModels": "Disponibles per baixar",
       "deleteConfirm": "Segur que voleu suprimir {{modelName}}? Haureu de tornar-lo a baixar per utilitzar-lo.",
       "deleteActiveConfirm": "{{modelName}} és el model actiu. Si el suprimiu, no podreu fer transcripcions fins que seleccioneu un altre model. N'esteu segur?",
+      "deleteRecordingsConfirm": "{{modelName}} és el model per a enregistraments. Si el suprimiu, els enregistraments utilitzaran el model de dictat. N'esteu segur?",
       "deleteTitle": "Suprimeix el model",
       "filters": {
         "allLanguages": "Totes les llengües",
@@ -469,10 +470,12 @@
       "description": "Convertiu enregistraments existents en text en aquest ordinador. Els fitxers no surten mai del dispositiu.",
       "settingsNote": "Utilitza el model seleccionat i la configuració de llengua, traducció, paraules personalitzades i falques.",
       "settingsNoteLemonade": "Utilitza la configuració de llengua, paraules personalitzades i falques.",
+      "settingsNoteOwnModel": "Utilitza el model per a enregistraments i la configuració de llengua, traducció, paraules personalitzades i falques.",
       "model": "Model: {{model}}",
       "modelLemonade": "Model: {{model}} a Lemonade Server",
       "noModel": "Seleccioneu un model baixat a la pàgina Models per transcriure fitxers.",
       "noLemonadeModel": "Trieu un model de Lemonade per transcriure fitxers.",
+      "noRecordingsModel": "El model per a enregistraments no està baixat. Trieu-ne un altre a dalt o baixeu-lo a la pàgina Models.",
       "dropzone": {
         "title": "Deixeu anar aquí fitxers d'àudio o de vídeo",
         "hint": "Entrevistes, reunions, classes i notes de veu de qualsevol durada",
@@ -499,6 +502,14 @@
         "description": "El dictat sempre utilitza el model propi de Handy. Aquesta opció només s'aplica als fitxers.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model per a enregistraments",
+        "description": "Els enregistraments poden utilitzar un model més lent i més precís que el del dictat. Funciona per separat i només es carrega mentre es transcriuen fitxers, de manera que el model de dictat continua a punt. Tots dos models han de cabre a la memòria.",
+        "same": "El mateix que el dictat ({{model}})",
+        "sameNoModel": "El mateix que el dictat",
+        "switchWarning": "Aquest fitxer utilitza el model de dictat, així que si ara canvieu el model de dictat s'aturarà. Per mantenir-los separats, trieu un altre model per als enregistraments.",
+        "onCpu": "Els enregistraments s'estan executant al processador perquè no hi ha prou memòria gràfica per als dos models. Trieu un model més petit per als enregistraments per utilitzar la targeta gràfica."
       },
       "lemonade": {
         "url": {

@@ -164,6 +164,7 @@
       "description": "Chọn mô hình chuyển đổi hoặc tải thêm mô hình. Các mô hình khác nhau có mức độ chính xác và tốc độ khác nhau.",
       "deleteConfirm": "Bạn có chắc chắn muốn xóa {{modelName}}? Bạn sẽ cần tải lại để sử dụng.",
       "deleteActiveConfirm": "{{modelName}} là mô hình đang hoạt động của bạn. Xóa nó sẽ dừng phiên âm cho đến khi bạn chọn một mô hình mới. Bạn có chắc không?",
+      "deleteRecordingsConfirm": "{{modelName}} là mô hình cho bản ghi âm của bạn. Nếu xóa nó, bản ghi âm sẽ dùng mô hình nhập bằng giọng nói của bạn. Bạn có chắc không?",
       "deleteTitle": "Xóa mô hình",
       "filters": {
         "allLanguages": "Tất cả ngôn ngữ",
@@ -469,10 +470,12 @@
       "description": "Chuyển các bản ghi âm có sẵn thành văn bản ngay trên máy tính này. Tệp của bạn không bao giờ rời khỏi thiết bị.",
       "settingsNote": "Sử dụng mô hình bạn đã chọn cùng các cài đặt ngôn ngữ, dịch, từ tùy chỉnh và từ đệm của bạn.",
       "settingsNoteLemonade": "Sử dụng các cài đặt ngôn ngữ, từ tùy chỉnh và từ đệm của bạn.",
+      "settingsNoteOwnModel": "Sử dụng mô hình cho bản ghi âm cùng các cài đặt ngôn ngữ, dịch, từ tùy chỉnh và từ đệm của bạn.",
       "model": "Mô hình: {{model}}",
       "modelLemonade": "Mô hình: {{model}} trên Lemonade Server",
       "noModel": "Chọn một mô hình đã tải xuống ở trang Mô hình để phiên âm tệp.",
       "noLemonadeModel": "Chọn một mô hình Lemonade để phiên âm tệp.",
+      "noRecordingsModel": "Mô hình cho bản ghi âm của bạn chưa được tải xuống. Hãy chọn mô hình khác ở trên hoặc tải xuống ở trang Mô hình.",
       "dropzone": {
         "title": "Thả tệp âm thanh hoặc video vào đây",
         "hint": "Phỏng vấn, cuộc họp, bài giảng và ghi chú giọng nói với mọi độ dài",
@@ -499,6 +502,14 @@
         "description": "Nhập bằng giọng nói luôn dùng mô hình riêng của Handy. Lựa chọn này chỉ áp dụng cho tệp.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Mô hình cho bản ghi âm",
+        "description": "Bản ghi âm có thể dùng một mô hình chậm hơn nhưng chính xác hơn mô hình nhập bằng giọng nói. Mô hình này chạy riêng và chỉ được tải trong lúc phiên âm tệp, nên mô hình nhập bằng giọng nói của bạn luôn sẵn sàng. Cả hai mô hình phải vừa trong bộ nhớ.",
+        "same": "Giống nhập bằng giọng nói ({{model}})",
+        "sameNoModel": "Giống nhập bằng giọng nói",
+        "switchWarning": "Tệp này dùng mô hình nhập bằng giọng nói của bạn, nên đổi mô hình nhập bằng giọng nói lúc này sẽ dừng nó. Để tách riêng hai việc, hãy chọn một mô hình khác cho bản ghi âm.",
+        "onCpu": "Bản ghi âm đang chạy trên bộ xử lý vì bộ nhớ đồ họa không đủ cho cả hai mô hình. Hãy chọn một mô hình nhỏ hơn cho bản ghi âm để dùng card đồ họa."
       },
       "lemonade": {
         "url": {

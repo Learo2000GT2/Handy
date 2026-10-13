@@ -246,6 +246,7 @@
       "availableModels": "다운로드 가능",
       "deleteConfirm": "{{modelName}}을(를) 삭제하시겠습니까? 다시 사용하려면 다운로드해야 합니다.",
       "deleteActiveConfirm": "{{modelName}}은(는) 현재 활성 모델입니다. 삭제하면 새 모델을 선택할 때까지 전사가 중지됩니다. 정말 삭제하시겠습니까?",
+      "deleteRecordingsConfirm": "{{modelName}}은(는) 녹음용 모델입니다. 삭제하면 녹음에 음성 입력 모델이 사용됩니다. 정말 삭제하시겠습니까?",
       "deleteTitle": "모델 삭제",
       "filters": {
         "allLanguages": "모든 언어",
@@ -469,10 +470,12 @@
       "description": "기존 녹음을 이 컴퓨터에서 텍스트로 변환합니다. 파일은 기기 밖으로 전송되지 않습니다.",
       "settingsNote": "선택한 모델과 언어, 번역, 사용자 정의 단어, 군더더기 표현 설정을 사용합니다.",
       "settingsNoteLemonade": "언어, 사용자 정의 단어, 군더더기 표현 설정을 사용합니다.",
+      "settingsNoteOwnModel": "녹음용 모델과 언어, 번역, 사용자 정의 단어, 군더더기 표현 설정을 사용합니다.",
       "model": "모델: {{model}}",
       "modelLemonade": "모델: Lemonade Server의 {{model}}",
       "noModel": "파일을 전사하려면 모델 페이지에서 다운로드된 모델을 선택하세요.",
       "noLemonadeModel": "파일을 전사하려면 Lemonade 모델을 선택하세요.",
+      "noRecordingsModel": "녹음용 모델이 다운로드되지 않았습니다. 위에서 다른 모델을 선택하거나 모델 페이지에서 다운로드하세요.",
       "dropzone": {
         "title": "오디오 또는 비디오 파일을 여기에 놓으세요",
         "hint": "인터뷰, 회의, 강의, 음성 메모 등 길이 제한 없음",
@@ -499,6 +502,14 @@
         "description": "음성 입력에는 항상 Handy 자체 모델을 사용합니다. 이 선택은 파일에만 적용됩니다.",
         "handy": "Handy",
         "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "녹음용 모델",
+        "description": "녹음에는 음성 입력보다 느리지만 더 정확한 모델을 사용할 수 있습니다. 이 모델은 별도로 실행되며 파일을 전사하는 동안에만 로드되므로 음성 입력 모델은 계속 준비된 상태로 유지됩니다. 두 모델이 모두 메모리에 들어갈 수 있어야 합니다.",
+        "same": "음성 입력과 동일 ({{model}})",
+        "sameNoModel": "음성 입력과 동일",
+        "switchWarning": "이 파일은 음성 입력 모델을 사용하므로 지금 음성 입력 모델을 변경하면 중지됩니다. 둘을 분리하려면 녹음용으로 다른 모델을 선택하세요.",
+        "onCpu": "그래픽 메모리가 두 모델을 모두 올리기에 부족하여 녹음을 프로세서에서 처리하고 있습니다. 그래픽 카드를 사용하려면 녹음용으로 더 작은 모델을 선택하세요."
       },
       "lemonade": {
         "url": {

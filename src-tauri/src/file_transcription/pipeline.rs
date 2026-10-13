@@ -26,6 +26,7 @@ use crate::file_transcription::formats::DecodeRoute;
 use crate::file_transcription::lemonade::{LemonadeJobConfig, LemonadeTranscriber};
 use crate::file_transcription::speakers::{self, MergeOptions};
 use crate::file_transcription::types::*;
+use crate::managers::recordings_engine::FileModelSlot;
 use crate::managers::transcription::{ChunkLimits, ChunkTranscript, TranscriptionManager};
 use crate::settings::AppSettings;
 use anyhow::anyhow;
@@ -52,10 +53,12 @@ const MAX_CONSECUTIVE_FAILED_CHUNKS: u32 = 3;
 /// The engine a job transcribes with.
 #[derive(Clone, Debug)]
 pub enum PipelineEngine {
-    /// Handy's model through TranscriptionManager (today's behaviour).
+    /// Handy's model through TranscriptionManager: on dictation's slot
+    /// (today's behaviour) or on the recordings engine.
     Handy {
         model_id: String,
         device_index: Option<usize>,
+        slot: FileModelSlot,
     },
     /// Lemonade Server; never takes the lease, the run gate or the loaded model.
     Lemonade {
@@ -237,9 +240,10 @@ fn transcribe_file(
         PipelineEngine::Handy {
             model_id,
             device_index,
+            slot,
         } => {
             let lease = tm
-                .begin_file_job(model_id, *device_index, token.clone())
+                .begin_file_job(model_id, *device_index, token.clone(), *slot)
                 .map_err(|e| {
                     if token.is_cancelled() {
                         PipelineError::Cancelled { partial: None }
@@ -923,8 +927,9 @@ pub(crate) fn decode_failure(
 }
 
 /// `NoModel` when the model is unknown or not downloaded (the messages of
-/// `TranscriptionManager::load_model_with_device`); `EngineFailed` otherwise.
-fn model_load_error_code(error: &anyhow::Error) -> FileJobErrorCode {
+/// `TranscriptionManager::load_model_with_device` and of the recordings
+/// engine's loads); `EngineFailed` otherwise.
+pub(crate) fn model_load_error_code(error: &anyhow::Error) -> FileJobErrorCode {
     let message = format!("{:#}", error);
     if message.contains("Model not found") || message.contains("Model not downloaded") {
         FileJobErrorCode::NoModel
@@ -1780,6 +1785,48 @@ mod tests {
         assert_eq!(waiting, 1);
     }
 
+    /// A chunk on the recordings engine yields while a dictation is active
+    /// (and when one interrupted it): the pipeline shows the job as waiting
+    /// and sends the chunk again once the dictation is over.
+    #[test]
+    fn a_recordings_chunk_that_yields_is_redone_after_the_dictation() {
+        let engine = FakeEngine {
+            yields: true,
+            // Popped from the end: interrupted by the dictation, then done.
+            results: RefCell::new(vec![Err(TranscribeError::Yield)]),
+        };
+        let polls = Cell::new(0);
+        // Idle at the first poll (the chunk starts), active for the next two
+        // (the dictation that interrupted it), then idle.
+        let dictation_active = || {
+            polls.set(polls.get() + 1);
+            matches!(polls.get(), 2 | 3)
+        };
+        let token = WorkToken::new();
+        let chunks = ChunkEngine {
+            engine: &engine,
+            dictation_active: &dictation_active,
+            token: &token,
+        };
+        let mut events = Vec::new();
+
+        let chunk = chunks
+            .transcribe(&[0.0; 16_000], 0, 0, 1_000, &mut |event| events.push(event))
+            .unwrap();
+
+        assert_eq!(chunk.text, "ok");
+        let count =
+            |wanted: fn(&PipelineEvent) -> bool| events.iter().filter(|e| wanted(e)).count();
+        assert_eq!(count(|e| matches!(e, PipelineEvent::Waiting)), 1);
+        // Sent twice: interrupted, then redone.
+        assert_eq!(
+            count(|e| matches!(e, PipelineEvent::Transcribing { .. })),
+            2
+        );
+        assert_eq!(polls.get(), 4);
+        assert!(engine.results.borrow().is_empty());
+    }
+
     #[test]
     fn engine_stops_map_to_job_failures() {
         let token = WorkToken::new();
@@ -1831,6 +1878,7 @@ mod tests {
         let handy = |model_id: &str| PipelineEngine::Handy {
             model_id: model_id.to_string(),
             device_index: None,
+            slot: FileModelSlot::Dictation,
         };
         let lemonade = |model: &str| PipelineEngine::Lemonade {
             config: LemonadeJobConfig {
