@@ -179,6 +179,10 @@
           "transcribe_with_post_process": {
             "name": "पोस्ट-प्रोसेसिंग हॉटकी",
             "description": "वैकल्पिक: एक अलग हॉटकी जो आपके ट्रांसक्रिप्शन पर हमेशा AI पोस्ट-प्रोसेसिंग लागू करती है."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -388,7 +392,20 @@
         "removeSpelling": "Remove spelling {{spelling}}",
         "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
         "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
-        "spellingTooManyWords": "A spelling can have at most {{max}} words"
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add a word",
+          "description": "Teach Handy a word or the right spelling for something it wrote.",
+          "heardLabel": "Handy wrote",
+          "heardPlaceholder": "Stacy",
+          "writtenLabel": "Should be",
+          "writtenPlaceholder": "Stacey",
+          "hint": "Handy replaces what it wrote everywhere it appears, so don't use an ordinary word like \"three\". Leave \"Should be\" empty to add what Handy wrote as a custom word.",
+          "save": "Save",
+          "cancel": "Cancel",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpelling": "\"{{spelling}}\" will now be written as \"{{word}}\""
+        }
       },
       "voiceActivityDetection": {
         "title": "वॉइस एक्टिविटी डिटेक्शन",

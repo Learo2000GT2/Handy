@@ -102,19 +102,61 @@ fn paste_via_clipboard(
 
     finish_clipboard_paste(paste_result, paste_delay_after_ms, || {
         // Restore original clipboard content even when key injection failed.
-        // Text takes priority so this path stays identical to the previous behavior;
-        // an image is only restored when the clipboard held no text at all, which is
-        // the case that used to silently wipe screenshots.
-        if let Some(clipboard_content) = saved_text {
-            let _ = write_text_to_clipboard(app_handle, &clipboard_content);
-        } else if let Some(image) = saved_image {
-            info!("Restoring image to clipboard");
-            let _ = clipboard.write_image(&image);
-        } else {
-            // Nothing was there to begin with — don't leave the transcription behind.
-            let _ = clipboard.clear();
-        }
+        restore_clipboard(app_handle, saved_text, saved_image);
     })
+}
+
+/// Puts back what the clipboard held before Handy borrowed it. Text takes
+/// priority; an image is only restored when the clipboard held no text at
+/// all, which is the case that used to silently wipe screenshots. An empty
+/// clipboard is cleared again so nothing Handy wrote is left behind.
+fn restore_clipboard(
+    app_handle: &AppHandle,
+    saved_text: Option<String>,
+    saved_image: Option<tauri::image::Image<'static>>,
+) {
+    let clipboard = app_handle.clipboard();
+    if let Some(clipboard_content) = saved_text {
+        let _ = write_text_to_clipboard(app_handle, &clipboard_content);
+    } else if let Some(image) = saved_image {
+        info!("Restoring image to clipboard");
+        let _ = clipboard.write_image(&image);
+    } else {
+        let _ = clipboard.clear();
+    }
+}
+
+/// Copies the text selected in the focused application and returns it,
+/// leaving the user's clipboard as it was. Returns `None` when nothing is
+/// selected or the copy keystroke cannot be sent (for example on Wayland
+/// without input permissions).
+pub fn capture_selected_text(app_handle: &AppHandle) -> Option<String> {
+    let clipboard = app_handle.clipboard();
+    let saved_text = clipboard.read_text().ok().filter(|t| !t.is_empty());
+    let saved_image = if saved_text.is_none() {
+        clipboard.read_image().ok().map(|image| image.to_owned())
+    } else {
+        None
+    };
+
+    // Clear first, so a copy that copies nothing reads as "no selection"
+    // instead of returning whatever the clipboard already held.
+    let _ = clipboard.clear();
+    let copied = with_enigo(app_handle, input::send_copy);
+    // Give the focused application time to put the selection on the clipboard.
+    std::thread::sleep(Duration::from_millis(150));
+    let selection = match copied {
+        Ok(()) => clipboard.read_text().ok(),
+        Err(e) => {
+            log::warn!("Could not copy the selection: {}", e);
+            None
+        }
+    };
+
+    restore_clipboard(app_handle, saved_text, saved_image);
+    selection
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
 }
 
 /// Attempts to send a key combination using Linux-native tools.

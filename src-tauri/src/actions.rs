@@ -833,6 +833,34 @@ impl ShortcutAction for CancelAction {
     }
 }
 
+// Add Custom Word Action
+//
+// Copies the word the user selected (usually one Handy got wrong) and opens
+// the "Add word" dialog in the main window with it filled in. Runs on release
+// so the user's own shortcut keys are up before the copy keystroke is sent.
+struct AddCustomWordAction;
+
+/// Event the main window listens for to open the "Add word" dialog. The
+/// payload is the selected text, or "" when nothing could be copied.
+pub const ADD_CUSTOM_WORD_EVENT: &str = "add-custom-word-requested";
+
+impl ShortcutAction for AddCustomWordAction {
+    fn start(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {}
+
+    fn stop(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        let app = app.clone();
+        std::thread::spawn(move || {
+            // Let the remaining shortcut keys come up before copying.
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let selection = crate::clipboard::capture_selected_text(&app).unwrap_or_default();
+            crate::show_main_window(&app);
+            if let Err(e) = app.emit(ADD_CUSTOM_WORD_EVENT, selection) {
+                log::error!("Failed to open the add-word dialog: {}", e);
+            }
+        });
+    }
+}
+
 // Test Action
 struct TestAction;
 
@@ -874,6 +902,10 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         Arc::new(CancelAction) as Arc<dyn ShortcutAction>,
     );
     map.insert(
+        "add_custom_word".to_string(),
+        Arc::new(AddCustomWordAction) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
         "test".to_string(),
         Arc::new(TestAction) as Arc<dyn ShortcutAction>,
     );
@@ -892,6 +924,16 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
+
+    #[test]
+    fn every_default_binding_has_an_action() {
+        for id in crate::settings::get_default_settings().bindings.keys() {
+            assert!(super::ACTION_MAP.contains_key(id), "no action for '{id}'");
+        }
+        assert!(crate::settings::get_default_settings()
+            .bindings
+            .contains_key("add_custom_word"));
+    }
 
     #[test]
     fn blank_transcription_is_detected() {

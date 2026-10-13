@@ -923,6 +923,24 @@ pub fn get_default_settings() -> AppSettings {
             current_binding: default_post_process_shortcut.to_string(),
         },
     );
+    // Rarely used elsewhere, so it is unlikely to collide with app shortcuts.
+    #[cfg(target_os = "macos")]
+    let default_add_custom_word_shortcut = "option+shift+w";
+    #[cfg(not(target_os = "macos"))]
+    let default_add_custom_word_shortcut = "ctrl+alt+shift+w";
+
+    bindings.insert(
+        "add_custom_word".to_string(),
+        ShortcutBinding {
+            id: "add_custom_word".to_string(),
+            name: "Add Custom Word".to_string(),
+            description:
+                "Adds the selected word to your custom words, or as a spelling to replace."
+                    .to_string(),
+            default_binding: default_add_custom_word_shortcut.to_string(),
+            current_binding: default_add_custom_word_shortcut.to_string(),
+        },
+    );
     bindings.insert(
         "cancel".to_string(),
         ShortcutBinding {

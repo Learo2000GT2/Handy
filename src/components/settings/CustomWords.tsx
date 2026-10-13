@@ -5,79 +5,24 @@ import { useSettings } from "../../hooks/useSettings";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { SettingContainer } from "../ui/SettingContainer";
+import {
+  MAX_ENTRY_LENGTH,
+  MAX_SPELLING_WORDS,
+  SpellingMap,
+  hasWord,
+  isUsableSpelling,
+  normalizeCustomWord,
+  normalizeSpelling,
+  phraseKey,
+  spellingOwner as findSpellingOwner,
+  spellingsOf,
+  withoutWord,
+} from "@/lib/customWords";
 
 interface CustomWordsProps {
   descriptionMode?: "inline" | "tooltip";
   grouped?: boolean;
 }
-
-type SpellingMap = Partial<{ [key in string]: string[] }>;
-
-const MAX_ENTRY_LENGTH = 50;
-// Mirrors MAX_VARIANT_WORDS in src-tauri/src/audio_toolkit/text.rs.
-const MAX_SPELLING_WORDS = 6;
-
-const normalizeCustomWord = (word: string) =>
-  word
-    .replace(/[<>"']/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-// Spellings keep their apostrophes ("Dunkin' Donuts", "nothin'"), which are
-// part of the words. Quotes and angle brackets never are.
-const normalizeSpelling = (spelling: string) =>
-  spelling
-    .replace(/[<>"\u201C\u201D\u00AB\u00BB]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const WORD_CHAR = /[\p{Alphabetic}\p{N}]/u;
-const EDGE_PUNCTUATION = /^[^\p{Alphabetic}\p{N}]+|[^\p{Alphabetic}\p{N}]+$/gu;
-
-// Mirrors phrase_key in src-tauri/src/audio_toolkit/text.rs: case and
-// punctuation inside or around words are ignored, punctuation between words
-// is kept, and words stay separate ("Charge Bee" is not "ChargeBee").
-const phraseKey = (text: string) =>
-  text
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => {
-      const chars = Array.from(word);
-      const first = chars.findIndex((c) => WORD_CHAR.test(c));
-      if (first === -1) return word;
-      let last = chars.length - 1;
-      while (!WORD_CHAR.test(chars[last])) last -= 1;
-      const core = chars
-        .slice(first, last + 1)
-        .filter((c) => WORD_CHAR.test(c))
-        .join("")
-        .toLowerCase();
-      // Straight and curly apostrophes read the same.
-      const fold = (edge: string[]) =>
-        edge.join("").replace(/[\u2018\u2019]/g, "'");
-      return fold(chars.slice(0, first)) + core + fold(chars.slice(last + 1));
-    })
-    .join(" ")
-    .replace(EDGE_PUNCTUATION, "");
-
-// Mirrors build_variant_lookup: a spelling must start and end on a word, or
-// it can never match as typed ("& Co").
-const isUsableSpelling = (spelling: string) => {
-  const words = spelling.split(" ");
-  return (
-    phraseKey(spelling) !== "" &&
-    WORD_CHAR.test(words[0]) &&
-    WORD_CHAR.test(words[words.length - 1])
-  );
-};
-
-// Own entries only: a word such as "constructor" must not read
-// Object.prototype members.
-const hasWord = (map: SpellingMap, word: string) =>
-  Object.prototype.hasOwnProperty.call(map, word);
-
-const withoutWord = (map: SpellingMap, word: string): SpellingMap =>
-  Object.fromEntries(Object.entries(map).filter(([key]) => key !== word));
 
 const RemoveIcon: React.FC = () => (
   <svg
@@ -112,16 +57,9 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
     const activeWord =
       selectedWord && customWords.includes(selectedWord) ? selectedWord : null;
 
-    const spellingsFor = (word: string) =>
-      (hasWord(spellingMap, word) ? spellingMap[word] : undefined) ?? [];
-
-    // The custom word whose spelling list already holds `text`, if any.
-    const spellingOwner = (text: string) => {
-      const key = phraseKey(text);
-      return customWords.find((word) =>
-        spellingsFor(word).some((spelling) => phraseKey(spelling) === key),
-      );
-    };
+    const spellingsFor = (word: string) => spellingsOf(spellingMap, word);
+    const spellingOwner = (text: string) =>
+      findSpellingOwner(customWords, spellingMap, text);
 
     const handleAddWord = () => {
       if (normalizedWord && normalizedWord.length <= MAX_ENTRY_LENGTH) {
