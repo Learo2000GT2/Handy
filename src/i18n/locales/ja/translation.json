@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "一般",
+    "transcribe": "文字起こし",
     "models": "モデル",
     "advanced": "詳細設定",
     "postProcessing": "後処理",
@@ -163,6 +164,7 @@
       "description": "文字起こしのモデルを選択するか、追加のモデルをダウンロードします。異なるモデルは精度と速度のレベルが異なります。",
       "deleteConfirm": "{{modelName}}を削除してもよろしいですか? 再度使用するにはダウンロードが必要です。",
       "deleteActiveConfirm": "{{modelName}}は現在使用中のモデルです。削除すると、新しいモデルを選択するまで文字起こしが停止します。本当に削除しますか?",
+      "deleteRecordingsConfirm": "{{modelName}}は録音用モデルです。削除すると、録音には音声入力用のモデルが使用されます。本当に削除しますか?",
       "deleteTitle": "モデルを削除",
       "filters": {
         "allLanguages": "すべての言語",
@@ -463,6 +465,217 @@
         "createFirst": "上の「新しいプロンプトを作成」をクリックして、最初の後処理プロンプトを作成してください。"
       }
     },
+    "transcribeFiles": {
+      "title": "ファイルの文字起こし",
+      "description": "既存の録音をこのコンピューター上でテキストに変換します。ファイルがデバイスの外に送信されることはありません。",
+      "settingsNote": "選択中のモデルと、言語・翻訳・カスタム単語・フィラー語の設定が使用されます。",
+      "settingsNoteLemonade": "言語・カスタム単語・フィラー語の設定が使用されます。",
+      "settingsNoteOwnModel": "録音用モデルと、言語・翻訳・カスタム単語・フィラー語の設定が使用されます。",
+      "model": "モデル: {{model}}",
+      "modelLemonade": "モデル: Lemonade Server の {{model}}",
+      "noModel": "ファイルを文字起こしするには、モデルページでダウンロード済みのモデルを選択してください。",
+      "noLemonadeModel": "ファイルを文字起こしするには、Lemonade のモデルを選択してください。",
+      "noRecordingsModel": "録音用モデルがダウンロードされていません。上で別のモデルを選択するか、モデルページでダウンロードしてください。",
+      "dropzone": {
+        "title": "音声または動画ファイルをここにドロップ",
+        "hint": "インタビュー、会議、講義、ボイスメモなど、長さを問わず対応",
+        "active": "ドロップして追加",
+        "choose": "ファイルを選択…",
+        "skipped": "音声・動画以外のファイルをスキップしました: {{number}}"
+      },
+      "picker": {
+        "title": "録音を選択",
+        "filterName": "音声・動画ファイル"
+      },
+      "formats": {
+        "native": "対応形式: {{formats}}",
+        "ffmpegAvailable": "Opus、WebM、WMA、DSS などのその他の形式は ffmpeg で開きます。",
+        "ffmpegMissing": "ffmpeg をインストールすると、Opus、WebM、WMA、DSS などの形式も開けます。"
+      },
+      "saveToHistory": {
+        "label": "履歴に保存",
+        "description": "完了した文字起こしは保存されてスターが付き、自動削除の対象外になります。"
+      },
+      "engine": {
+        "title": "文字起こしエンジン",
+        "label": "使用するエンジン",
+        "description": "音声入力には常に Handy 独自のモデルが使用されます。この選択はファイルにのみ適用されます。",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "録音用モデル",
+        "description": "録音には、音声入力より低速でも高精度なモデルを使えます。このモデルは独立して動作し、ファイルの文字起こし中にだけ読み込まれるため、音声入力用のモデルはすぐに使える状態のままです。両方のモデルがメモリに収まる必要があります。",
+        "same": "音声入力と同じ（{{model}}）",
+        "sameNoModel": "音声入力と同じ",
+        "switchWarning": "このファイルは音声入力用のモデルを使用しているため、今音声入力用のモデルを変更すると処理が停止します。分けて使うには、録音用に別のモデルを選択してください。",
+        "onCpu": "グラフィックメモリが両方のモデルには足りないため、録音はプロセッサーで処理されています。グラフィックカードを使うには、録音用に小さいモデルを選択してください。"
+      },
+      "lemonade": {
+        "url": {
+          "label": "サーバーアドレス",
+          "description": "通常は http://localhost:13305 です。古いバージョンの Lemonade ではポート 8000 が使われていました。"
+        },
+        "apiKey": {
+          "label": "API キー",
+          "description": "Lemonade Server で API キーが求められる場合にのみ必要です。",
+          "placeholder": "任意"
+        },
+        "model": {
+          "label": "モデル",
+          "description": "ファイルの文字起こしに使用する Lemonade のモデル（例: Whisper-Base）。",
+          "placeholder": "Whisper モデルを選択",
+          "notDownloaded": "{{model}}（初回使用時にダウンロード）",
+          "none": "このサーバーに文字起こしモデルが見つかりません。",
+          "use": "「{{model}}」を使用"
+        },
+        "test": "接続をテスト",
+        "testing": "接続中…",
+        "connected": "接続しました。利用可能な文字起こしモデル: {{number}}",
+        "checkFailed": "Lemonade Server を確認できませんでした: {{error}}",
+        "saveError": "Lemonade の設定を保存できませんでした: {{error}}",
+        "firstChunkSlow": "Lemonade がモデルをダウンロードまたは読み込んでいる可能性があります。初回は数分かかることがあります。",
+        "errors": {
+          "invalidUrl": "http://localhost:13305 のようなアドレスを入力してください。",
+          "unreachable": "{{url}} の Lemonade Server に接続できません。起動していることを確認してください。",
+          "timeout": "Lemonade Server から時間内に応答がありませんでした。",
+          "unauthorized": "Lemonade Server で API キーが受け付けられませんでした。",
+          "modelNotFound": "Lemonade Server にこのモデルがありません。",
+          "http": "Lemonade Server がエラーを返しました。",
+          "badResponse": "Lemonade Server から Handy が読み取れない応答が返されました。",
+          "cancelled": "接続テストがキャンセルされました。"
+        },
+        "notes": {
+          "noTranslate": "Lemonade Server では「英語に翻訳」を使用できません。ファイルは話されている言語のまま文字起こしされます。",
+          "remote": "このアドレスはこのコンピューター上にありません。録音はこのアドレスに送信されます。"
+        }
+      },
+      "speakers": {
+        "label": "話者ラベルを付ける",
+        "description": "最大 4 人まで、誰が何を話したかを区別します。このコンピューター上で動作し、初回のみ {{size}} MB のダウンロードが必要です。",
+        "download": "話者モデルをダウンロード（{{size}} MB）",
+        "downloading": "話者モデルをダウンロード中… {{percent}}%",
+        "verifying": "ダウンロードを確認中…",
+        "cancelDownload": "ダウンロードをキャンセル",
+        "downloadFailed": "話者モデルをダウンロードできませんでした: {{error}}",
+        "installed": "話者モデルをインストール済み（{{size}} MB）",
+        "remove": "話者モデルを削除",
+        "removeError": "話者モデルを削除できませんでした: {{error}}",
+        "removeConfirm": "話者モデルを削除しますか？話者ラベルを付けるには、再度ダウンロード（{{size}} MB）が必要です。",
+        "license": "話者モデルは NVIDIA が NVIDIA Open Model License の下で提供しています（<page>モデルページ</page>）。",
+        "title": "話者",
+        "defaultName": "話者 {{number}}",
+        "rename": "{{name}} の名前を変更",
+        "nameLabel": "{{name}} の新しい名前",
+        "save": "保存",
+        "cancel": "キャンセル",
+        "renameError": "話者の名前を変更できませんでした: {{error}}",
+        "approximate": "このモデルはタイムスタンプを出力しないため、話者の切り替わり位置はおおよそのものです。",
+        "unassigned": "一部の箇所は話者を特定できませんでした。",
+        "none": "この文字起こしには話者ラベルがありません。",
+        "labelAction": "話者ラベルを付ける",
+        "labelHint": "話者ラベルは、元の録音 {{file}} からこのコンピューター上で作成されます。長い録音には数分かかります。",
+        "needsModel": "話者ラベルを付けるには話者モデルが必要です（初回のみ {{size}} MB のダウンロード）。",
+        "labelError": "話者ラベルを追加できませんでした: {{error}}",
+        "findRecording": "録音を探す…",
+        "findRecordingHint": "移動した録音を選択してください。文字起こししたファイルと同じものである必要があります。",
+        "relabel": "ラベルを付け直す…",
+        "relabelTitle": "話者ラベルを付け直す",
+        "relabelConfirm": "録音から話者ラベルを付け直しますか？名前、統合、箇所ごとの変更は失われます。",
+        "mergeInto": "{{name}} を別の話者に統合",
+        "mergePrompt": "{{name}} の統合先:",
+        "mergeTitle": "話者を統合",
+        "mergeConfirm": "{{from}} を {{into}} に統合しますか？{{from}} のすべての箇所が {{into}} として扱われます。文字起こしを閉じるまでは元に戻せます。",
+        "mergeError": "話者を統合できませんでした: {{error}}",
+        "changeSpeaker": "この箇所の話者を変更（{{name}}）",
+        "changeSpeakerPrompt": "誰が話しましたか？",
+        "newSpeaker": "新しい話者",
+        "unknownSpeaker": "不明な話者",
+        "changeSpeakerError": "話者を変更できませんでした: {{error}}",
+        "undo": "元に戻す",
+        "undoError": "元に戻せませんでした: {{error}}",
+        "jobKind": "話者ラベル",
+        "state": {
+          "running": "話者を識別中…",
+          "done": "話者数: {{number}}",
+          "failed": "話者ラベルを付けられませんでした",
+          "skipped": {
+            "modelMissing": "話者ラベルをスキップしました: 話者モデルがダウンロードされていません。",
+            "noSpeech": "話者ラベルをスキップしました: 音声が見つかりませんでした。"
+          }
+        }
+      },
+      "queue": {
+        "title": "ファイル",
+        "cancelAll": "すべてキャンセル",
+        "clearFinished": "完了したものをクリア"
+      },
+      "status": {
+        "queued": "開始待ち",
+        "preparing": "準備中…",
+        "waiting": "音声入力中のため一時停止",
+        "transcribing": "文字起こし中…",
+        "completed": "完了",
+        "partial": "完了（一部欠落あり）",
+        "cancelled": "キャンセル済み",
+        "failed": "失敗"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "文字起こし済み: {{processed}}",
+      "noSpeech": "このファイルに音声が見つかりませんでした。",
+      "actions": {
+        "cancel": "キャンセル",
+        "remove": "リストから削除",
+        "view": "文字起こしを表示",
+        "copy": "文字起こしをコピー",
+        "showFile": "ファイルを表示"
+      },
+      "copied": "文字起こしをクリップボードにコピーしました。",
+      "copyError": "文字起こしをコピーできませんでした。",
+      "savedToHistory": "履歴に保存済み",
+      "errors": {
+        "notFound": "ファイルが見つからないか、開けません。",
+        "unsupportedFormat": "このファイル形式には対応していません。",
+        "needsFfmpeg": "この形式には ffmpeg が必要です。ffmpeg をインストールしてから、もう一度お試しください。",
+        "noModel": "文字起こしのモデルが選択されていません。",
+        "modelChanged": "このファイルの文字起こし中にモデルが変更されました。",
+        "decodeFailed": "このファイルの音声を読み取れませんでした。",
+        "engineFailed": "文字起こしに失敗しました。",
+        "serverUnreachable": "Lemonade Server に接続できません。起動していることを確認してください。",
+        "serverUnauthorized": "Lemonade Server で API キーが受け付けられませんでした。",
+        "serverModelMissing": "Lemonade Server に選択したモデルがありません。",
+        "internal": "問題が発生しました。",
+        "sourceChanged": "この場所にある録音は文字起こし後に変更されているため、話者をこの文字起こしに対応付けられません。同じ録音であれば、「録音を探す…」で選択してください。",
+        "speakerLabelsFailed": "話者ラベルの作成に失敗しました。",
+        "enqueue": "ファイルを追加できませんでした: {{error}}",
+        "cancel": "キャンセルできませんでした: {{error}}",
+        "remove": "リストから削除できませんでした: {{error}}",
+        "loadTranscript": "文字起こしを読み込めませんでした: {{error}}"
+      },
+      "transcript": {
+        "title": "文字起こし: {{file}}",
+        "live": "文字起こしの進行に合わせて更新中",
+        "partial": "この文字起こしは不完全です: {{reason}}",
+        "partialNoReason": "この文字起こしは不完全です。",
+        "approximateTimes": "このモデルはタイムスタンプを出力しないため、時間はおおよその値です。",
+        "empty": "音声が見つかりませんでした。",
+        "segmentsLabel": "タイムスタンプ付きの文字起こし"
+      },
+      "export": {
+        "button": "エクスポート…",
+        "dialogTitle": "文字起こしをエクスポート",
+        "formats": {
+          "docx": "Word 文書 (.docx)",
+          "txt": "プレーンテキスト (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip 字幕 (.srt)",
+          "vtt": "WebVTT 字幕 (.vtt)"
+        },
+        "success": "文字起こしをエクスポートしました。",
+        "showInFolder": "フォルダーで表示",
+        "error": "エクスポートに失敗しました: {{error}}"
+      }
+    },
     "history": {
       "title": "履歴",
       "openFolder": "録音フォルダを開く",
@@ -477,7 +690,14 @@
       "retranscribe": "再文字起こし",
       "retranscribeError": "再文字起こしに失敗しました。もう一度お試しください。",
       "transcribing": "文字起こし中…",
-      "transcriptionFailed": "文字起こしに失敗しました。リトライアイコンを使用して再文字起こしできます。"
+      "transcriptionFailed": "文字起こしに失敗しました。リトライアイコンを使用して再文字起こしできます。",
+      "openTranscript": "文字起こしを開く",
+      "showOriginal": "元のファイルを表示",
+      "originalMissing": "元のファイルは移動または削除されています。",
+      "fileDuration": "長さ {{duration}}",
+      "incomplete": "不完全",
+      "speakerCount": "話者数: {{number}}",
+      "retranscribeFileUnavailable": "このファイルをもう一度文字起こしするには、「文字起こし」ページを使用してください。"
     },
     "debug": {
       "title": "デバッグ",

@@ -114,7 +114,12 @@ export const Dialog: React.FC<DialogProps> = ({
       const lastElement = focusableElements[focusableElements.length - 1];
       const activeElement = document.activeElement;
 
-      if (activeElement === contentRef.current) {
+      // Focus on the dialog box itself, or lost to the page behind it (say,
+      // the focused control was removed): Tab starts again inside.
+      if (
+        activeElement === contentRef.current ||
+        !contentRef.current.contains(activeElement)
+      ) {
         event.preventDefault();
         if (event.shiftKey) {
           lastElement.focus();

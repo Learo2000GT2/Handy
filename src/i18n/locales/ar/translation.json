@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "عام",
+    "transcribe": "التفريغ الصوتي",
     "advanced": "متقدم",
     "postProcessing": "معالجة لاحقة",
     "history": "السجل",
@@ -440,6 +441,217 @@
         "createFirst": ".انقر على 'إنشاء مطالبة جديدة' أعلاه لإنشاء أول مطالبة معالجة لاحقة لك"
       }
     },
+    "transcribeFiles": {
+      "title": "تفريغ الملفات",
+      "description": "حوّل التسجيلات الموجودة إلى نص على هذا الكمبيوتر. لا تغادر ملفاتك جهازك أبدًا.",
+      "settingsNote": "يستخدم النموذج المحدد وإعداداتك للغة والترجمة والكلمات المخصصة وكلمات الحشو.",
+      "settingsNoteLemonade": "يستخدم إعداداتك للغة والكلمات المخصصة وكلمات الحشو.",
+      "settingsNoteOwnModel": "يستخدم نموذج التسجيلات وإعداداتك للغة والترجمة والكلمات المخصصة وكلمات الحشو.",
+      "model": "النموذج: {{model}}",
+      "modelLemonade": "النموذج: {{model}} على Lemonade Server",
+      "noModel": "اختر نموذجًا محمّلًا من صفحة النماذج لتفريغ الملفات.",
+      "noLemonadeModel": "اختر نموذج Lemonade لتفريغ الملفات.",
+      "noRecordingsModel": "نموذج التسجيلات غير محمّل. اختر نموذجًا آخر من الأعلى أو حمّله من صفحة النماذج.",
+      "dropzone": {
+        "title": "أفلت ملفات الصوت أو الفيديو هنا",
+        "hint": "مقابلات واجتماعات ومحاضرات ومذكرات صوتية بأي طول",
+        "active": "أفلت للإضافة",
+        "choose": "اختيار الملفات…",
+        "skipped": "تم تخطي ملفات ليست صوتًا أو فيديو: {{number}}"
+      },
+      "picker": {
+        "title": "اختيار التسجيلات",
+        "filterName": "ملفات الصوت والفيديو"
+      },
+      "formats": {
+        "native": "يفتح {{formats}}",
+        "ffmpegAvailable": "تُفتح الصيغ الأخرى مثل Opus وWebM وWMA وDSS باستخدام ffmpeg.",
+        "ffmpegMissing": "ثبّت ffmpeg لفتح Opus وWebM وWMA وDSS وصيغ أخرى أيضًا."
+      },
+      "saveToHistory": {
+        "label": "الحفظ في السجل",
+        "description": "تُحفظ التفريغات المكتملة وتُميَّز بنجمة حتى لا يحذفها التنظيف التلقائي."
+      },
+      "engine": {
+        "title": "محرك التفريغ",
+        "label": "التفريغ باستخدام",
+        "description": "يستخدم الإملاء دائمًا النموذج الخاص بـ Handy. هذا الخيار للملفات فقط.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "نموذج التسجيلات",
+        "description": "يمكن أن تستخدم التسجيلات نموذجًا أبطأ وأكثر دقة من نموذج الإملاء. يعمل بشكل مستقل ولا يُحمَّل إلا أثناء تفريغ الملفات، لذا يبقى نموذج الإملاء جاهزًا. يجب أن تتسع الذاكرة للنموذجين معًا.",
+        "same": "نفس نموذج الإملاء ({{model}})",
+        "sameNoModel": "نفس نموذج الإملاء",
+        "switchWarning": "يستخدم هذا الملف نموذج الإملاء، لذا فإن تغيير نموذج الإملاء الآن سيوقفه. لفصلهما، اختر نموذجًا مختلفًا للتسجيلات.",
+        "onCpu": "تعمل التسجيلات على المعالج لأن ذاكرة بطاقة الرسومات لا تتسع للنموذجين معًا. اختر نموذجًا أصغر للتسجيلات لاستخدام بطاقة الرسومات."
+      },
+      "lemonade": {
+        "url": {
+          "label": "عنوان الخادم",
+          "description": "عادةً http://localhost:13305. كانت إصدارات Lemonade الأقدم تستخدم المنفذ 8000."
+        },
+        "apiKey": {
+          "label": "مفتاح API",
+          "description": "مطلوب فقط إذا طلبه Lemonade Server.",
+          "placeholder": "اختياري"
+        },
+        "model": {
+          "label": "النموذج",
+          "description": "نموذج Lemonade الذي يفرّغ ملفاتك، مثل Whisper-Base.",
+          "placeholder": "اختر نموذج Whisper",
+          "notDownloaded": "{{model}} (يُنزَّل عند أول استخدام)",
+          "none": "لم يُعثر على نماذج تفريغ على هذا الخادم.",
+          "use": "استخدام «{{model}}»"
+        },
+        "test": "اختبار الاتصال",
+        "testing": "جارٍ الاتصال…",
+        "connected": "متصل. نماذج التفريغ المتاحة: {{number}}",
+        "checkFailed": "تعذر التحقق من Lemonade Server: {{error}}",
+        "saveError": "تعذر حفظ إعدادات Lemonade: {{error}}",
+        "firstChunkSlow": "قد يكون Lemonade بصدد تنزيل النموذج أو تحميله. قد يستغرق ذلك بضع دقائق في المرة الأولى.",
+        "errors": {
+          "invalidUrl": "أدخل عنوانًا مثل http://localhost:13305.",
+          "unreachable": "تعذر الوصول إلى Lemonade Server على {{url}}. تأكد من أنه قيد التشغيل.",
+          "timeout": "لم يستجب Lemonade Server في الوقت المحدد.",
+          "unauthorized": "لم يقبل Lemonade Server مفتاح API.",
+          "modelNotFound": "هذا النموذج غير متوفر على Lemonade Server.",
+          "http": "أرجع Lemonade Server خطأً.",
+          "badResponse": "أرسل Lemonade Server ردًا تعذر على Handy قراءته.",
+          "cancelled": "تم إلغاء اختبار الاتصال."
+        },
+        "notes": {
+          "noTranslate": "خيار «الترجمة إلى الإنجليزية» غير متاح مع Lemonade Server. تُفرَّغ الملفات باللغة المنطوقة.",
+          "remote": "هذا العنوان ليس على هذا الكمبيوتر. سيتم إرسال تسجيلاتك إليه."
+        }
+      },
+      "speakers": {
+        "label": "تمييز المتحدثين",
+        "description": "حدّد من قال ماذا، لما يصل إلى 4 متحدثين. يعمل على هذا الكمبيوتر ويتطلب تنزيلًا لمرة واحدة بحجم {{size}} ميجابايت.",
+        "download": "تنزيل نموذج المتحدثين ({{size}} ميجابايت)",
+        "downloading": "جارٍ تنزيل نموذج المتحدثين… {{percent}}%",
+        "verifying": "جارٍ التحقق من التنزيل…",
+        "cancelDownload": "إلغاء التنزيل",
+        "downloadFailed": "تعذر تنزيل نموذج المتحدثين: {{error}}",
+        "installed": "نموذج المتحدثين مثبّت ({{size}} ميجابايت)",
+        "remove": "إزالة نموذج المتحدثين",
+        "removeError": "تعذرت إزالة نموذج المتحدثين: {{error}}",
+        "removeConfirm": "هل تريد إزالة نموذج المتحدثين؟ ستحتاج إلى تنزيله مرة أخرى ({{size}} ميجابايت) لتمييز المتحدثين.",
+        "license": "نموذج المتحدثين من NVIDIA، بموجب ترخيص NVIDIA Open Model License (<page>صفحة النموذج</page>).",
+        "title": "المتحدثون",
+        "defaultName": "المتحدث {{number}}",
+        "rename": "إعادة تسمية {{name}}",
+        "nameLabel": "الاسم الجديد لـ {{name}}",
+        "save": "حفظ",
+        "cancel": "إلغاء",
+        "renameError": "تعذرت إعادة تسمية المتحدث: {{error}}",
+        "approximate": "مواضع تغيّر المتحدث تقريبية لأن هذا النموذج لا يوفر طوابع زمنية.",
+        "unassigned": "تعذر ربط بعض المقاطع بمتحدث.",
+        "none": "لا يحتوي هذا التفريغ على تمييز للمتحدثين.",
+        "labelAction": "تمييز المتحدثين",
+        "labelHint": "يُجرى تمييز المتحدثين على هذا الكمبيوتر من التسجيل الأصلي، {{file}}. تستغرق التسجيلات الطويلة بضع دقائق.",
+        "needsModel": "يتطلب تمييز المتحدثين نموذج المتحدثين، وهو تنزيل لمرة واحدة بحجم {{size}} ميجابايت.",
+        "labelError": "تعذر تمييز المتحدثين: {{error}}",
+        "findRecording": "البحث عن التسجيل…",
+        "findRecordingHint": "اختر التسجيل الذي نُقل. يجب أن يكون هو نفس الملف الذي فُرّغ.",
+        "relabel": "تمييز مرة أخرى…",
+        "relabelTitle": "تمييز المتحدثين مرة أخرى",
+        "relabelConfirm": "هل تريد تمييز المتحدثين مرة أخرى من التسجيل؟ ستُفقد الأسماء وعمليات الدمج وتغييرات المقاطع.",
+        "mergeInto": "دمج {{name}} مع متحدث آخر",
+        "mergePrompt": "دمج {{name}} مع:",
+        "mergeTitle": "دمج المتحدثين",
+        "mergeConfirm": "هل تريد دمج {{from}} مع {{into}}؟ ستُنسب كل مقاطع {{from}} إلى {{into}}. يمكنك التراجع عن ذلك حتى تغلق التفريغ.",
+        "mergeError": "تعذر دمج المتحدثين: {{error}}",
+        "changeSpeaker": "تغيير متحدث هذا المقطع ({{name}})",
+        "changeSpeakerPrompt": "من قال هذا؟",
+        "newSpeaker": "متحدث جديد",
+        "unknownSpeaker": "متحدث غير معروف",
+        "changeSpeakerError": "تعذر تغيير المتحدث: {{error}}",
+        "undo": "تراجع",
+        "undoError": "تعذر التراجع: {{error}}",
+        "jobKind": "تمييز المتحدثين",
+        "state": {
+          "running": "جارٍ تحديد المتحدثين…",
+          "done": "المتحدثون: {{number}}",
+          "failed": "تعذر تمييز المتحدثين",
+          "skipped": {
+            "modelMissing": "تم تخطي تمييز المتحدثين: نموذج المتحدثين غير منزَّل.",
+            "noSpeech": "تم تخطي تمييز المتحدثين: لم يُعثر على كلام."
+          }
+        }
+      },
+      "queue": {
+        "title": "الملفات",
+        "cancelAll": "إلغاء الكل",
+        "clearFinished": "مسح المكتملة"
+      },
+      "status": {
+        "queued": "في انتظار البدء",
+        "preparing": "جارٍ التحضير…",
+        "waiting": "متوقف مؤقتًا أثناء الإملاء",
+        "transcribing": "جارٍ النسخ…",
+        "completed": "مكتمل",
+        "partial": "مكتمل مع وجود فجوات",
+        "cancelled": "ملغى",
+        "failed": "فشل"
+      },
+      "progress": "{{processed}} من {{total}}",
+      "progressNoTotal": "تم تفريغ {{processed}}",
+      "noSpeech": "لم يُعثر على كلام في هذا الملف.",
+      "actions": {
+        "cancel": "إلغاء",
+        "remove": "إزالة من القائمة",
+        "view": "عرض التفريغ",
+        "copy": "نسخ التفريغ",
+        "showFile": "إظهار الملف"
+      },
+      "copied": "تم نسخ التفريغ إلى الحافظة.",
+      "copyError": "تعذر نسخ التفريغ.",
+      "savedToHistory": "تم الحفظ في السجل",
+      "errors": {
+        "notFound": "تعذر العثور على الملف أو فتحه.",
+        "unsupportedFormat": "نوع الملف هذا غير مدعوم.",
+        "needsFfmpeg": "تتطلب هذه الصيغة ffmpeg. ثبّت ffmpeg ثم حاول مرة أخرى.",
+        "noModel": "لم يتم تحديد نموذج للتفريغ الصوتي.",
+        "modelChanged": "تغيّر النموذج أثناء تفريغ هذا الملف.",
+        "decodeFailed": "تعذرت قراءة الصوت في هذا الملف.",
+        "engineFailed": "فشل التفريغ.",
+        "serverUnreachable": "تعذر الوصول إلى Lemonade Server. تأكد من أنه قيد التشغيل.",
+        "serverUnauthorized": "لم يقبل Lemonade Server مفتاح API.",
+        "serverModelMissing": "النموذج المحدد غير متوفر على Lemonade Server.",
+        "internal": "حدث خطأ ما.",
+        "sourceChanged": "تغيّر التسجيل في هذا الموقع منذ تفريغه، لذا لا يمكن مطابقة متحدثيه مع هذا التفريغ. إذا كان التسجيل نفسه، فاختره عبر «البحث عن التسجيل…».",
+        "speakerLabelsFailed": "فشل تمييز المتحدثين.",
+        "enqueue": "تعذرت إضافة الملفات: {{error}}",
+        "cancel": "تعذر الإلغاء: {{error}}",
+        "remove": "تعذرت الإزالة من القائمة: {{error}}",
+        "loadTranscript": "تعذر تحميل التفريغ: {{error}}"
+      },
+      "transcript": {
+        "title": "التفريغ: {{file}}",
+        "live": "يتم التحديث أثناء التفريغ",
+        "partial": "هذا التفريغ غير مكتمل: {{reason}}",
+        "partialNoReason": "هذا التفريغ غير مكتمل.",
+        "approximateTimes": "الأوقات تقريبية لأن هذا النموذج لا يوفر طوابع زمنية.",
+        "empty": "لم يُعثر على كلام.",
+        "segmentsLabel": "التفريغ مع الطوابع الزمنية"
+      },
+      "export": {
+        "button": "تصدير…",
+        "dialogTitle": "تصدير التفريغ",
+        "formats": {
+          "docx": "مستند Word (.docx)",
+          "txt": "نص عادي (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "ترجمات SubRip (.srt)",
+          "vtt": "ترجمات WebVTT (.vtt)"
+        },
+        "success": "تم تصدير التفريغ.",
+        "showInFolder": "إظهار في المجلد",
+        "error": "فشل التصدير: {{error}}"
+      }
+    },
     "history": {
       "title": "السجل",
       "openFolder": "فتح مجلد التسجيلات",
@@ -454,7 +666,14 @@
       "retranscribe": "إعادة النسخ",
       "retranscribeError": "فشلت إعادة النسخ. يرجى المحاولة مرة أخرى.",
       "transcribing": "جارٍ النسخ...",
-      "transcriptionFailed": "فشل النسخ. يمكنك إعادة النسخ باستخدام أيقونة إعادة المحاولة."
+      "transcriptionFailed": "فشل النسخ. يمكنك إعادة النسخ باستخدام أيقونة إعادة المحاولة.",
+      "openTranscript": "فتح التفريغ",
+      "showOriginal": "إظهار الملف الأصلي",
+      "originalMissing": "تم نقل الملف الأصلي أو حذفه.",
+      "fileDuration": "المدة {{duration}}",
+      "incomplete": "غير مكتمل",
+      "speakerCount": "المتحدثون: {{number}}",
+      "retranscribeFileUnavailable": "لإعادة تفريغ هذا الملف، استخدم صفحة التفريغ الصوتي."
     },
     "debug": {
       "title": "تصحيح الأخطاء",
@@ -633,6 +852,7 @@
       "availableModels": "متاح للتنزيل",
       "deleteConfirm": "هل أنت متأكد أنك تريد حذف {{modelName}}؟ ستحتاج إلى تنزيله مرة أخرى لاستخدامه.",
       "deleteActiveConfirm": "{{modelName}} هو النموذج النشط حاليًا. حذفه سيوقف النسخ حتى تختار نموذجًا جديدًا. هل أنت متأكد؟",
+      "deleteRecordingsConfirm": "{{modelName}} هو نموذج التسجيلات. إذا حذفته، فستستخدم التسجيلات نموذج الإملاء. هل أنت متأكد؟",
       "deleteTitle": "حذف النموذج",
       "filters": {
         "allLanguages": "جميع اللغات",

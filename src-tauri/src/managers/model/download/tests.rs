@@ -577,3 +577,109 @@ async fn http_cancel_during_stalled_body_keeps_partial() {
         "bytes received before the cancel must be kept for resume"
     );
 }
+
+// ── download_verified_file (files outside the model registry) ─────────────
+
+#[tokio::test]
+async fn download_verified_file_resumes_and_reports_progress() {
+    let full = b"helloworld";
+    let (url, server) = serve_once(http_response(
+        "206 Partial Content",
+        &[
+            "Content-Range: bytes 5-9/10".to_string(),
+            "Content-Length: 5".to_string(),
+        ],
+        &full[5..],
+    ))
+    .await;
+    let dir = TempDir::new().unwrap();
+    let partial = dir.path().join("speaker.gguf.partial");
+    fs::write(&partial, &full[..5]).unwrap();
+
+    let progress = std::sync::Mutex::new(Vec::new());
+    let verifying = std::sync::atomic::AtomicBool::new(false);
+    let completed = ModelManager::download_verified_file(
+        &url,
+        &partial,
+        full.len() as u64,
+        &sha_hex(full),
+        &CancellationToken::new(),
+        &|downloaded, total| progress.lock().unwrap().push((downloaded, total)),
+        &|| verifying.store(true, std::sync::atomic::Ordering::SeqCst),
+    )
+    .await
+    .unwrap();
+
+    assert!(completed);
+    assert_eq!(fs::read(&partial).unwrap(), full);
+    assert!(server.await.unwrap().contains("range: bytes=5-"));
+    let progress = progress.into_inner().unwrap();
+    assert_eq!(progress.first(), Some(&(5, 10)));
+    assert_eq!(progress.last(), Some(&(10, 10)));
+    assert!(verifying.into_inner());
+}
+
+#[tokio::test]
+async fn download_verified_file_sha_mismatch_deletes_the_partial() {
+    let body = b"not the model";
+    let (url, _server) = serve_once(http_response(
+        "200 OK",
+        &[format!("Content-Length: {}", body.len())],
+        body,
+    ))
+    .await;
+    let dir = TempDir::new().unwrap();
+    let partial = dir.path().join("speaker.gguf.partial");
+
+    let err = ModelManager::download_verified_file(
+        &url,
+        &partial,
+        body.len() as u64,
+        &sha_hex(b"the real model"),
+        &CancellationToken::new(),
+        &|_, _| {},
+        &|| {},
+    )
+    .await
+    .unwrap_err();
+
+    assert!(err.to_string().contains("corrupt"), "{err}");
+    assert!(!partial.exists());
+}
+
+#[tokio::test]
+async fn download_verified_file_cancel_keeps_the_partial() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        let (mut sock, _) = listener.accept().await.unwrap();
+        let _ = read_request_head(&mut sock).await;
+        let _ = sock
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nabc")
+            .await;
+        tokio::time::sleep(Duration::from_secs(600)).await;
+    });
+    let dir = TempDir::new().unwrap();
+    let partial = dir.path().join("speaker.gguf.partial");
+    let cancel = CancellationToken::new();
+    let trigger = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        trigger.cancel();
+    });
+
+    let completed = ModelManager::download_verified_file(
+        &format!("http://{}/file", addr),
+        &partial,
+        100,
+        "00",
+        &cancel,
+        &|_, _| {},
+        &|| {},
+    )
+    .await
+    .unwrap();
+
+    assert!(!completed);
+    assert_eq!(fs::read(&partial).unwrap(), b"abc");
+}

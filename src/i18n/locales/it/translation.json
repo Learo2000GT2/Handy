@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Generale",
+    "transcribe": "Trascrivi",
     "models": "Modelli",
     "advanced": "Avanzate",
     "postProcessing": "Post-Elaborazione",
@@ -163,6 +164,7 @@
       "description": "Seleziona un modello di trascrizione o scarica modelli aggiuntivi. Diversi modelli offrono diversi livelli di accuratezza e velocità.",
       "deleteConfirm": "Sei sicuro di voler eliminare {{modelName}}? Dovrai scaricarlo di nuovo per usarlo.",
       "deleteActiveConfirm": "{{modelName}} è il tuo modello attivo. Eliminarlo interromperà le trascrizioni fino a quando non selezionerai un nuovo modello. Sei sicuro?",
+      "deleteRecordingsConfirm": "{{modelName}} è il tuo modello per le registrazioni. Se lo elimini, le registrazioni useranno il modello di dettatura. Sei sicuro?",
       "deleteTitle": "Elimina modello",
       "filters": {
         "allLanguages": "Tutte le lingue",
@@ -463,6 +465,217 @@
         "createFirst": "Clicca 'Crea un nuovo prompt' qui sopra per creare il tuo primo prompt di post-elaborazione."
       }
     },
+    "transcribeFiles": {
+      "title": "Trascrivi file",
+      "description": "Trasforma le registrazioni esistenti in testo su questo computer. I tuoi file non lasciano mai il dispositivo.",
+      "settingsNote": "Usa il modello selezionato e le tue impostazioni di lingua, traduzione, parole personalizzate e parole riempitive.",
+      "settingsNoteLemonade": "Usa le tue impostazioni di lingua, parole personalizzate e parole riempitive.",
+      "settingsNoteOwnModel": "Usa il modello per le registrazioni e le tue impostazioni di lingua, traduzione, parole personalizzate e parole riempitive.",
+      "model": "Modello: {{model}}",
+      "modelLemonade": "Modello: {{model}} su Lemonade Server",
+      "noModel": "Seleziona un modello scaricato nella pagina Modelli per trascrivere i file.",
+      "noLemonadeModel": "Scegli un modello Lemonade per trascrivere i file.",
+      "noRecordingsModel": "Il modello per le registrazioni non è scaricato. Scegline un altro qui sopra o scaricalo nella pagina Modelli.",
+      "dropzone": {
+        "title": "Trascina qui file audio o video",
+        "hint": "Interviste, riunioni, lezioni e memo vocali di qualsiasi durata",
+        "active": "Rilascia per aggiungere",
+        "choose": "Scegli file…",
+        "skipped": "File ignorati perché non audio o video: {{number}}"
+      },
+      "picker": {
+        "title": "Scegli registrazioni",
+        "filterName": "File audio e video"
+      },
+      "formats": {
+        "native": "Apre {{formats}}",
+        "ffmpegAvailable": "Altri formati come Opus, WebM, WMA e DSS vengono aperti con ffmpeg.",
+        "ffmpegMissing": "Installa ffmpeg per aprire anche Opus, WebM, WMA, DSS e altri formati."
+      },
+      "saveToHistory": {
+        "label": "Salva nella cronologia",
+        "description": "Le trascrizioni completate vengono salvate e contrassegnate con la stella, così la pulizia automatica le conserva."
+      },
+      "engine": {
+        "title": "Motore di trascrizione",
+        "label": "Trascrivi con",
+        "description": "La dettatura usa sempre il modello di Handy. Questa scelta vale solo per i file.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Modello per le registrazioni",
+        "description": "Le registrazioni possono usare un modello più lento e più preciso di quello della dettatura. Funziona separatamente e viene caricato solo durante la trascrizione dei file, così il modello di dettatura resta pronto. Entrambi i modelli devono entrare in memoria.",
+        "same": "Uguale alla dettatura ({{model}})",
+        "sameNoModel": "Uguale alla dettatura",
+        "switchWarning": "Questo file usa il modello di dettatura, quindi cambiarlo ora lo interromperà. Per tenerli separati, scegli un modello diverso per le registrazioni.",
+        "onCpu": "Le registrazioni vengono eseguite sul processore perché la memoria grafica non basta per entrambi i modelli. Scegli un modello più piccolo per le registrazioni per usare la scheda grafica."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Indirizzo del server",
+          "description": "Di solito http://localhost:13305. Le versioni precedenti di Lemonade usavano la porta 8000."
+        },
+        "apiKey": {
+          "label": "Chiave API",
+          "description": "Necessaria solo se il tuo Lemonade Server la richiede.",
+          "placeholder": "Facoltativa"
+        },
+        "model": {
+          "label": "Modello",
+          "description": "Il modello Lemonade che trascrive i tuoi file, ad esempio Whisper-Base.",
+          "placeholder": "Scegli un modello Whisper",
+          "notDownloaded": "{{model}} (scaricato al primo utilizzo)",
+          "none": "Nessun modello di trascrizione trovato su questo server.",
+          "use": "Usa “{{model}}”"
+        },
+        "test": "Verifica connessione",
+        "testing": "Connessione in corso…",
+        "connected": "Connesso. Modelli di trascrizione disponibili: {{number}}",
+        "checkFailed": "Impossibile verificare Lemonade Server: {{error}}",
+        "saveError": "Impossibile salvare le impostazioni di Lemonade: {{error}}",
+        "firstChunkSlow": "Lemonade potrebbe essere in fase di download o caricamento del modello. La prima volta può richiedere alcuni minuti.",
+        "errors": {
+          "invalidUrl": "Inserisci un indirizzo come http://localhost:13305.",
+          "unreachable": "Impossibile raggiungere Lemonade Server all'indirizzo {{url}}. Assicurati che sia in esecuzione.",
+          "timeout": "Lemonade Server non ha risposto in tempo.",
+          "unauthorized": "Lemonade Server non ha accettato la chiave API.",
+          "modelNotFound": "Lemonade Server non dispone di questo modello.",
+          "http": "Lemonade Server ha restituito un errore.",
+          "badResponse": "Lemonade Server ha inviato una risposta che Handy non è riuscito a leggere.",
+          "cancelled": "La verifica della connessione è stata annullata."
+        },
+        "notes": {
+          "noTranslate": "L'opzione Traduci in inglese non è disponibile con Lemonade Server. I file vengono trascritti nella lingua parlata.",
+          "remote": "Questo indirizzo non è su questo computer. Le tue registrazioni verranno inviate lì."
+        }
+      },
+      "speakers": {
+        "label": "Etichetta i parlanti",
+        "description": "Indica chi ha detto cosa, fino a 4 parlanti. Funziona su questo computer e richiede un download una tantum di {{size}} MB.",
+        "download": "Scarica il modello dei parlanti ({{size}} MB)",
+        "downloading": "Download del modello dei parlanti… {{percent}}%",
+        "verifying": "Verifica del download…",
+        "cancelDownload": "Annulla download",
+        "downloadFailed": "Impossibile scaricare il modello dei parlanti: {{error}}",
+        "installed": "Modello dei parlanti installato ({{size}} MB)",
+        "remove": "Rimuovi il modello dei parlanti",
+        "removeError": "Impossibile rimuovere il modello dei parlanti: {{error}}",
+        "removeConfirm": "Rimuovere il modello dei parlanti? Dovrai scaricarlo di nuovo ({{size}} MB) per etichettare i parlanti.",
+        "license": "Modello dei parlanti di NVIDIA, con licenza NVIDIA Open Model License (<page>pagina del modello</page>).",
+        "title": "Parlanti",
+        "defaultName": "Parlante {{number}}",
+        "rename": "Rinomina {{name}}",
+        "nameLabel": "Nuovo nome per {{name}}",
+        "save": "Salva",
+        "cancel": "Annulla",
+        "renameError": "Impossibile rinominare il parlante: {{error}}",
+        "approximate": "I cambi di parlante sono approssimativi perché questo modello non fornisce i timestamp.",
+        "unassigned": "Non è stato possibile associare alcuni passaggi a un parlante.",
+        "none": "Questa trascrizione non ha etichette dei parlanti.",
+        "labelAction": "Etichetta i parlanti",
+        "labelHint": "Le etichette dei parlanti vengono create su questo computer a partire dalla registrazione originale, {{file}}. Le registrazioni lunghe richiedono alcuni minuti.",
+        "needsModel": "Per etichettare i parlanti serve il modello dei parlanti, un download una tantum di {{size}} MB.",
+        "labelError": "Impossibile aggiungere le etichette dei parlanti: {{error}}",
+        "findRecording": "Trova registrazione…",
+        "findRecordingHint": "Scegli la registrazione spostata. Deve essere lo stesso file che è stato trascritto.",
+        "relabel": "Etichetta di nuovo…",
+        "relabelTitle": "Etichetta di nuovo i parlanti",
+        "relabelConfirm": "Etichettare di nuovo i parlanti dalla registrazione? Nomi, unioni e modifiche ai passaggi andranno persi.",
+        "mergeInto": "Unisci {{name}} a un altro parlante",
+        "mergePrompt": "Unisci {{name}} a:",
+        "mergeTitle": "Unisci parlanti",
+        "mergeConfirm": "Unire {{from}} a {{into}}? Tutti i passaggi di {{from}} verranno attribuiti a {{into}}. Puoi annullare finché non chiudi la trascrizione.",
+        "mergeError": "Impossibile unire i parlanti: {{error}}",
+        "changeSpeaker": "Cambia il parlante di questo passaggio ({{name}})",
+        "changeSpeakerPrompt": "Chi l'ha detto?",
+        "newSpeaker": "Nuovo parlante",
+        "unknownSpeaker": "Parlante sconosciuto",
+        "changeSpeakerError": "Impossibile cambiare il parlante: {{error}}",
+        "undo": "Annulla modifica",
+        "undoError": "Impossibile annullare la modifica: {{error}}",
+        "jobKind": "Etichette dei parlanti",
+        "state": {
+          "running": "Identificazione dei parlanti…",
+          "done": "Parlanti: {{number}}",
+          "failed": "Impossibile etichettare i parlanti",
+          "skipped": {
+            "modelMissing": "Etichette dei parlanti saltate: il modello dei parlanti non è stato scaricato.",
+            "noSpeech": "Etichette dei parlanti saltate: nessun parlato trovato."
+          }
+        }
+      },
+      "queue": {
+        "title": "File",
+        "cancelAll": "Annulla tutto",
+        "clearFinished": "Rimuovi completati"
+      },
+      "status": {
+        "queued": "In attesa di avvio",
+        "preparing": "Preparazione…",
+        "waiting": "In pausa mentre detti",
+        "transcribing": "Trascrizione in corso…",
+        "completed": "Completato",
+        "partial": "Completato, con lacune",
+        "cancelled": "Annullato",
+        "failed": "Non riuscito"
+      },
+      "progress": "{{processed}} di {{total}}",
+      "progressNoTotal": "Trascritto fino a {{processed}}",
+      "noSpeech": "Nessun parlato trovato in questo file.",
+      "actions": {
+        "cancel": "Annulla",
+        "remove": "Rimuovi dall'elenco",
+        "view": "Visualizza trascrizione",
+        "copy": "Copia trascrizione",
+        "showFile": "Mostra file"
+      },
+      "copied": "Trascrizione copiata negli appunti.",
+      "copyError": "Impossibile copiare la trascrizione.",
+      "savedToHistory": "Salvata nella cronologia",
+      "errors": {
+        "notFound": "Impossibile trovare o aprire il file.",
+        "unsupportedFormat": "Questo tipo di file non è supportato.",
+        "needsFfmpeg": "Questo formato richiede ffmpeg. Installa ffmpeg e riprova.",
+        "noModel": "Nessun modello di trascrizione selezionato.",
+        "modelChanged": "Il modello è cambiato durante la trascrizione di questo file.",
+        "decodeFailed": "Impossibile leggere l'audio di questo file.",
+        "engineFailed": "Trascrizione non riuscita.",
+        "serverUnreachable": "Impossibile raggiungere Lemonade Server. Assicurati che sia in esecuzione.",
+        "serverUnauthorized": "Lemonade Server non ha accettato la chiave API.",
+        "serverModelMissing": "Lemonade Server non dispone del modello selezionato.",
+        "internal": "Si è verificato un errore.",
+        "sourceChanged": "La registrazione in questa posizione è cambiata dopo la trascrizione, quindi i suoi parlanti non possono essere associati a questa trascrizione. Se è la stessa registrazione, sceglila con «Trova registrazione…».",
+        "speakerLabelsFailed": "Etichettatura dei parlanti non riuscita.",
+        "enqueue": "Impossibile aggiungere i file: {{error}}",
+        "cancel": "Impossibile annullare: {{error}}",
+        "remove": "Impossibile rimuovere dall'elenco: {{error}}",
+        "loadTranscript": "Impossibile caricare la trascrizione: {{error}}"
+      },
+      "transcript": {
+        "title": "Trascrizione: {{file}}",
+        "live": "Aggiornamento durante la trascrizione",
+        "partial": "Questa trascrizione è incompleta: {{reason}}",
+        "partialNoReason": "Questa trascrizione è incompleta.",
+        "approximateTimes": "I tempi sono approssimativi perché questo modello non fornisce i timestamp.",
+        "empty": "Nessun parlato trovato.",
+        "segmentsLabel": "Trascrizione con timestamp"
+      },
+      "export": {
+        "button": "Esporta…",
+        "dialogTitle": "Esporta trascrizione",
+        "formats": {
+          "docx": "Documento Word (.docx)",
+          "txt": "Testo semplice (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Sottotitoli SubRip (.srt)",
+          "vtt": "Sottotitoli WebVTT (.vtt)"
+        },
+        "success": "Trascrizione esportata.",
+        "showInFolder": "Mostra nella cartella",
+        "error": "Esportazione non riuscita: {{error}}"
+      }
+    },
     "history": {
       "title": "Cronologia",
       "openFolder": "Apri la cartella delle registrazioni",
@@ -477,7 +690,14 @@
       "retranscribe": "Ri-trascrivere",
       "retranscribeError": "Impossibile ri-trascrivere. Riprova.",
       "transcribing": "Trascrizione in corso...",
-      "transcriptionFailed": "Trascrizione fallita. Puoi ri-trascrivere usando l'icona di ripetizione."
+      "transcriptionFailed": "Trascrizione fallita. Puoi ri-trascrivere usando l'icona di ripetizione.",
+      "openTranscript": "Apri trascrizione",
+      "showOriginal": "Mostra file originale",
+      "originalMissing": "Il file originale è stato spostato o eliminato.",
+      "fileDuration": "Durata {{duration}}",
+      "incomplete": "Incompleta",
+      "speakerCount": "Parlanti: {{number}}",
+      "retranscribeFileUnavailable": "Per trascrivere di nuovo questo file, usa la pagina Trascrivi."
     },
     "debug": {
       "title": "Debug",

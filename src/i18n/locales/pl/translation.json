@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "Ogólne",
+    "transcribe": "Transkrypcja",
     "models": "Modele",
     "advanced": "Zaawansowane",
     "postProcessing": "Postproces",
@@ -163,6 +164,7 @@
       "description": "Wybierz model transkrypcji lub pobierz dodatkowe modele. Różne modele oferują różne poziomy dokładności i szybkości.",
       "deleteConfirm": "Czy na pewno chcesz usunąć {{modelName}}? Będziesz musiał pobrać go ponownie, aby go użyć.",
       "deleteActiveConfirm": "{{modelName}} jest Twoim aktywnym modelem. Usunięcie go zatrzyma transkrypcje, dopóki nie wybierzesz nowego modelu. Czy na pewno chcesz kontynuować?",
+      "deleteRecordingsConfirm": "{{modelName}} to Twój model do nagrań. Jeśli go usuniesz, nagrania będą używać modelu do dyktowania. Czy na pewno chcesz kontynuować?",
       "deleteTitle": "Usuń model",
       "filters": {
         "allLanguages": "Wszystkie języki",
@@ -463,6 +465,217 @@
         "createFirst": "Kliknij 'Utwórz nowy prompt' powyżej, aby utworzyć pierwszy prompt postprocessingu."
       }
     },
+    "transcribeFiles": {
+      "title": "Transkrypcja plików",
+      "description": "Zamieniaj istniejące nagrania na tekst na tym komputerze. Twoje pliki nigdy nie opuszczają urządzenia.",
+      "settingsNote": "Używa wybranego modelu oraz Twoich ustawień języka, tłumaczenia, własnych słów i wyrazów wypełniających.",
+      "settingsNoteLemonade": "Używa Twoich ustawień języka, własnych słów i wyrazów wypełniających.",
+      "settingsNoteOwnModel": "Używa modelu do nagrań oraz Twoich ustawień języka, tłumaczenia, własnych słów i wyrazów wypełniających.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} na Lemonade Server",
+      "noModel": "Wybierz pobrany model na stronie Modele, aby transkrybować pliki.",
+      "noLemonadeModel": "Wybierz model Lemonade, aby transkrybować pliki.",
+      "noRecordingsModel": "Model do nagrań nie jest pobrany. Wybierz inny powyżej lub pobierz go na stronie Modele.",
+      "dropzone": {
+        "title": "Upuść tutaj pliki audio lub wideo",
+        "hint": "Wywiady, spotkania, wykłady i notatki głosowe dowolnej długości",
+        "active": "Puść, aby dodać",
+        "choose": "Wybierz pliki…",
+        "skipped": "Pominięte pliki, które nie są plikami audio ani wideo: {{number}}"
+      },
+      "picker": {
+        "title": "Wybierz nagrania",
+        "filterName": "Pliki audio i wideo"
+      },
+      "formats": {
+        "native": "Otwiera pliki {{formats}}",
+        "ffmpegAvailable": "Inne formaty, takie jak Opus, WebM, WMA i DSS, są otwierane za pomocą ffmpeg.",
+        "ffmpegMissing": "Zainstaluj ffmpeg, aby otwierać także pliki Opus, WebM, WMA, DSS i inne formaty."
+      },
+      "saveToHistory": {
+        "label": "Zapisuj w historii",
+        "description": "Gotowe transkrypcje są zapisywane i oznaczane gwiazdką, dzięki czemu automatyczne czyszczenie ich nie usuwa."
+      },
+      "engine": {
+        "title": "Silnik transkrypcji",
+        "label": "Transkrybuj za pomocą",
+        "description": "Dyktowanie zawsze używa własnego modelu Handy. Ten wybór dotyczy tylko plików.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model do nagrań",
+        "description": "Nagrania mogą używać wolniejszego, ale dokładniejszego modelu niż dyktowanie. Działa on osobno i jest wczytywany tylko podczas transkrypcji plików, więc model do dyktowania pozostaje gotowy. Oba modele muszą zmieścić się w pamięci.",
+        "same": "Taki sam jak do dyktowania ({{model}})",
+        "sameNoModel": "Taki sam jak do dyktowania",
+        "switchWarning": "Ten plik używa modelu do dyktowania, więc zmiana modelu do dyktowania teraz go zatrzyma. Aby je rozdzielić, wybierz inny model do nagrań.",
+        "onCpu": "Nagrania są przetwarzane przez procesor, ponieważ pamięć karty graficznej nie mieści obu modeli. Wybierz mniejszy model do nagrań, aby korzystać z karty graficznej."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Adres serwera",
+          "description": "Zwykle http://localhost:13305. Starsze wersje Lemonade używały portu 8000."
+        },
+        "apiKey": {
+          "label": "Klucz API",
+          "description": "Potrzebny tylko wtedy, gdy Twój Lemonade Server go wymaga.",
+          "placeholder": "Opcjonalnie"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Model Lemonade, który transkrybuje Twoje pliki, np. Whisper-Base.",
+          "placeholder": "Wybierz model Whisper",
+          "notDownloaded": "{{model}} (pobierany przy pierwszym użyciu)",
+          "none": "Nie znaleziono modeli transkrypcji na tym serwerze.",
+          "use": "Użyj „{{model}}”"
+        },
+        "test": "Testuj połączenie",
+        "testing": "Łączenie…",
+        "connected": "Połączono. Dostępne modele transkrypcji: {{number}}",
+        "checkFailed": "Nie udało się sprawdzić Lemonade Server: {{error}}",
+        "saveError": "Nie udało się zapisać ustawień Lemonade: {{error}}",
+        "firstChunkSlow": "Lemonade może pobierać lub wczytywać model. Za pierwszym razem może to potrwać kilka minut.",
+        "errors": {
+          "invalidUrl": "Wpisz adres, np. http://localhost:13305.",
+          "unreachable": "Nie można połączyć się z Lemonade Server pod adresem {{url}}. Upewnij się, że jest uruchomiony.",
+          "timeout": "Lemonade Server nie odpowiedział na czas.",
+          "unauthorized": "Lemonade Server nie zaakceptował klucza API.",
+          "modelNotFound": "Lemonade Server nie ma tego modelu.",
+          "http": "Lemonade Server zwrócił błąd.",
+          "badResponse": "Lemonade Server wysłał odpowiedź, której Handy nie może odczytać.",
+          "cancelled": "Test połączenia został anulowany."
+        },
+        "notes": {
+          "noTranslate": "Opcja „Tłumacz na angielski” nie jest dostępna z Lemonade Server. Pliki są transkrybowane w języku nagrania.",
+          "remote": "Ten adres nie wskazuje na ten komputer. Twoje nagrania zostaną na niego wysłane."
+        }
+      },
+      "speakers": {
+        "label": "Oznaczaj mówców",
+        "description": "Pokazuje, kto co powiedział, dla maksymalnie 4 mówców. Działa na tym komputerze i wymaga jednorazowego pobrania {{size}} MB.",
+        "download": "Pobierz model mówców ({{size}} MB)",
+        "downloading": "Pobieranie modelu mówców… {{percent}}%",
+        "verifying": "Sprawdzanie pobranego pliku…",
+        "cancelDownload": "Anuluj pobieranie",
+        "downloadFailed": "Nie udało się pobrać modelu mówców: {{error}}",
+        "installed": "Zainstalowano model mówców ({{size}} MB)",
+        "remove": "Usuń model mówców",
+        "removeError": "Nie udało się usunąć modelu mówców: {{error}}",
+        "removeConfirm": "Usunąć model mówców? Aby oznaczać mówców, trzeba będzie pobrać go ponownie ({{size}} MB).",
+        "license": "Model mówców od NVIDIA, na licencji NVIDIA Open Model License (<page>strona modelu</page>).",
+        "title": "Mówcy",
+        "defaultName": "Mówca {{number}}",
+        "rename": "Zmień nazwę „{{name}}”",
+        "nameLabel": "Nowa nazwa dla „{{name}}”",
+        "save": "Zapisz",
+        "cancel": "Anuluj",
+        "renameError": "Nie udało się zmienić nazwy mówcy: {{error}}",
+        "approximate": "Zmiany mówców są przybliżone, ponieważ ten model nie podaje znaczników czasu.",
+        "unassigned": "Niektórych fragmentów nie udało się przypisać do mówcy.",
+        "none": "Ta transkrypcja nie ma oznaczonych mówców.",
+        "labelAction": "Oznacz mówców",
+        "labelHint": "Mówcy są oznaczani na tym komputerze na podstawie oryginalnego nagrania, {{file}}. Długie nagrania zajmują kilka minut.",
+        "needsModel": "Do oznaczania mówców potrzebny jest model mówców – jednorazowe pobranie {{size}} MB.",
+        "labelError": "Nie udało się oznaczyć mówców: {{error}}",
+        "findRecording": "Znajdź nagranie…",
+        "findRecordingHint": "Wybierz przeniesione nagranie. Musi to być ten sam plik, który został przetranskrybowany.",
+        "relabel": "Oznacz ponownie…",
+        "relabelTitle": "Ponowne oznaczanie mówców",
+        "relabelConfirm": "Oznaczyć mówców ponownie na podstawie nagrania? Nazwy, scalenia i zmiany fragmentów zostaną utracone.",
+        "mergeInto": "Scal „{{name}}” z innym mówcą",
+        "mergePrompt": "Scal „{{name}}” z:",
+        "mergeTitle": "Scalanie mówców",
+        "mergeConfirm": "Scalić „{{from}}” z „{{into}}”? Wszystkie fragmenty „{{from}}” zostaną przypisane do „{{into}}”. Możesz to cofnąć do zamknięcia transkrypcji.",
+        "mergeError": "Nie udało się scalić mówców: {{error}}",
+        "changeSpeaker": "Zmień mówcę tego fragmentu ({{name}})",
+        "changeSpeakerPrompt": "Kto to powiedział?",
+        "newSpeaker": "Nowy mówca",
+        "unknownSpeaker": "Nieznany mówca",
+        "changeSpeakerError": "Nie udało się zmienić mówcy: {{error}}",
+        "undo": "Cofnij",
+        "undoError": "Nie udało się cofnąć: {{error}}",
+        "jobKind": "Oznaczanie mówców",
+        "state": {
+          "running": "Rozpoznawanie mówców…",
+          "done": "Mówcy: {{number}}",
+          "failed": "Nie udało się oznaczyć mówców",
+          "skipped": {
+            "modelMissing": "Pominięto oznaczanie mówców: model mówców nie został pobrany.",
+            "noSpeech": "Pominięto oznaczanie mówców: nie wykryto mowy."
+          }
+        }
+      },
+      "queue": {
+        "title": "Pliki",
+        "cancelAll": "Anuluj wszystko",
+        "clearFinished": "Wyczyść zakończone"
+      },
+      "status": {
+        "queued": "Oczekuje na rozpoczęcie",
+        "preparing": "Przygotowywanie…",
+        "waiting": "Wstrzymano na czas dyktowania",
+        "transcribing": "Transkrybowanie…",
+        "completed": "Gotowe",
+        "partial": "Gotowe, z lukami",
+        "cancelled": "Anulowano",
+        "failed": "Niepowodzenie"
+      },
+      "progress": "{{processed}} z {{total}}",
+      "progressNoTotal": "Przetranskrybowano {{processed}}",
+      "noSpeech": "Nie wykryto mowy w tym pliku.",
+      "actions": {
+        "cancel": "Anuluj",
+        "remove": "Usuń z listy",
+        "view": "Pokaż transkrypcję",
+        "copy": "Kopiuj transkrypcję",
+        "showFile": "Pokaż plik"
+      },
+      "copied": "Skopiowano transkrypcję do schowka.",
+      "copyError": "Nie udało się skopiować transkrypcji.",
+      "savedToHistory": "Zapisano w historii",
+      "errors": {
+        "notFound": "Nie można znaleźć ani otworzyć pliku.",
+        "unsupportedFormat": "Ten typ pliku nie jest obsługiwany.",
+        "needsFfmpeg": "Ten format wymaga ffmpeg. Zainstaluj ffmpeg i spróbuj ponownie.",
+        "noModel": "Nie wybrano modelu transkrypcji.",
+        "modelChanged": "Model zmienił się podczas transkrypcji tego pliku.",
+        "decodeFailed": "Nie udało się odczytać dźwięku z tego pliku.",
+        "engineFailed": "Transkrypcja nie powiodła się.",
+        "serverUnreachable": "Nie można połączyć się z Lemonade Server. Upewnij się, że jest uruchomiony.",
+        "serverUnauthorized": "Lemonade Server nie zaakceptował klucza API.",
+        "serverModelMissing": "Lemonade Server nie ma wybranego modelu.",
+        "internal": "Coś poszło nie tak.",
+        "sourceChanged": "Nagranie w tej lokalizacji zmieniło się od czasu transkrypcji, więc jego mówców nie można dopasować do tej transkrypcji. Jeśli to to samo nagranie, wybierz je za pomocą „Znajdź nagranie…”.",
+        "speakerLabelsFailed": "Oznaczanie mówców nie powiodło się.",
+        "enqueue": "Nie udało się dodać plików: {{error}}",
+        "cancel": "Nie udało się anulować: {{error}}",
+        "remove": "Nie udało się usunąć z listy: {{error}}",
+        "loadTranscript": "Nie udało się wczytać transkrypcji: {{error}}"
+      },
+      "transcript": {
+        "title": "Transkrypcja: {{file}}",
+        "live": "Aktualizowana w trakcie transkrypcji",
+        "partial": "Ta transkrypcja jest niekompletna: {{reason}}",
+        "partialNoReason": "Ta transkrypcja jest niekompletna.",
+        "approximateTimes": "Czasy są przybliżone, ponieważ ten model nie podaje znaczników czasu.",
+        "empty": "Nie wykryto mowy.",
+        "segmentsLabel": "Transkrypcja ze znacznikami czasu"
+      },
+      "export": {
+        "button": "Eksportuj…",
+        "dialogTitle": "Eksportuj transkrypcję",
+        "formats": {
+          "docx": "Dokument Word (.docx)",
+          "txt": "Zwykły tekst (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Napisy SubRip (.srt)",
+          "vtt": "Napisy WebVTT (.vtt)"
+        },
+        "success": "Wyeksportowano transkrypcję.",
+        "showInFolder": "Pokaż w folderze",
+        "error": "Eksport nie powiódł się: {{error}}"
+      }
+    },
     "history": {
       "title": "Historia",
       "openFolder": "Otwórz folder nagrań",
@@ -477,7 +690,14 @@
       "retranscribe": "Transkrybuj ponownie",
       "retranscribeError": "Nie udało się ponownie transkrybować. Spróbuj ponownie.",
       "transcribing": "Transkrybuję...",
-      "transcriptionFailed": "Transkrypcja nie powiodła się. Możesz transkrybować ponownie za pomocą ikony ponowienia."
+      "transcriptionFailed": "Transkrypcja nie powiodła się. Możesz transkrybować ponownie za pomocą ikony ponowienia.",
+      "openTranscript": "Otwórz transkrypcję",
+      "showOriginal": "Pokaż oryginalny plik",
+      "originalMissing": "Oryginalny plik został przeniesiony lub usunięty.",
+      "fileDuration": "Długość {{duration}}",
+      "incomplete": "Niekompletna",
+      "speakerCount": "Mówcy: {{number}}",
+      "retranscribeFileUnavailable": "Aby ponownie transkrybować ten plik, użyj strony Transkrypcja."
     },
     "debug": {
       "title": "Debugowanie",

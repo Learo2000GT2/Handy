@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "General",
+    "transcribe": "Transcripció",
     "models": "Models",
     "advanced": "Avançat",
     "postProcessing": "Postprocessament",
@@ -217,6 +218,7 @@
       "availableModels": "Disponibles per baixar",
       "deleteConfirm": "Segur que voleu suprimir {{modelName}}? Haureu de tornar-lo a baixar per utilitzar-lo.",
       "deleteActiveConfirm": "{{modelName}} és el model actiu. Si el suprimiu, no podreu fer transcripcions fins que seleccioneu un altre model. N'esteu segur?",
+      "deleteRecordingsConfirm": "{{modelName}} és el model per a enregistraments. Si el suprimiu, els enregistraments utilitzaran el model de dictat. N'esteu segur?",
       "deleteTitle": "Suprimeix el model",
       "filters": {
         "allLanguages": "Totes les llengües",
@@ -463,6 +465,217 @@
         "createFirst": "Feu clic a «Creeu una indicació nova» més amunt per crear la primera indicació de postprocessament."
       }
     },
+    "transcribeFiles": {
+      "title": "Transcripció de fitxers",
+      "description": "Convertiu enregistraments existents en text en aquest ordinador. Els fitxers no surten mai del dispositiu.",
+      "settingsNote": "Utilitza el model seleccionat i la configuració de llengua, traducció, paraules personalitzades i falques.",
+      "settingsNoteLemonade": "Utilitza la configuració de llengua, paraules personalitzades i falques.",
+      "settingsNoteOwnModel": "Utilitza el model per a enregistraments i la configuració de llengua, traducció, paraules personalitzades i falques.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} a Lemonade Server",
+      "noModel": "Seleccioneu un model baixat a la pàgina Models per transcriure fitxers.",
+      "noLemonadeModel": "Trieu un model de Lemonade per transcriure fitxers.",
+      "noRecordingsModel": "El model per a enregistraments no està baixat. Trieu-ne un altre a dalt o baixeu-lo a la pàgina Models.",
+      "dropzone": {
+        "title": "Deixeu anar aquí fitxers d'àudio o de vídeo",
+        "hint": "Entrevistes, reunions, classes i notes de veu de qualsevol durada",
+        "active": "Deixeu anar per afegir",
+        "choose": "Tria els fitxers…",
+        "skipped": "S'han omès fitxers que no són d'àudio ni de vídeo: {{number}}"
+      },
+      "picker": {
+        "title": "Tria els enregistraments",
+        "filterName": "Fitxers d'àudio i de vídeo"
+      },
+      "formats": {
+        "native": "Obre {{formats}}",
+        "ffmpegAvailable": "Altres formats, com ara Opus, WebM, WMA i DSS, s'obren amb l'ffmpeg.",
+        "ffmpegMissing": "Instal·leu l'ffmpeg per obrir també Opus, WebM, WMA, DSS i altres formats."
+      },
+      "saveToHistory": {
+        "label": "Desa a l'historial",
+        "description": "Les transcripcions acabades es desen i es marquen amb una estrella perquè la neteja automàtica les conservi."
+      },
+      "engine": {
+        "title": "Motor de transcripció",
+        "label": "Transcriu amb",
+        "description": "El dictat sempre utilitza el model propi de Handy. Aquesta opció només s'aplica als fitxers.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model per a enregistraments",
+        "description": "Els enregistraments poden utilitzar un model més lent i més precís que el del dictat. Funciona per separat i només es carrega mentre es transcriuen fitxers, de manera que el model de dictat continua a punt. Tots dos models han de cabre a la memòria.",
+        "same": "El mateix que el dictat ({{model}})",
+        "sameNoModel": "El mateix que el dictat",
+        "switchWarning": "Aquest fitxer utilitza el model de dictat, així que si ara canvieu el model de dictat s'aturarà. Per mantenir-los separats, trieu un altre model per als enregistraments.",
+        "onCpu": "Els enregistraments s'estan executant al processador perquè no hi ha prou memòria gràfica per als dos models. Trieu un model més petit per als enregistraments per utilitzar la targeta gràfica."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Adreça del servidor",
+          "description": "Normalment http://localhost:13305. Les versions antigues de Lemonade utilitzaven el port 8000."
+        },
+        "apiKey": {
+          "label": "Clau de l'API",
+          "description": "Només cal si el vostre Lemonade Server en demana una.",
+          "placeholder": "Opcional"
+        },
+        "model": {
+          "label": "Model",
+          "description": "El model de Lemonade que transcriu els fitxers, com ara Whisper-Base.",
+          "placeholder": "Trieu un model Whisper",
+          "notDownloaded": "{{model}} (es baixa en el primer ús)",
+          "none": "No s'ha trobat cap model de transcripció en aquest servidor.",
+          "use": "Utilitza «{{model}}»"
+        },
+        "test": "Prova la connexió",
+        "testing": "S'està connectant…",
+        "connected": "Connectat. Models de transcripció disponibles: {{number}}",
+        "checkFailed": "No s'ha pogut comprovar Lemonade Server: {{error}}",
+        "saveError": "No s'ha pogut desar la configuració de Lemonade: {{error}}",
+        "firstChunkSlow": "És possible que Lemonade estigui baixant o carregant el model. La primera vegada pot trigar uns quants minuts.",
+        "errors": {
+          "invalidUrl": "Introduïu una adreça com ara http://localhost:13305.",
+          "unreachable": "No es pot connectar amb Lemonade Server a {{url}}. Comproveu que s'estigui executant.",
+          "timeout": "Lemonade Server no ha respost a temps.",
+          "unauthorized": "Lemonade Server no ha acceptat la clau de l'API.",
+          "modelNotFound": "Lemonade Server no té aquest model.",
+          "http": "Lemonade Server ha retornat un error.",
+          "badResponse": "Lemonade Server ha enviat una resposta que Handy no ha pogut llegir.",
+          "cancelled": "S'ha cancel·lat la prova de connexió."
+        },
+        "notes": {
+          "noTranslate": "La traducció a l'anglès no està disponible amb Lemonade Server. Els fitxers es transcriuen en la llengua parlada.",
+          "remote": "Aquesta adreça no és d'aquest ordinador. Els enregistraments s'hi enviaran."
+        }
+      },
+      "speakers": {
+        "label": "Etiqueta els parlants",
+        "description": "Indica qui ha dit què, fins a 4 parlants. S'executa en aquest ordinador i requereix una baixada única de {{size}} MB.",
+        "download": "Baixa el model de parlants ({{size}} MB)",
+        "downloading": "S'està baixant el model de parlants… {{percent}}%",
+        "verifying": "S'està comprovant la baixada…",
+        "cancelDownload": "Cancel·la la baixada",
+        "downloadFailed": "No s'ha pogut baixar el model de parlants: {{error}}",
+        "installed": "Model de parlants instal·lat ({{size}} MB)",
+        "remove": "Suprimeix el model de parlants",
+        "removeError": "No s'ha pogut suprimir el model de parlants: {{error}}",
+        "removeConfirm": "Voleu suprimir el model de parlants? L'haureu de tornar a baixar ({{size}} MB) per etiquetar els parlants.",
+        "license": "Model de parlants d'NVIDIA, amb la llicència NVIDIA Open Model License (<page>pàgina del model</page>).",
+        "title": "Parlants",
+        "defaultName": "Parlant {{number}}",
+        "rename": "Canvia el nom de {{name}}",
+        "nameLabel": "Nom nou per a {{name}}",
+        "save": "Desa",
+        "cancel": "Cancel·la",
+        "renameError": "No s'ha pogut canviar el nom del parlant: {{error}}",
+        "approximate": "Els canvis de parlant són aproximats perquè aquest model no proporciona marques de temps.",
+        "unassigned": "Alguns fragments no s'han pogut associar a cap parlant.",
+        "none": "Aquesta transcripció no té etiquetes de parlants.",
+        "labelAction": "Etiqueta els parlants",
+        "labelHint": "Les etiquetes de parlants es generen en aquest ordinador a partir de l'enregistrament original, {{file}}. Els enregistraments llargs triguen uns minuts.",
+        "needsModel": "Per etiquetar els parlants cal el model de parlants, una baixada única de {{size}} MB.",
+        "labelError": "No s'han pogut afegir les etiquetes de parlants: {{error}}",
+        "findRecording": "Cerca l'enregistrament…",
+        "findRecordingHint": "Trieu l'enregistrament que s'ha mogut. Ha de ser el mateix fitxer que es va transcriure.",
+        "relabel": "Torna a etiquetar…",
+        "relabelTitle": "Torna a etiquetar els parlants",
+        "relabelConfirm": "Voleu tornar a etiquetar els parlants a partir de l'enregistrament? Es perdran els noms, les fusions i els canvis de fragments.",
+        "mergeInto": "Fusiona {{name}} amb un altre parlant",
+        "mergePrompt": "Fusiona {{name}} amb:",
+        "mergeTitle": "Fusiona els parlants",
+        "mergeConfirm": "Voleu fusionar {{from}} amb {{into}}? Tots els fragments de {{from}} es marcaran com a {{into}}. Podeu desfer-ho fins que tanqueu la transcripció.",
+        "mergeError": "No s'han pogut fusionar els parlants: {{error}}",
+        "changeSpeaker": "Canvia el parlant d'aquest fragment ({{name}})",
+        "changeSpeakerPrompt": "Qui ho ha dit?",
+        "newSpeaker": "Parlant nou",
+        "unknownSpeaker": "Parlant desconegut",
+        "changeSpeakerError": "No s'ha pogut canviar el parlant: {{error}}",
+        "undo": "Desfés",
+        "undoError": "No s'ha pogut desfer: {{error}}",
+        "jobKind": "Etiquetes de parlants",
+        "state": {
+          "running": "S'estan identificant els parlants…",
+          "done": "Parlants: {{number}}",
+          "failed": "No s'han pogut etiquetar els parlants",
+          "skipped": {
+            "modelMissing": "S'ha omès l'etiquetatge de parlants: el model de parlants no s'ha baixat.",
+            "noSpeech": "S'ha omès l'etiquetatge de parlants: no s'ha detectat parla."
+          }
+        }
+      },
+      "queue": {
+        "title": "Fitxers",
+        "cancelAll": "Cancel·la-ho tot",
+        "clearFinished": "Esborra les acabades"
+      },
+      "status": {
+        "queued": "Pendent d'iniciar",
+        "preparing": "S'està preparant…",
+        "waiting": "En pausa mentre dicteu",
+        "transcribing": "S'està transcrivint…",
+        "completed": "Fet",
+        "partial": "Fet, amb buits",
+        "cancelled": "Cancel·lat",
+        "failed": "Ha fallat"
+      },
+      "progress": "{{processed}} de {{total}}",
+      "progressNoTotal": "{{processed}} transcrits",
+      "noSpeech": "No s'ha detectat parla en aquest fitxer.",
+      "actions": {
+        "cancel": "Cancel·la",
+        "remove": "Treu de la llista",
+        "view": "Mostra la transcripció",
+        "copy": "Copia la transcripció",
+        "showFile": "Mostra el fitxer"
+      },
+      "copied": "S'ha copiat la transcripció al porta-retalls.",
+      "copyError": "No s'ha pogut copiar la transcripció.",
+      "savedToHistory": "Desat a l'historial",
+      "errors": {
+        "notFound": "No es pot trobar o obrir el fitxer.",
+        "unsupportedFormat": "Aquest tipus de fitxer no és compatible.",
+        "needsFfmpeg": "Aquest format necessita l'ffmpeg. Instal·leu l'ffmpeg i torneu-ho a provar.",
+        "noModel": "No hi ha cap model de transcripció seleccionat.",
+        "modelChanged": "El model ha canviat mentre es transcrivia aquest fitxer.",
+        "decodeFailed": "No s'ha pogut llegir l'àudio d'aquest fitxer.",
+        "engineFailed": "La transcripció ha fallat.",
+        "serverUnreachable": "No es pot connectar amb Lemonade Server. Comproveu que s'estigui executant.",
+        "serverUnauthorized": "Lemonade Server no ha acceptat la clau de l'API.",
+        "serverModelMissing": "Lemonade Server no té el model seleccionat.",
+        "internal": "Alguna cosa no ha anat bé.",
+        "sourceChanged": "L'enregistrament d'aquesta ubicació ha canviat des que es va transcriure, de manera que els seus parlants no es poden associar a aquesta transcripció. Si és el mateix enregistrament, trieu-lo amb «Cerca l'enregistrament…».",
+        "speakerLabelsFailed": "No s'han pogut etiquetar els parlants.",
+        "enqueue": "No s'han pogut afegir els fitxers: {{error}}",
+        "cancel": "No s'ha pogut cancel·lar: {{error}}",
+        "remove": "No s'ha pogut treure de la llista: {{error}}",
+        "loadTranscript": "No s'ha pogut carregar la transcripció: {{error}}"
+      },
+      "transcript": {
+        "title": "Transcripció: {{file}}",
+        "live": "S'actualitza mentre es transcriu",
+        "partial": "Aquesta transcripció és incompleta: {{reason}}",
+        "partialNoReason": "Aquesta transcripció és incompleta.",
+        "approximateTimes": "Els temps són aproximats perquè aquest model no proporciona marques de temps.",
+        "empty": "No s'ha detectat parla.",
+        "segmentsLabel": "Transcripció amb marques de temps"
+      },
+      "export": {
+        "button": "Exporta…",
+        "dialogTitle": "Exporta la transcripció",
+        "formats": {
+          "docx": "Document de Word (.docx)",
+          "txt": "Text sense format (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Subtítols SubRip (.srt)",
+          "vtt": "Subtítols WebVTT (.vtt)"
+        },
+        "success": "S'ha exportat la transcripció.",
+        "showInFolder": "Mostra a la carpeta",
+        "error": "No s'ha pogut exportar: {{error}}"
+      }
+    },
     "history": {
       "title": "Historial",
       "openFolder": "Obriu la carpeta d'enregistraments",
@@ -477,7 +690,14 @@
       "retranscribe": "Torneu a transcriure",
       "retranscribeError": "No s'ha pogut tornar a transcriure. Torneu-ho a provar.",
       "transcribing": "S'està transcrivint...",
-      "transcriptionFailed": "La transcripció ha fallat. Podeu tornar a transcriure amb la icona de reintent."
+      "transcriptionFailed": "La transcripció ha fallat. Podeu tornar a transcriure amb la icona de reintent.",
+      "openTranscript": "Obre la transcripció",
+      "showOriginal": "Mostra el fitxer original",
+      "originalMissing": "El fitxer original s'ha mogut o suprimit.",
+      "fileDuration": "Durada {{duration}}",
+      "incomplete": "Incompleta",
+      "speakerCount": "Parlants: {{number}}",
+      "retranscribeFileUnavailable": "Per tornar a transcriure aquest fitxer, utilitzeu la pàgina Transcripció."
     },
     "debug": {
       "title": "Depuració",

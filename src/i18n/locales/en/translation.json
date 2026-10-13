@@ -11,6 +11,7 @@
   },
   "sidebar": {
     "general": "General",
+    "transcribe": "Transcribe",
     "models": "Models",
     "advanced": "Advanced",
     "postProcessing": "Post Process",
@@ -217,6 +218,7 @@
       "availableModels": "Available to Download",
       "deleteConfirm": "Are you sure you want to delete {{modelName}}? You will need to download it again to use it.",
       "deleteActiveConfirm": "{{modelName}} is your active model. Deleting it will stop transcriptions until you select a new model. Are you sure?",
+      "deleteRecordingsConfirm": "{{modelName}} is your model for recordings. If you delete it, recordings will use your dictation model. Are you sure?",
       "deleteTitle": "Delete Model",
       "filters": {
         "allLanguages": "All Languages",
@@ -463,6 +465,217 @@
         "createFirst": "Click 'Create New Prompt' above to create your first post-processing prompt."
       }
     },
+    "transcribeFiles": {
+      "title": "Transcribe Files",
+      "description": "Turn existing recordings into text on this computer. Your files never leave your device.",
+      "settingsNote": "Uses your selected model and your language, translation, custom word and filler word settings.",
+      "settingsNoteLemonade": "Uses your language, custom word and filler word settings.",
+      "settingsNoteOwnModel": "Uses your model for recordings and your language, translation, custom word and filler word settings.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} on Lemonade Server",
+      "noModel": "Select a downloaded model on the Models page to transcribe files.",
+      "noLemonadeModel": "Choose a Lemonade model to transcribe files.",
+      "noRecordingsModel": "Your model for recordings isn't downloaded. Choose another one above or download it on the Models page.",
+      "dropzone": {
+        "title": "Drop audio or video files here",
+        "hint": "Interviews, meetings, lectures and voice memos of any length",
+        "active": "Release to add",
+        "choose": "Choose Files…",
+        "skipped": "Skipped files that aren't audio or video: {{number}}"
+      },
+      "picker": {
+        "title": "Choose Recordings",
+        "filterName": "Audio and video files"
+      },
+      "formats": {
+        "native": "Opens {{formats}}",
+        "ffmpegAvailable": "Other formats such as Opus, WebM, WMA and DSS open with ffmpeg.",
+        "ffmpegMissing": "Install ffmpeg to also open Opus, WebM, WMA, DSS and other formats."
+      },
+      "saveToHistory": {
+        "label": "Save to History",
+        "description": "Finished transcripts are saved and starred so automatic cleanup keeps them."
+      },
+      "engine": {
+        "title": "Transcription Engine",
+        "label": "Transcribe With",
+        "description": "Dictation always uses Handy's own model. This choice is only for files.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model for Recordings",
+        "description": "Recordings can use a slower, more accurate model than dictation. It runs on its own and is loaded only while files are transcribed, so your dictation model stays ready. Both models need to fit in memory.",
+        "same": "Same as dictation ({{model}})",
+        "sameNoModel": "Same as dictation",
+        "switchWarning": "This file uses your dictation model, so changing the dictation model now stops it. To keep them apart, choose a different model for recordings.",
+        "onCpu": "Recordings are running on the processor because there isn't enough graphics memory for both models. Choose a smaller model for recordings to use the graphics card."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Server Address",
+          "description": "Usually http://localhost:13305. Older Lemonade versions used port 8000."
+        },
+        "apiKey": {
+          "label": "API Key",
+          "description": "Only needed if your Lemonade Server asks for one.",
+          "placeholder": "Optional"
+        },
+        "model": {
+          "label": "Model",
+          "description": "The Lemonade model that transcribes your files, such as Whisper-Base.",
+          "placeholder": "Choose a Whisper model",
+          "notDownloaded": "{{model}} (downloads on first use)",
+          "none": "No transcription models found on this server.",
+          "use": "Use “{{model}}”"
+        },
+        "test": "Test Connection",
+        "testing": "Connecting…",
+        "connected": "Connected. Transcription models available: {{number}}",
+        "checkFailed": "Couldn't check Lemonade Server: {{error}}",
+        "saveError": "Couldn't save the Lemonade settings: {{error}}",
+        "firstChunkSlow": "Lemonade may be downloading or loading the model. This can take a few minutes the first time.",
+        "errors": {
+          "invalidUrl": "Enter an address like http://localhost:13305.",
+          "unreachable": "Can't reach Lemonade Server at {{url}}. Make sure it's running.",
+          "timeout": "Lemonade Server didn't answer in time.",
+          "unauthorized": "Lemonade Server didn't accept the API key.",
+          "modelNotFound": "Lemonade Server doesn't have this model.",
+          "http": "Lemonade Server returned an error.",
+          "badResponse": "Lemonade Server sent an answer Handy couldn't read.",
+          "cancelled": "The connection test was cancelled."
+        },
+        "notes": {
+          "noTranslate": "Translate to English isn't available with Lemonade Server. Files are transcribed in the language spoken.",
+          "remote": "This address isn't on this computer. Your recordings will be sent to it."
+        }
+      },
+      "speakers": {
+        "label": "Label Speakers",
+        "description": "Mark who said what, for up to 4 speakers. Runs on this computer and needs a one-time {{size}} MB download.",
+        "download": "Download Speaker Model ({{size}} MB)",
+        "downloading": "Downloading speaker model… {{percent}}%",
+        "verifying": "Checking the download…",
+        "cancelDownload": "Cancel Download",
+        "downloadFailed": "Couldn't download the speaker model: {{error}}",
+        "installed": "Speaker model installed ({{size}} MB)",
+        "remove": "Remove Speaker Model",
+        "removeError": "Couldn't remove the speaker model: {{error}}",
+        "removeConfirm": "Remove the speaker model? You'll need to download it again ({{size}} MB) to label speakers.",
+        "license": "Speaker model by NVIDIA, under the NVIDIA Open Model License (<page>model page</page>).",
+        "title": "Speakers",
+        "defaultName": "Speaker {{number}}",
+        "rename": "Rename {{name}}",
+        "nameLabel": "New name for {{name}}",
+        "save": "Save",
+        "cancel": "Cancel",
+        "renameError": "Couldn't rename the speaker: {{error}}",
+        "approximate": "Speaker changes are approximate because this model doesn't report timestamps.",
+        "unassigned": "Some passages couldn't be matched to a speaker.",
+        "none": "This transcript has no speaker labels.",
+        "labelAction": "Label Speakers",
+        "labelHint": "Speaker labels are made on this computer from the original recording, {{file}}. Long recordings take a few minutes.",
+        "needsModel": "Labelling speakers needs the speaker model, a one-time {{size}} MB download.",
+        "labelError": "Couldn't add speaker labels: {{error}}",
+        "findRecording": "Find Recording…",
+        "findRecordingHint": "Choose the moved recording. It must be the same file that was transcribed.",
+        "relabel": "Label Again…",
+        "relabelTitle": "Label Speakers Again",
+        "relabelConfirm": "Label the speakers again from the recording? Names, merges and passage changes will be lost.",
+        "mergeInto": "Merge {{name}} into another speaker",
+        "mergePrompt": "Merge {{name}} into:",
+        "mergeTitle": "Merge Speakers",
+        "mergeConfirm": "Merge {{from}} into {{into}}? All of {{from}}'s passages will be marked as {{into}}. You can undo this until you close the transcript.",
+        "mergeError": "Couldn't merge the speakers: {{error}}",
+        "changeSpeaker": "Change speaker of this passage ({{name}})",
+        "changeSpeakerPrompt": "Who said this?",
+        "newSpeaker": "New Speaker",
+        "unknownSpeaker": "Unknown speaker",
+        "changeSpeakerError": "Couldn't change the speaker: {{error}}",
+        "undo": "Undo",
+        "undoError": "Couldn't undo: {{error}}",
+        "jobKind": "Speaker labels",
+        "state": {
+          "running": "Identifying speakers…",
+          "done": "Speakers: {{number}}",
+          "failed": "Couldn't label speakers",
+          "skipped": {
+            "modelMissing": "Speaker labels skipped: the speaker model isn't downloaded.",
+            "noSpeech": "Speaker labels skipped: no speech found."
+          }
+        }
+      },
+      "queue": {
+        "title": "Files",
+        "cancelAll": "Cancel All",
+        "clearFinished": "Clear Finished"
+      },
+      "status": {
+        "queued": "Waiting to start",
+        "preparing": "Preparing…",
+        "waiting": "Paused while you dictate",
+        "transcribing": "Transcribing…",
+        "completed": "Done",
+        "partial": "Done, with gaps",
+        "cancelled": "Cancelled",
+        "failed": "Failed"
+      },
+      "progress": "{{processed}} of {{total}}",
+      "progressNoTotal": "{{processed}} transcribed",
+      "noSpeech": "No speech found in this file.",
+      "actions": {
+        "cancel": "Cancel",
+        "remove": "Remove from List",
+        "view": "View Transcript",
+        "copy": "Copy Transcript",
+        "showFile": "Show File"
+      },
+      "copied": "Transcript copied to clipboard.",
+      "copyError": "Failed to copy the transcript.",
+      "savedToHistory": "Saved to History",
+      "errors": {
+        "notFound": "The file can't be found or opened.",
+        "unsupportedFormat": "This file type isn't supported.",
+        "needsFfmpeg": "This format needs ffmpeg. Install ffmpeg, then try again.",
+        "noModel": "No transcription model is selected.",
+        "modelChanged": "The model changed while this file was being transcribed.",
+        "decodeFailed": "The audio in this file couldn't be read.",
+        "engineFailed": "Transcription failed.",
+        "serverUnreachable": "Lemonade Server can't be reached. Make sure it's running.",
+        "serverUnauthorized": "Lemonade Server didn't accept the API key.",
+        "serverModelMissing": "Lemonade Server doesn't have the selected model.",
+        "internal": "Something went wrong.",
+        "sourceChanged": "The recording at this location has changed since it was transcribed, so its speakers can't be matched to this transcript. If it's the same recording, choose it with Find Recording…",
+        "speakerLabelsFailed": "Speaker labelling failed.",
+        "enqueue": "Couldn't add files: {{error}}",
+        "cancel": "Couldn't cancel: {{error}}",
+        "remove": "Couldn't remove from the list: {{error}}",
+        "loadTranscript": "Couldn't load the transcript: {{error}}"
+      },
+      "transcript": {
+        "title": "Transcript: {{file}}",
+        "live": "Updating as transcription runs",
+        "partial": "This transcript is incomplete: {{reason}}",
+        "partialNoReason": "This transcript is incomplete.",
+        "approximateTimes": "Times are approximate because this model doesn't report timestamps.",
+        "empty": "No speech found.",
+        "segmentsLabel": "Timestamped transcript"
+      },
+      "export": {
+        "button": "Export…",
+        "dialogTitle": "Export Transcript",
+        "formats": {
+          "docx": "Word document (.docx)",
+          "txt": "Plain text (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip subtitles (.srt)",
+          "vtt": "WebVTT subtitles (.vtt)"
+        },
+        "success": "Transcript exported.",
+        "showInFolder": "Show in Folder",
+        "error": "Export failed: {{error}}"
+      }
+    },
     "history": {
       "title": "History",
       "openFolder": "Open Recordings Folder",
@@ -477,7 +690,14 @@
       "retranscribe": "Re-transcribe",
       "retranscribeError": "Failed to re-transcribe. Please try again.",
       "transcribing": "Transcribing...",
-      "transcriptionFailed": "Transcription failed. You can re-transcribe using the retry icon."
+      "transcriptionFailed": "Transcription failed. You can re-transcribe using the retry icon.",
+      "openTranscript": "Open Transcript",
+      "showOriginal": "Show Original File",
+      "originalMissing": "The original file has been moved or deleted.",
+      "fileDuration": "Length {{duration}}",
+      "incomplete": "Incomplete",
+      "speakerCount": "Speakers: {{number}}",
+      "retranscribeFileUnavailable": "To transcribe this file again, use the Transcribe page."
     },
     "debug": {
       "title": "Debug",
