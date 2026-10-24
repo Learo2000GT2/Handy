@@ -146,6 +146,18 @@ export const isRunningStatus = (status: FileJobStatus): boolean =>
 export const isFinishedStatus = (status: FileJobStatus): boolean =>
   FINISHED_STATUSES.includes(status);
 
+/**
+ * The job to bring into view after `added` were queued: the first of them
+ * in the list (job ids grow in enqueue order). Null when none was added.
+ */
+export const firstAddedJobId = (
+  added: readonly Pick<FileJobSnapshot, "job_id">[],
+): number | null =>
+  added.reduce<number | null>(
+    (first, job) => (first === null || job.job_id < first ? job.job_id : first),
+    null,
+  );
+
 /** Keys under `settings.transcribeFiles.status`. */
 export type JobStatusKey = FileJobStatus | "partial";
 

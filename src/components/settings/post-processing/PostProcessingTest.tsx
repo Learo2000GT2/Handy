@@ -1,7 +1,8 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { commands, type PostProcessTest } from "@/bindings";
+import { revealElement } from "@/lib/utils/reveal";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { SettingContainer } from "../../ui/SettingContainer";
@@ -35,6 +36,14 @@ export const PostProcessingTest: React.FC = () => {
   const [state, setState] = useState<TestState>({ phase: "idle" });
   // Only the newest test may update the result.
   const testIdRef = useRef(0);
+  // The result appears below the Test button, at the bottom of the page in
+  // the default window, so it is scrolled into view once it is there.
+  const resultRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (state.phase === "done" || state.phase === "failed") {
+      revealElement(resultRef.current);
+    }
+  }, [state]);
 
   const handleTest = async () => {
     const id = ++testIdRef.current;
@@ -123,7 +132,9 @@ export const PostProcessingTest: React.FC = () => {
               ? t("settings.postProcessing.test.testing")
               : t("settings.postProcessing.test.button")}
           </Button>
-          {result}
+          <div ref={resultRef} aria-live="polite" className="empty:hidden">
+            {result}
+          </div>
         </div>
       </SettingContainer>
     </SettingsGroup>

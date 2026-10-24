@@ -4,6 +4,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FileUp } from "lucide-react";
 import { toast } from "sonner";
+import type { FileJobSnapshot } from "@/bindings";
 import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
 import {
   DISPLAY_FORMATS,
@@ -18,6 +19,8 @@ interface FileDropZoneProps {
    * when a file is dropped; null when they can.
    */
   disabledReason: string | null;
+  /** Called with the jobs a drop or the file picker queued. */
+  onAdded: (jobs: FileJobSnapshot[]) => void;
 }
 
 /**
@@ -27,6 +30,7 @@ interface FileDropZoneProps {
  */
 export const FileDropZone: React.FC<FileDropZoneProps> = ({
   disabledReason,
+  onAdded,
 }) => {
   const { t } = useTranslation();
   const disabled = disabledReason !== null;
@@ -37,8 +41,8 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
 
   // The drag-drop listener is registered once; it reads the latest values
   // from here.
-  const latest = useRef({ disabledReason, formats, enqueue, t });
-  latest.current = { disabledReason, formats, enqueue, t };
+  const latest = useRef({ disabledReason, formats, enqueue, onAdded, t });
+  latest.current = { disabledReason, formats, enqueue, onAdded, t };
 
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
@@ -68,7 +72,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
             }),
           );
         }
-        void current.enqueue(accepted);
+        void current.enqueue(accepted).then(current.onAdded);
       }
     });
 
@@ -96,7 +100,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
             : undefined,
       });
       if (selected !== null) {
-        await enqueue(selected);
+        onAdded(await enqueue(selected));
       }
     } catch (error) {
       console.error("Failed to choose files:", error);

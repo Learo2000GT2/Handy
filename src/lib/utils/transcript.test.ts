@@ -25,6 +25,7 @@ import {
   estimateRemainingMs,
   extensionOf,
   fileNameFromPath,
+  firstAddedJobId,
   formatClock,
   formatDuration,
   formatPercent,
@@ -178,6 +179,16 @@ assert.equal(isFinishedStatus("transcribing"), false);
 assert.equal(isFinishedStatus("completed"), true);
 assert.equal(isFinishedStatus("cancelled"), true);
 assert.equal(isFinishedStatus("failed"), true);
+
+// firstAddedJobId: the earliest queued of the jobs just added (shown first
+// in the list), whatever order the backend returned them in.
+assert.equal(firstAddedJobId([]), null);
+assert.equal(firstAddedJobId([{ job_id: 7 }]), 7);
+assert.equal(
+  firstAddedJobId([{ job_id: 12 }, { job_id: 10 }, { job_id: 11 }]),
+  10,
+);
+assert.equal(firstAddedJobId([{ job_id: 0 }, { job_id: 3 }]), 0);
 
 // errorKey: every backend code maps to its camelCase i18n key.
 const expectedErrorKeys: Record<FileJobErrorCode, string> = {

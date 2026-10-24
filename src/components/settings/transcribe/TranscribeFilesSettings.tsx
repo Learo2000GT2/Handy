@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { FileJobSnapshot, ModelInfo, TranscriptSource } from "@/bindings";
 import { useSettings } from "@/hooks/useSettings";
 import { useModelStore } from "@/stores/modelStore";
 import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
 import { getTranslatedModelName } from "@/lib/utils/modelTranslation";
+import { revealElement } from "@/lib/utils/reveal";
 import {
+  firstAddedJobId,
   isFinishedStatus,
   notReadyKey,
   recordingsModelId,
@@ -54,6 +56,15 @@ export const TranscribeFilesSettings: React.FC = () => {
     (state) => state.clearViewRequest,
   );
   const [viewed, setViewed] = useState<ViewedJob | null>(null);
+  // The list sits below the drop zone, out of sight in the default window,
+  // so files just added are scrolled into view: their row shows the
+  // progress, and later where the transcript was saved.
+  const rowRefs = useRef(new Map<number, HTMLDivElement>());
+  const [revealJobId, setRevealJobId] = useState<number | null>(null);
+  const handleAdded = useCallback((added: FileJobSnapshot[]) => {
+    const jobId = firstAddedJobId(added);
+    if (jobId !== null) setRevealJobId(jobId);
+  }, []);
 
   // "Open" on a "Transcript ready" toast, from any page.
   useEffect(() => {
@@ -61,6 +72,18 @@ export const TranscribeFilesSettings: React.FC = () => {
     setViewed(viewRequest);
     clearViewRequest();
   }, [viewRequest, clearViewRequest]);
+
+  useEffect(() => {
+    if (revealJobId === null) return;
+    const row = rowRefs.current.get(revealJobId);
+    if (row) {
+      revealElement(row);
+      setRevealJobId(null);
+    } else if (!order.includes(revealJobId)) {
+      // Gone before it was shown.
+      setRevealJobId(null);
+    }
+  }, [revealJobId, order]);
 
   // ffmpeg may have been installed since the list was loaded.
   useEffect(() => {
@@ -152,7 +175,7 @@ export const TranscribeFilesSettings: React.FC = () => {
         </Alert>
       )}
 
-      <FileDropZone disabledReason={notReadyText} />
+      <FileDropZone disabledReason={notReadyText} onAdded={handleAdded} />
 
       <SettingsGroup>
         <ToggleSwitch
@@ -203,12 +226,21 @@ export const TranscribeFilesSettings: React.FC = () => {
           <div className="bg-background border border-mid-gray/20 rounded-lg overflow-visible">
             <div className="divide-y divide-mid-gray/20">
               {queue.map((job) => (
-                <FileJobRow
+                <div
                   key={job.job_id}
-                  job={job}
-                  noSpeech={noSpeech[job.job_id] === true}
-                  onView={(source, fileName) => setViewed({ source, fileName })}
-                />
+                  ref={(element) => {
+                    if (element) rowRefs.current.set(job.job_id, element);
+                    else rowRefs.current.delete(job.job_id);
+                  }}
+                >
+                  <FileJobRow
+                    job={job}
+                    noSpeech={noSpeech[job.job_id] === true}
+                    onView={(source, fileName) =>
+                      setViewed({ source, fileName })
+                    }
+                  />
+                </div>
               ))}
             </div>
           </div>
