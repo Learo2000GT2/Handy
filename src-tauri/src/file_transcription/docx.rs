@@ -141,7 +141,11 @@ pub(crate) fn document_xml(t: &FileTranscript, options: &ExportOptions) -> Strin
         out.push_str("<w:bidi/>");
     }
     out.push_str("</w:pPr>");
-    push_run(&mut out, rtl_if(title_bidi, &title), &[&title]);
+    if title_bidi {
+        push_rtl_runs(&mut out, &[("", &title)]);
+    } else {
+        push_run(&mut out, "", &[&title]);
+    }
     out.push_str("</w:p>");
 
     // Labels and values are short, mostly Latin text: never right-to-left.
@@ -337,7 +341,8 @@ fn display_label(speakers: &TranscriptSpeakers, id: u32) -> String {
 /// Direction is decided per paragraph from its own letters, as the app's
 /// view does: a mixed-language transcript keeps its English paragraphs
 /// left-to-right. Inside a right-to-left paragraph, the speaker and text
-/// runs that hold right-to-left characters are marked as such.
+/// are cut into runs by script (see `rtl_flags`), so an English phrase
+/// keeps its word order.
 fn push_body_paragraph(out: &mut String, start_ms: Option<u64>, label: Option<&str>, text: &str) {
     let lines = lines(text);
     if lines.is_empty() {
@@ -351,18 +356,30 @@ fn push_body_paragraph(out: &mut String, start_ms: Option<u64>, label: Option<&s
     if let Some(start_ms) = start_ms {
         push_run(out, TIME_STYLE, &[format!("[{}] ", format_clock(start_ms))]);
     }
-    if let Some(label) = label {
-        let properties = format!("{SPEAKER_STYLE}{}", rtl_if(bidi, label));
-        push_run(out, &properties, &[format!("{label}: ")]);
+    let label = label.map(|label| format!("{label}: "));
+    if bidi {
+        // One pass over the label and the text: a space or colon between
+        // them is laid out by the letters on both sides.
+        let text = lines.join("\n");
+        let mut parts = Vec::with_capacity(2);
+        if let Some(label) = &label {
+            parts.push((SPEAKER_STYLE, label.as_str()));
+        }
+        parts.push(("", text.as_str()));
+        push_rtl_runs(out, &parts);
+    } else {
+        if let Some(label) = &label {
+            push_run(out, SPEAKER_STYLE, &[label]);
+        }
+        push_run(out, "", &lines);
     }
-    let rtl = bidi && lines.iter().any(|line| line.chars().any(is_rtl_char));
-    push_run(out, if rtl { RTL } else { "" }, &lines);
     out.push_str("</w:p>");
 }
 
 /// One run: `properties` (the children of `w:rPr`, in schema order; none
-/// when empty), then `lines` separated by line breaks. The lines must
-/// already be cleaned; they are escaped here.
+/// when empty), then `lines` separated by line breaks (an empty line writes
+/// only its break). The lines must already be cleaned; they are escaped
+/// here.
 fn push_run<S: AsRef<str>>(out: &mut String, properties: &str, lines: &[S]) {
     out.push_str("<w:r>");
     if !properties.is_empty() {
@@ -374,21 +391,137 @@ fn push_run<S: AsRef<str>>(out: &mut String, properties: &str, lines: &[S]) {
         if i > 0 {
             out.push_str("<w:br/>");
         }
-        out.push_str("<w:t xml:space=\"preserve\">");
-        out.push_str(&xml_escape(line.as_ref()));
-        out.push_str("</w:t>");
+        let line = line.as_ref();
+        if !line.is_empty() {
+            out.push_str("<w:t xml:space=\"preserve\">");
+            out.push_str(&xml_escape(line));
+            out.push_str("</w:t>");
+        }
     }
     out.push_str("</w:r>");
 }
 
-/// `<w:rtl/>` for a run of a right-to-left paragraph that holds
-/// right-to-left characters.
-fn rtl_if(bidi: bool, text: &str) -> &'static str {
-    if bidi && text.chars().any(is_rtl_char) {
-        RTL
-    } else {
-        ""
+/// The runs of a right-to-left paragraph: each of `parts` (the run
+/// properties, then its cleaned text, lines separated by '\n') cut where the
+/// direction changes, with `<w:rtl/>` added to the right-to-left pieces.
+/// The direction is worked out over all the parts together.
+fn push_rtl_runs(out: &mut String, parts: &[(&str, &str)]) {
+    let chars: Vec<char> = parts.iter().flat_map(|(_, text)| text.chars()).collect();
+    let mut flags = rtl_flags(&chars).into_iter();
+    for (properties, text) in parts {
+        let part_flags = flags.by_ref().take(text.chars().count());
+        for (rtl, piece) in split_by_direction(text, part_flags) {
+            let properties = if rtl {
+                format!("{properties}{RTL}")
+            } else {
+                (*properties).to_string()
+            };
+            let lines: Vec<&str> = piece.split('\n').collect();
+            push_run(out, &properties, &lines);
+        }
     }
+}
+
+/// `text` cut where `flags` (one per character) changes, as
+/// (right-to-left, piece). A line break stays with the piece before it: it
+/// reads the same in either direction.
+fn split_by_direction(text: &str, flags: impl Iterator<Item = bool>) -> Vec<(bool, String)> {
+    let mut pieces: Vec<(bool, String)> = Vec::new();
+    for (c, rtl) in text.chars().zip(flags) {
+        match pieces.last_mut() {
+            Some((last, piece)) if *last == rtl || c == '\n' => piece.push(c),
+            _ => pieces.push((rtl, c.to_string())),
+        }
+    }
+    pieces
+}
+
+/// How a character of a right-to-left paragraph decides its run's
+/// direction.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Strength {
+    Ltr,
+    Rtl,
+    Neutral,
+}
+
+/// For each of `chars` (a right-to-left paragraph's text, '\n' between
+/// lines), whether it goes in a run marked `<w:rtl/>`.
+///
+/// Word reads `<w:rtl/>` as an override (ISO/IEC 29500 17.3.2.30): inside
+/// such a run every space and punctuation mark is laid out right to left,
+/// so "Microsoft Office" in one shows as "Office Microsoft". So, as Word
+/// does when someone types the text, only right-to-left letters are marked,
+/// with the characters the Unicode bidirectional algorithm would lay out
+/// right to left anyway:
+///
+/// - a combining accent goes with the character before it;
+/// - digits after a left-to-right letter belong to it ("Windows 10");
+/// - spaces, punctuation and line breaks between two left-to-right letters
+///   stay left-to-right; all the others (between two right-to-left letters,
+///   between the two scripts, at either end) and digits after a
+///   right-to-left letter are right-to-left, the paragraph's direction.
+fn rtl_flags(chars: &[char]) -> Vec<bool> {
+    let mut strengths: Vec<Strength> = Vec::with_capacity(chars.len());
+    // The paragraph's direction stands before its first letter.
+    let mut last_strong = Strength::Rtl;
+    for &c in chars {
+        let strength = if is_rtl_char(c) {
+            Strength::Rtl
+        } else if c.is_alphabetic() {
+            Strength::Ltr
+        } else if is_combining_mark(c) {
+            strengths.last().copied().unwrap_or(Strength::Neutral)
+        } else if c.is_numeric() && last_strong == Strength::Ltr {
+            Strength::Ltr
+        } else {
+            Strength::Neutral
+        };
+        if strength != Strength::Neutral {
+            last_strong = strength;
+        }
+        strengths.push(strength);
+    }
+
+    let mut flags = Vec::with_capacity(chars.len());
+    let mut i = 0;
+    while i < strengths.len() {
+        let end = match strengths[i] {
+            Strength::Neutral => strengths[i..]
+                .iter()
+                .position(|&strength| strength != Strength::Neutral)
+                .map_or(strengths.len(), |n| i + n),
+            _ => i + 1,
+        };
+        let rtl = match strengths[i] {
+            Strength::Ltr => false,
+            Strength::Rtl => true,
+            Strength::Neutral => {
+                let before = i.checked_sub(1).and_then(|j| strengths.get(j)).copied();
+                let after = strengths.get(end).copied();
+                !(before == Some(Strength::Ltr) && after == Some(Strength::Ltr))
+            }
+        };
+        flags.extend(std::iter::repeat_n(rtl, end - i));
+        i = end;
+    }
+    flags
+}
+
+/// Combining accents and variation selectors, which belong to the
+/// character before them (a file name from macOS spells "é" as "e" and an
+/// accent).
+fn is_combining_mark(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x0300..=0x036F
+            | 0x1AB0..=0x1AFF
+            | 0x1DC0..=0x1DFF
+            | 0x20D0..=0x20FF
+            | 0xFE00..=0xFE0F
+            | 0xFE20..=0xFE2F
+            | 0xE0100..=0xE01EF
+    )
 }
 
 /// Keeps only characters XML allows: a tab becomes a space, every kind of
@@ -628,6 +761,39 @@ mod tests {
         }
     }
 
+    /// Mostly Hebrew and Arabic paragraphs holding English names and terms,
+    /// as Whisper writes them; the file name's "é" is an "e" and an accent,
+    /// as macOS spells it.
+    fn english_in_rtl() -> FileTranscript {
+        FileTranscript {
+            source_name: "Jose\u{301} ראיון חדש.m4a".to_string(),
+            language: Some("he".to_string()),
+            paragraphs: vec![
+                labelled_seg(
+                    0,
+                    4_000,
+                    "צריך ללמוד את Microsoft Office לפני הראיון בעבודה.",
+                    2,
+                ),
+                labelled_seg(
+                    4_000,
+                    8_000,
+                    "يعمل كـ forklift operator في المستودع منذ خمس سنوات",
+                    2,
+                ),
+                labelled_seg(8_000, 12_000, "עבדתי עם Windows 10 ו-Office 365 שנתיים.", 2),
+                labelled_seg(
+                    12_000,
+                    16_000,
+                    "Home Depot היא החברה שבה עבדתי שנתיים\nבמחלקת Customer\nService, ועכשיו Microsoft\nשוב.",
+                    1,
+                ),
+            ],
+            speakers: speakers(&[Some("Doug"), None]),
+            ..labelled_sample()
+        }
+    }
+
     /// Detected as Arabic overall, but two of three paragraphs are English.
     fn mixed() -> FileTranscript {
         FileTranscript {
@@ -695,6 +861,7 @@ mod tests {
             ("sample", sample()),
             ("labelled", labelled_sample()),
             ("hebrew", hebrew()),
+            ("english_in_rtl", english_in_rtl()),
             ("mixed", mixed()),
             ("japanese", japanese()),
             ("escaping", escaping()),
@@ -827,6 +994,33 @@ mod tests {
             .split("<w:r>")
             .skip(1)
             .map(|run| &run[..run.find("</w:r>").unwrap()])
+            .collect()
+    }
+
+    /// Each run of a paragraph as (marked `<w:rtl/>`, its text with '\n' for
+    /// a line break). The text stays escaped.
+    fn run_texts(paragraph: &str) -> Vec<(bool, String)> {
+        runs(paragraph)
+            .into_iter()
+            .map(|run| {
+                let mut text = String::new();
+                for tag in run.split('<').skip(1) {
+                    if tag.starts_with("w:br/>") {
+                        text.push('\n');
+                    } else if let Some(t) = tag.strip_prefix("w:t xml:space=\"preserve\">") {
+                        text.push_str(t);
+                    }
+                }
+                (run.contains("<w:rtl/>"), text)
+            })
+            .collect()
+    }
+
+    /// (right-to-left, text) pieces, from string literals.
+    fn expect(pieces: &[(bool, &str)]) -> Vec<(bool, String)> {
+        pieces
+            .iter()
+            .map(|&(rtl, text)| (rtl, text.to_string()))
             .collect()
     }
 
@@ -1266,21 +1460,40 @@ mod tests {
         assert_eq!(body.len(), 2);
         for paragraph in &body {
             assert!(paragraph.starts_with("<w:p><w:pPr><w:bidi/></w:pPr>"));
-            let runs = runs(paragraph);
-            assert!(!runs[0].contains("<w:rtl/>"), "time: {paragraph}");
             assert!(
-                runs[2].starts_with("<w:rPr><w:rtl/></w:rPr>"),
-                "{paragraph}"
+                runs(paragraph)[0]
+                    .starts_with("<w:rPr><w:rStyle w:val=\"TranscriptTime\"/></w:rPr>"),
+                "time: {paragraph}"
             );
         }
-        // "OK, …" starts the first paragraph, which is still Hebrew.
-        assert!(body[0].contains(">OK, שלום"));
+        // "OK, …" starts the first paragraph, which is still Hebrew; the
+        // speaker's name is Hebrew too.
+        assert_eq!(
+            run_texts(body[0]),
+            expect(&[
+                (false, "[00:00:00] "),
+                (true, "דוד: "),
+                (false, "OK"),
+                (true, ", שלום וברוך הבא. כמה שעות אתה עומד?"),
+            ])
+        );
         assert!(runs(body[0])[1]
             .starts_with("<w:rPr><w:rStyle w:val=\"TranscriptSpeaker\"/><w:rtl/></w:rPr>"));
-        // "Speaker 2" holds no right-to-left characters.
+        // "Speaker 2" is English; its colon reads with the Hebrew.
+        assert_eq!(
+            run_texts(body[1]),
+            expect(&[
+                (false, "[00:00:05] "),
+                (false, "Speaker 2"),
+                (true, ": "),
+                (true, "כמעט כל המשמרת, 8 שעות."),
+            ])
+        );
         assert!(
             runs(body[1])[1].starts_with("<w:rPr><w:rStyle w:val=\"TranscriptSpeaker\"/></w:rPr>")
         );
+        assert!(runs(body[1])[2]
+            .starts_with("<w:rPr><w:rStyle w:val=\"TranscriptSpeaker\"/><w:rtl/></w:rPr>"));
 
         // The transcript's language does not decide: only Arabic is RTL.
         let xml = document_xml(&mixed(), &PST);
@@ -1288,7 +1501,17 @@ mod tests {
         assert_eq!(body.len(), 3);
         assert!(!body[0].contains("<w:bidi/>") && !body[0].contains("<w:rtl/>"));
         assert!(body[1].starts_with("<w:p><w:pPr><w:bidi/></w:pPr>"));
-        assert!(runs(body[1])[2].starts_with("<w:rPr><w:rtl/></w:rPr>"));
+        assert_eq!(
+            run_texts(body[1]),
+            expect(&[
+                (false, "[00:00:05] "),
+                (false, "Speaker 2"),
+                (true, ": "),
+                (true, "شكرا لك. أقف حوالي ثماني ساعات، "),
+                (false, "OK"),
+                (true, "؟"),
+            ])
+        );
         // An English paragraph quoting a Hebrew name.
         assert!(body[2].contains("דוד"));
         assert!(!body[2].contains("<w:bidi/>") && !body[2].contains("<w:rtl/>"));
@@ -1306,6 +1529,116 @@ mod tests {
         assert!(!mostly_rtl("ab שׁ"), "a tie is left-to-right");
         assert!(!mostly_rtl("123 ... !"));
         assert!(mostly_rtl("مرحبا"));
+    }
+
+    /// Word lays out every space and punctuation mark of an `<w:rtl/>` run
+    /// right to left, so a two-word English phrase in one would show its
+    /// words swapped ("Office Microsoft"): English stretches, with the
+    /// spaces and digits inside them, get runs of their own.
+    #[test]
+    fn english_phrases_in_rtl_paragraphs_keep_their_word_order() {
+        let xml = document_xml(&english_in_rtl(), &PST);
+        let body = body_paragraphs(&xml);
+        assert_eq!(body.len(), 4);
+        for paragraph in &body {
+            assert!(paragraph.starts_with("<w:p><w:pPr><w:bidi/></w:pPr>"));
+        }
+        let cases: [&[(bool, &str)]; 4] = [
+            &[
+                (false, "[00:00:00] "),
+                (false, "Speaker 2"),
+                (true, ": "),
+                (true, "צריך ללמוד את "),
+                (false, "Microsoft Office"),
+                (true, " לפני הראיון בעבודה."),
+            ],
+            &[
+                (false, "[00:00:04] "),
+                (false, "Speaker 2"),
+                (true, ": "),
+                (true, "يعمل كـ "),
+                (false, "forklift operator"),
+                (true, " في المستودع منذ خمس سنوات"),
+            ],
+            // Digits after an English word belong to it.
+            &[
+                (false, "[00:00:08] "),
+                (false, "Speaker 2"),
+                (true, ": "),
+                (true, "עבדתי עם "),
+                (false, "Windows 10"),
+                (true, " ו-"),
+                (false, "Office 365"),
+                (true, " שנתיים."),
+            ],
+            // An English name before English text stays English, colon and
+            // all. A line break between English words is English; one after
+            // an English word stays in its run.
+            &[
+                (false, "[00:00:12] "),
+                (false, "Doug: "),
+                (false, "Home Depot"),
+                (true, " היא החברה שבה עבדתי שנתיים\nבמחלקת "),
+                (false, "Customer\nService"),
+                (true, ", ועכשיו "),
+                (false, "Microsoft\n"),
+                (true, "שוב."),
+            ],
+        ];
+        for (paragraph, expected) in body.iter().zip(cases) {
+            assert_eq!(run_texts(paragraph), expect(expected), "{paragraph}");
+        }
+        // "Microsoft\n" is the run's text, then its break: no empty text.
+        assert!(xml.contains(">Microsoft</w:t><w:br/></w:r>"), "{xml}");
+        assert!(!xml.contains("<w:t xml:space=\"preserve\"></w:t>"), "{xml}");
+        // The speaker style is kept on both pieces of a cut label.
+        let runs = runs(body[0]);
+        assert!(runs[1].starts_with("<w:rPr><w:rStyle w:val=\"TranscriptSpeaker\"/></w:rPr>"));
+        assert!(
+            runs[2].starts_with("<w:rPr><w:rStyle w:val=\"TranscriptSpeaker\"/><w:rtl/></w:rPr>")
+        );
+        assert!(runs[4].starts_with("<w:t "), "no properties: {}", runs[4]);
+
+        // The title too; the accent stays with its "e".
+        let title = paragraphs(&xml)[0];
+        assert!(title.starts_with("<w:p><w:pPr><w:pStyle w:val=\"Title\"/><w:bidi/></w:pPr>"));
+        assert_eq!(
+            run_texts(title),
+            expect(&[
+                (false, "Jose\u{301}"),
+                (true, " ראיון חדש."),
+                (false, "m4a")
+            ])
+        );
+    }
+
+    #[test]
+    fn rtl_flags_follow_the_letters_around_each_space() {
+        let pieces = |text: &str| {
+            let chars: Vec<char> = text.chars().collect();
+            split_by_direction(text, rtl_flags(&chars).into_iter())
+        };
+        // Nothing but neutrals: the paragraph's direction.
+        assert_eq!(pieces("12 ... !"), expect(&[(true, "12 ... !")]));
+        assert_eq!(pieces(""), expect(&[]));
+        // Ends take the paragraph's direction; English punctuation and
+        // digits between English letters stay English.
+        assert_eq!(
+            pieces("(check-in, 9:30 AM) עם don't"),
+            expect(&[
+                (true, "("),
+                (false, "check-in, 9:30 AM"),
+                (true, ") עם "),
+                (false, "don't"),
+            ])
+        );
+        // Digits after Hebrew read with it, even before English.
+        assert_eq!(
+            pieces("בשעה 5:30 PM"),
+            expect(&[(true, "בשעה 5:30 "), (false, "PM")])
+        );
+        // An accent with nothing before it is neutral.
+        assert_eq!(pieces("\u{301}שלום"), expect(&[(true, "\u{301}שלום")]));
     }
 
     #[test]
