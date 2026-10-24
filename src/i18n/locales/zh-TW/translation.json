@@ -15,6 +15,8 @@
     "transcribe": "轉錄",
     "transcribeProgress": "正在轉錄：已完成 {{percent}}",
     "transcribeRunning": "正在轉錄…",
+    "speakersProgress": "正在辨識說話者：已完成 {{percent}}",
+    "speakersRunning": "正在辨識說話者…",
     "models": "模型",
     "advanced": "進階",
     "postProcessing": "後處理",

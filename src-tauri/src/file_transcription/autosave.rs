@@ -7,7 +7,8 @@
 //! an export. It is always a new file ("interview (2).docx" when
 //! "interview.docx" exists), and a transcript with gaps says so in its name.
 //! When the folder can't be written, the file goes to Documents/Handy
-//! Transcripts instead.
+//! Transcripts instead; so does the transcript of a recording in the
+//! temporary folder (taken out of a .zip file, say), which is emptied later.
 
 use crate::file_transcription::export::{self, ExportOptions};
 use crate::file_transcription::types::{FileTranscript, SavedTranscriptFile, TranscriptStatus};
@@ -36,14 +37,33 @@ pub fn file_stem(transcript: &FileTranscript) -> String {
 /// `source_path` in: the chosen folder (when one is chosen and absolute),
 /// else the recording's. None when the recording's path has no folder.
 pub fn target_folder(source_path: &Path, settings: &TranscriptAutoSave) -> Option<PathBuf> {
-    let chosen = Path::new(settings.folder.trim());
-    if settings.location == TranscriptSaveLocation::Folder && chosen.is_absolute() {
-        return Some(chosen.to_path_buf());
+    if let Some(chosen) = chosen_folder(settings) {
+        return Some(chosen);
     }
     source_path
         .parent()
         .filter(|folder| !folder.as_os_str().is_empty())
         .map(Path::to_path_buf)
+}
+
+/// The folder `settings` chose, when they save into one and it is absolute.
+fn chosen_folder(settings: &TranscriptAutoSave) -> Option<PathBuf> {
+    let chosen = Path::new(settings.folder.trim());
+    (settings.location == TranscriptSaveLocation::Folder && chosen.is_absolute())
+        .then(|| chosen.to_path_buf())
+}
+
+/// Whether `folder` is the temporary folder `temp_dir` or inside it, as
+/// written or once both are resolved (Windows may spell the temporary
+/// folder with short names, as in C:\Users\DOUGLA~1\AppData\Local\Temp).
+fn is_in_temp_folder(folder: &Path, temp_dir: &Path) -> bool {
+    if folder.starts_with(temp_dir) {
+        return true;
+    }
+    match (fs::canonicalize(folder), fs::canonicalize(temp_dir)) {
+        (Ok(folder), Ok(temp_dir)) => folder.starts_with(temp_dir),
+        _ => false,
+    }
 }
 
 /// Documents/Handy Transcripts, in the user's Documents folder `documents`.
@@ -55,11 +75,15 @@ pub fn fallback_folder(documents: &Path) -> PathBuf {
 /// they are enabled: the caller decides that) and returns where. When its
 /// folder can't be written, the file goes to the fallback folder in
 /// `documents` (the user's Documents folder, created if missing; None: no
-/// fallback). Err with an English reason when it couldn't be saved at all.
+/// fallback). So does the transcript of a recording in `temp_dir` (the
+/// system's temporary folder; None: none), as that folder is emptied later,
+/// with the transcript in it; with no fallback, it is saved there all the
+/// same. Err with an English reason when it couldn't be saved at all.
 pub fn save(
     transcript: &FileTranscript,
     settings: &TranscriptAutoSave,
     documents: Option<&Path>,
+    temp_dir: Option<&Path>,
     options: &ExportOptions,
 ) -> Result<SavedTranscriptFile, String> {
     let format = settings.format.transcript_format();
@@ -69,7 +93,27 @@ pub fn save(
     let extension = format.extension();
 
     let target = target_folder(Path::new(&transcript.source_path), settings);
+    let fallback = documents
+        .map(fallback_folder)
+        .filter(|fallback| target.as_deref() != Some(fallback.as_path()));
+    // A drive's root, or a folder that holds Documents, is no real
+    // temporary folder (a misconfigured TMP), so it is ignored.
+    let temp_dir = temp_dir.filter(|temp| {
+        temp.parent().is_some() && !documents.is_some_and(|documents| documents.starts_with(temp))
+    });
+    let in_temp = |folder: &Path| temp_dir.is_some_and(|temp| is_in_temp_folder(folder, temp));
     let first_error = match &target {
+        // The transcript of a recording in the temporary folder would be
+        // emptied with it, so it goes to the fallback; a folder the user
+        // chose is used wherever it is.
+        Some(folder)
+            if fallback.is_some() && chosen_folder(settings).is_none() && in_temp(folder) =>
+        {
+            format!(
+                "{} is a temporary folder, which is emptied later",
+                folder.display()
+            )
+        }
         Some(folder) => {
             // A chosen folder that was removed is made again; the
             // recording's folder exists, or the recording is gone too.
@@ -86,12 +130,9 @@ pub fn save(
         None => "The recording's folder is unknown".to_string(),
     };
 
-    let Some(fallback) = documents.map(fallback_folder) else {
+    let Some(fallback) = fallback else {
         return Err(first_error);
     };
-    if target.as_deref() == Some(fallback.as_path()) {
-        return Err(first_error);
-    }
     fs::create_dir_all(&fallback)
         .and_then(|()| export::write_new_file(&fallback, &stem, extension, &contents))
         .map(|path| saved(&path, target.as_deref()))
@@ -201,6 +242,7 @@ mod tests {
             &t,
             &TranscriptAutoSave::default(),
             None,
+            None,
             &ExportOptions::default(),
         )
         .unwrap();
@@ -229,7 +271,7 @@ mod tests {
         let txt = settings(TranscriptSaveFormat::Txt);
 
         let complete = transcript(&source, TranscriptStatus::Completed);
-        let first = save(&complete, &txt, None, &options).unwrap();
+        let first = save(&complete, &txt, None, None, &options).unwrap();
         assert_eq!(
             first.path,
             dir.path().join("interview (2).txt").to_string_lossy()
@@ -241,14 +283,14 @@ mod tests {
         );
 
         let partial = transcript(&source, TranscriptStatus::Partial);
-        let saved = save(&partial, &txt, None, &options).unwrap();
+        let saved = save(&partial, &txt, None, None, &options).unwrap();
         assert_eq!(
             saved.path,
             dir.path()
                 .join("interview (incomplete).txt")
                 .to_string_lossy()
         );
-        let again = save(&partial, &txt, None, &options).unwrap();
+        let again = save(&partial, &txt, None, None, &options).unwrap();
         assert_eq!(
             again.path,
             dir.path()
@@ -259,6 +301,7 @@ mod tests {
         let md = save(
             &complete,
             &settings(TranscriptSaveFormat::Md),
+            None,
             None,
             &options,
         )
@@ -284,6 +327,7 @@ mod tests {
             &transcript(&source, TranscriptStatus::Completed),
             &settings,
             None,
+            None,
             &ExportOptions::default(),
         )
         .unwrap();
@@ -302,7 +346,7 @@ mod tests {
         let txt = settings(TranscriptSaveFormat::Txt);
         let options = ExportOptions::default();
 
-        let saved = save(&t, &txt, Some(&documents), &options).unwrap();
+        let saved = save(&t, &txt, Some(&documents), None, &options).unwrap();
         let fallback = documents.join(FALLBACK_FOLDER_NAME);
         assert_eq!(saved.path, fallback.join("interview.txt").to_string_lossy());
         assert_eq!(
@@ -310,14 +354,14 @@ mod tests {
             Some(dir.path().join("unplugged").to_string_lossy().as_ref())
         );
         // Names stay free there too.
-        let again = save(&t, &txt, Some(&documents), &options).unwrap();
+        let again = save(&t, &txt, Some(&documents), None, &options).unwrap();
         assert_eq!(
             again.path,
             fallback.join("interview (2).txt").to_string_lossy()
         );
 
         // Without a Documents folder there is nowhere else to go.
-        let err = save(&t, &txt, None, &options).unwrap_err();
+        let err = save(&t, &txt, None, None, &options).unwrap_err();
         assert!(err.contains("unplugged"), "{err}");
         assert!(!dir.path().join("unplugged").exists());
     }
@@ -340,6 +384,7 @@ mod tests {
             &transcript(&source, TranscriptStatus::Completed),
             &settings(TranscriptSaveFormat::Txt),
             Some(&documents),
+            None,
             &ExportOptions::default(),
         );
         fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
@@ -366,6 +411,86 @@ mod tests {
     }
 
     #[test]
+    fn a_recording_in_the_temporary_folder_is_saved_in_documents() {
+        let dir = tempfile::tempdir().unwrap();
+        // Where Explorer puts a recording dragged out of a .zip file.
+        let temp = dir.path().join("Temp");
+        let extracted = temp.join("Temp1_recordings.zip");
+        fs::create_dir_all(&extracted).unwrap();
+        let source = extracted.join("interview.m4a");
+        fs::write(&source, b"audio").unwrap();
+        let documents = dir.path().join("Documents");
+        let t = transcript(&source, TranscriptStatus::Completed);
+        let txt = settings(TranscriptSaveFormat::Txt);
+        let options = ExportOptions::default();
+
+        let saved = save(&t, &txt, Some(&documents), Some(&temp), &options).unwrap();
+        let fallback = documents.join(FALLBACK_FOLDER_NAME);
+        assert_eq!(saved.path, fallback.join("interview.txt").to_string_lossy());
+        assert_eq!(
+            saved.unwritable_folder.as_deref(),
+            Some(extracted.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            fs::read_dir(&extracted).unwrap().count(),
+            1,
+            "only the recording"
+        );
+
+        // A folder the user chose is used, even in there.
+        let mine = temp.join("mine");
+        let chosen = TranscriptAutoSave {
+            location: TranscriptSaveLocation::Folder,
+            folder: mine.to_string_lossy().into_owned(),
+            ..txt.clone()
+        };
+        let saved = save(&t, &chosen, Some(&documents), Some(&temp), &options).unwrap();
+        assert_eq!(saved.path, mine.join("interview.txt").to_string_lossy());
+        assert_eq!(saved.unwritable_folder, None);
+
+        // Without a fallback, the temporary folder beats no file at all.
+        let saved = save(&t, &txt, None, Some(&temp), &options).unwrap();
+        assert_eq!(
+            saved.path,
+            extracted.join("interview.txt").to_string_lossy()
+        );
+
+        // A "temporary folder" that holds Documents, or a drive's root, is
+        // a misconfiguration and is ignored.
+        for not_temp in [dir.path(), Path::new("/")] {
+            let saved = save(&t, &txt, Some(&documents), Some(not_temp), &options).unwrap();
+            assert_eq!(saved.unwritable_folder, None, "{}", not_temp.display());
+            assert!(Path::new(&saved.path).starts_with(&extracted));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn temporary_folders_are_found_however_they_are_spelled() {
+        let dir = tempfile::tempdir().unwrap();
+        let temp = dir.path().join("Temp");
+        let inside = temp.join("Temp1_recordings.zip");
+        fs::create_dir_all(&inside).unwrap();
+        // Another spelling of the same folder, like a Windows short name.
+        let alias = dir.path().join("TEMP~1");
+        std::os::unix::fs::symlink(&temp, &alias).unwrap();
+
+        assert!(is_in_temp_folder(&inside, &temp));
+        assert!(is_in_temp_folder(&temp, &temp));
+        assert!(is_in_temp_folder(&inside, &alias));
+        assert!(is_in_temp_folder(
+            &alias.join("Temp1_recordings.zip"),
+            &temp
+        ));
+        assert!(!is_in_temp_folder(dir.path(), &temp));
+        // Whole folder names only: "Temporary" is not inside "Temp".
+        let similar = dir.path().join("Temporary");
+        fs::create_dir(&similar).unwrap();
+        assert!(!is_in_temp_folder(&similar, &temp));
+        assert!(!is_in_temp_folder(&dir.path().join("gone"), &temp));
+    }
+
+    #[test]
     fn a_failing_fallback_folder_reports_both_folders() {
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("gone").join("interview.m4a");
@@ -376,6 +501,7 @@ mod tests {
             &transcript(&source, TranscriptStatus::Completed),
             &settings(TranscriptSaveFormat::Txt),
             Some(&documents),
+            None,
             &ExportOptions::default(),
         )
         .unwrap_err();

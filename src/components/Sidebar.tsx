@@ -15,7 +15,11 @@ import HandyTextLogo from "./icons/HandyTextLogo";
 import HandyHand from "./icons/HandyHand";
 import { useSettings } from "../hooks/useSettings";
 import { useFileTranscriptionStore } from "../stores/fileTranscriptionStore";
-import { formatPercent, transcribeBadge } from "../lib/utils/transcript";
+import {
+  formatPercent,
+  transcribeBadge,
+  transcribeBadgeSpeakers,
+} from "../lib/utils/transcript";
 import {
   GeneralSettings,
   TranscribeFilesSettings,
@@ -109,19 +113,31 @@ interface SidebarProps {
 
 /**
  * The running transcription's percent under "Transcribe", or a spinner
- * while it prepares, so its progress shows from every page.
+ * while it prepares, so its progress shows from every page. Its label says
+ * when the percent is the speaker step's.
  */
 const TranscribeBadge: React.FC = () => {
   const { t, i18n } = useTranslation();
   const badge = useFileTranscriptionStore((state) =>
     transcribeBadge(state.jobs),
   );
+  const speakers = useFileTranscriptionStore((state) =>
+    transcribeBadgeSpeakers(state.jobs),
+  );
   if (badge === null) return null;
   const percent = badge === "busy" ? null : formatPercent(badge, i18n.language);
-  const label =
-    percent === null
-      ? t("sidebar.transcribeRunning")
-      : t("sidebar.transcribeProgress", { percent });
+  let label: string;
+  if (speakers) {
+    label =
+      percent === null
+        ? t("sidebar.speakersRunning")
+        : t("sidebar.speakersProgress", { percent });
+  } else {
+    label =
+      percent === null
+        ? t("sidebar.transcribeRunning")
+        : t("sidebar.transcribeProgress", { percent });
+  }
   return (
     <span
       className="self-start inline-flex items-center gap-1 rounded-full border border-mid-gray/30 bg-background px-1.5 py-0.5 text-[11px] font-semibold leading-none tabular-nums text-text"

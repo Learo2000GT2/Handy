@@ -15,6 +15,8 @@
     "transcribe": "Trascrivi",
     "transcribeProgress": "Trascrizione: {{percent}} completato",
     "transcribeRunning": "Trascrizione in corso…",
+    "speakersProgress": "Identificazione dei parlanti: {{percent}} completato",
+    "speakersRunning": "Identificazione dei parlanti…",
     "models": "Modelli",
     "advanced": "Avanzate",
     "postProcessing": "Post-Elaborazione",

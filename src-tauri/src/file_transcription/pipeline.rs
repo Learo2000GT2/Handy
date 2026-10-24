@@ -105,7 +105,8 @@ pub enum PipelineEvent {
     /// Speaker labelling changed state (only when labels were requested).
     Speakers(SpeakerJobState),
     /// While the transcript waits for its speaker labels: the diarizer is
-    /// done up to `processed_ms`, which never goes back.
+    /// done up to `processed_ms`, which never goes back. The first one, at
+    /// 0, comes as soon as the transcript is done and the wait begins.
     SpeakerProgress {
         processed_ms: u64,
     },
@@ -453,9 +454,9 @@ impl SpeakerLabels {
     /// transcript, reporting the final speaker state. A labelling failure
     /// keeps the transcript, without labels, and its status. A job cancelled
     /// while waiting for labels ends cancelled, with its whole transcript as
-    /// the partial (kept for viewing, never saved to History). A cancelled or
-    /// failed transcription stops the diarizer: partial transcripts are never
-    /// labelled.
+    /// the partial: its status says it is complete, so it is kept like a
+    /// finished one, without labels. A cancelled or failed transcription
+    /// stops the diarizer: partial transcripts are never labelled.
     fn finish(
         &mut self,
         result: Result<PipelineOutput, PipelineError>,
@@ -524,6 +525,9 @@ fn label_speakers(
             reason: SpeakerSkipReason::NoSpeech,
         };
     }
+    // Says at once that the transcript is done and only its labels are
+    // awaited: the diarizer may not finish a window for minutes.
+    on_event(PipelineEvent::SpeakerProgress { processed_ms: 0 });
     let diarized = handle.wait_reporting(&mut |progress| {
         if let DiarizeProgress::Diarized { through_ms } = progress {
             on_event(PipelineEvent::SpeakerProgress {
@@ -2081,8 +2085,8 @@ mod tests {
             .unwrap_err();
         canceller.join().unwrap();
 
-        // Cancelled, not completed (so never saved to History), with the
-        // whole transcript kept for viewing.
+        // Cancelled, with the whole transcript, still complete and without
+        // labels, as the partial.
         let PipelineError::Cancelled {
             partial: Some(partial),
         } = error
@@ -2094,8 +2098,21 @@ mod tests {
         };
         assert_eq!(partial.speakers, Some(cancelled.clone()));
         assert_eq!(partial.transcript, before);
+        assert_eq!(partial.transcript.status, TranscriptStatus::Completed);
         assert!(partial.warnings.is_empty(), "{:?}", partial.warnings);
-        assert!(matches!(events.last(), Some(PipelineEvent::Speakers(s)) if *s == cancelled));
+        // The wait was reported as soon as it began, though the diarizer
+        // never got to report anything.
+        assert!(
+            matches!(
+                events.as_slice(),
+                [
+                    PipelineEvent::Speakers(SpeakerJobState::Running),
+                    PipelineEvent::SpeakerProgress { processed_ms: 0 },
+                    PipelineEvent::Speakers(s),
+                ] if *s == cancelled
+            ),
+            "{events:?}"
+        );
     }
 
     #[test]

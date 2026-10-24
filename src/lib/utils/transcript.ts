@@ -532,8 +532,9 @@ export const awaitingSpeakers = (
 ): boolean =>
   job.status === "transcribing" &&
   (job.speakers?.state === "pending" || job.speakers?.state === "running") &&
-  // Speaker progress is only reported once the audio is transcribed (the
-  // probed length can be a little longer than the decoded audio).
+  // Speaker progress is reported, from 0, as soon as the audio is all
+  // transcribed (the probed length can be a little longer than the decoded
+  // audio, so it is the surer sign).
   ((job.speakers_processed_ms ?? null) !== null ||
     (job.duration_ms !== null &&
       job.duration_ms > 0 &&
@@ -605,6 +606,11 @@ export const jobProgressPercent = (
   return progressPercent(job.processed_ms, duration);
 };
 
+const runningJob = (
+  jobs: Record<number, FileJobSnapshot>,
+): FileJobSnapshot | undefined =>
+  Object.values(jobs).find((job) => isRunningStatus(job.status));
+
 /**
  * What the sidebar's Transcribe item shows: the running job's percent,
  * "busy" while it has none (preparing, or its length is unknown), or null
@@ -613,11 +619,23 @@ export const jobProgressPercent = (
 export const transcribeBadge = (
   jobs: Record<number, FileJobSnapshot>,
 ): number | "busy" | null => {
-  const running = Object.values(jobs).find((job) =>
-    isRunningStatus(job.status),
-  );
+  const running = runningJob(jobs);
   if (!running) return null;
   return jobProgressPercent(running) ?? "busy";
+};
+
+/**
+ * The running job identifies speakers (a speaker-label job, or a
+ * transcription waiting for its labels), so the sidebar's percent is the
+ * diarizer's, which starts again from 0, and its label says so.
+ */
+export const transcribeBadgeSpeakers = (
+  jobs: Record<number, FileJobSnapshot>,
+): boolean => {
+  const running = runningJob(jobs);
+  return (
+    running !== undefined && (isLabelJob(running) || awaitingSpeakers(running))
+  );
 };
 
 /** An estimate needs this much transcribed audio, or this much time spent. */
@@ -629,7 +647,7 @@ const RATE_SMOOTHING = 0.3;
 /**
  * How fast a job gets through its audio, from the snapshots seen so far.
  * Only time spent transcribing counts: not preparing, nor paused for
- * dictation.
+ * dictation, nor the first chunk.
  */
 export interface RateEstimate {
   /** When the last snapshot was seen (Unix ms). */
@@ -638,9 +656,16 @@ export interface RateEstimate {
   processedMs: number;
   /** It was transcribing, so the time since counts. */
   transcribing: boolean;
-  /** Time spent transcribing since the estimate began (ms). */
+  /**
+   * The audio has advanced once, which started the measuring. The first
+   * chunk can take far longer than the rest (a server loading its model on
+   * the first request, a GPU warming up), and for a job first seen while it
+   * ran only part of its time was seen.
+   */
+  measuring: boolean;
+  /** Time spent transcribing since the measuring began (ms). */
   activeMs: number;
-  /** Audio done since the estimate began (ms). */
+  /** Audio done since the measuring began (ms). */
   audioMs: number;
   /** Time spent transcribing since `processedMs` last grew (ms). */
   sinceAdvanceMs: number;
@@ -651,10 +676,11 @@ export interface RateEstimate {
 /**
  * The estimate after a snapshot with `processedMs`, seen at `now` while the
  * job was (or was not) `transcribing`. Starts afresh from null, or when the
- * job went back. The speed is first the average so far, once 2 minutes of
- * audio or 30 seconds of transcribing are done; each later step moves it
- * part of the way towards that step's speed, so it follows real changes
- * without jumping at every chunk.
+ * job went back. The first advance only starts the measuring. The speed is
+ * first the average since then, once 2 minutes of audio or 30 seconds of
+ * transcribing are done; each later step moves it part of the way towards
+ * that step's speed, so it follows real changes without jumping at every
+ * chunk.
  */
 export const updateRateEstimate = (
   previous: RateEstimate | null,
@@ -667,6 +693,7 @@ export const updateRateEstimate = (
       at: now,
       processedMs,
       transcribing,
+      measuring: false,
       activeMs: 0,
       audioMs: 0,
       sinceAdvanceMs: 0,
@@ -681,6 +708,7 @@ export const updateRateEstimate = (
     at: now,
     processedMs,
     transcribing,
+    measuring: previous.measuring,
     activeMs,
     audioMs: previous.audioMs + advanced,
     sinceAdvanceMs,
@@ -689,6 +717,9 @@ export const updateRateEstimate = (
   if (advanced <= 0) return next;
 
   next.sinceAdvanceMs = 0;
+  if (!previous.measuring) {
+    return { ...next, measuring: true, activeMs: 0, audioMs: 0 };
+  }
   const enough =
     next.audioMs >= ESTIMATE_MIN_AUDIO_MS || activeMs >= ESTIMATE_MIN_ACTIVE_MS;
   if (!enough || activeMs <= 0) return next;

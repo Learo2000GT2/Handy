@@ -549,15 +549,21 @@ impl FileTranscriptionManager {
             }
             Ok(Err(PipelineError::Cancelled { partial })) => {
                 info!("File transcription job {} cancelled", job.job_id);
-                // Kept for viewing and export, but never saved to history.
                 let kept = partial
                     .filter(|partial| !partial.transcript.paragraphs.is_empty())
                     .map(|partial| {
                         let source = source_identity(&partial);
-                        (
-                            self.finish_transcript(partial.transcript, &model_id),
-                            source,
-                        )
+                        let result = if partial.transcript.status == TranscriptStatus::Completed {
+                            // Cancelled while it waited for its speaker
+                            // labels: the transcript is whole, so it is kept
+                            // like a completed one, without labels.
+                            self.store_result(job, &model_id, *partial)
+                        } else {
+                            // Partial: kept for viewing, export and
+                            // auto-save, but never saved to history.
+                            self.finish_transcript(partial.transcript, &model_id)
+                        };
+                        (result, source)
                     });
                 JobFinish {
                     status: FileJobStatus::Cancelled,
@@ -624,11 +630,12 @@ impl FileTranscriptionManager {
     fn autosave(&self, finish: &JobFinish) -> Option<Result<SavedTranscriptFile, String>> {
         let settings = crate::settings::get_settings(&self.app).transcript_autosave;
         let documents = self.app.path().document_dir().ok();
-        let saved = save_job_transcript(finish, &settings, documents.as_deref())?;
+        let temp_dir = std::env::temp_dir();
+        let saved = save_job_transcript(finish, &settings, documents.as_deref(), Some(&temp_dir))?;
         match &saved {
             Ok(file) => match &file.unwritable_folder {
                 Some(folder) => warn!(
-                    "Saved the transcript to {} because {} couldn't be written",
+                    "Saved the transcript to {} because {} couldn't be written or is temporary",
                     file.path, folder
                 ),
                 None => info!("Saved the transcript to {}", file.path),
@@ -1042,16 +1049,20 @@ fn shares_dictation_model(settings: &AppSettings) -> bool {
 
 /// Saves the transcript of a finished transcription job as a file when
 /// `settings` ask for that, into `documents`' fallback folder when its own
-/// can't be written; None when nothing is to be saved. Saved: a completed
-/// job's transcript and a failed job's partial one, when they have text.
-/// Not saved: a cancelled job's (kept only for viewing, as it is never
-/// saved to History either) and a speaker-label job's (it has none).
+/// can't be written or is in `temp_dir` (see [`autosave::save`]); None when
+/// nothing is to be saved. Saved: the transcript of every transcription job
+/// that has text, whether it completed, failed or was cancelled, so what was
+/// transcribed outlives the app. A partial one says so in its name
+/// ("interview (incomplete).docx"); one cancelled only while it waited for
+/// its speaker labels is whole and named as usual. Not saved: a
+/// speaker-label job's (it has none).
 fn save_job_transcript(
     finish: &JobFinish,
     settings: &TranscriptAutoSave,
     documents: Option<&Path>,
+    temp_dir: Option<&Path>,
 ) -> Option<Result<SavedTranscriptFile, String>> {
-    if !settings.enabled || finish.status == FileJobStatus::Cancelled {
+    if !settings.enabled {
         return None;
     }
     let transcript = finish
@@ -1062,6 +1073,7 @@ fn save_job_transcript(
         transcript,
         settings,
         documents,
+        temp_dir,
         &ExportOptions::local(transcript.created_at),
     ))
 }
@@ -1587,7 +1599,8 @@ impl JobTable {
     }
 
     /// Records a pipeline event and returns the events to send for it.
-    /// Status changes are sent at once; progress at most every 250 ms.
+    /// Status changes and speaker progress are sent at once; transcription
+    /// progress at most every 250 ms.
     fn apply(
         &mut self,
         job_id: u64,
@@ -1620,7 +1633,12 @@ impl JobTable {
                     .unwrap_or(0)
                     .max(processed_ms);
                 snapshot.speakers_processed_ms = Some(through);
-                false
+                // Sent at once: the first says the transcript is done (and
+                // carries its last progress, which may have been held
+                // back), and the rest come at most once per diarizer window
+                // (a few together when several were done), with nothing
+                // else sent in between.
+                true
             }
             PipelineEvent::Transcribing { processed_ms, .. } => {
                 snapshot.processed_ms = processed_ms;
@@ -3137,7 +3155,7 @@ mod tests {
         std::fs::write(&source, b"audio").expect("write recording");
         let settings = txt_autosave();
         let save = |status, transcript| {
-            save_job_transcript(&finished(status, transcript), &settings, None)
+            save_job_transcript(&finished(status, transcript), &settings, None, None)
         };
 
         let completed = transcript_of(&source, "Hi.", TranscriptStatus::Completed);
@@ -3170,9 +3188,29 @@ mod tests {
                 .to_string_lossy()
         );
 
-        // Not saved: cancelled jobs, jobs without text, and nothing at all
-        // when auto-save is off.
-        assert!(save(FileJobStatus::Cancelled, Some(partial)).is_none());
+        // A cancelled job's text is saved too, so it outlives the app: a
+        // partial transcript as incomplete...
+        let saved = save(FileJobStatus::Cancelled, Some(partial))
+            .expect("saved")
+            .expect("written");
+        assert_eq!(
+            saved.path,
+            dir.path()
+                .join("interview (incomplete) (2).txt")
+                .to_string_lossy()
+        );
+        // ...and a whole one (cancelled while it waited for its speaker
+        // labels) under its usual name.
+        let saved = save(FileJobStatus::Cancelled, Some(completed.clone()))
+            .expect("saved")
+            .expect("written");
+        assert_eq!(
+            saved.path,
+            dir.path().join("interview (3).txt").to_string_lossy()
+        );
+
+        // Not saved: jobs without text, and nothing at all when auto-save
+        // is off.
         let silent = transcript_of(&source, "  ", TranscriptStatus::Completed);
         assert!(save(FileJobStatus::Completed, Some(silent)).is_none());
         assert!(save(FileJobStatus::Failed, None).is_none());
@@ -3183,6 +3221,7 @@ mod tests {
         assert!(save_job_transcript(
             &finished(FileJobStatus::Completed, Some(completed)),
             &off,
+            None,
             None
         )
         .is_none());
@@ -3202,6 +3241,8 @@ mod tests {
             names,
             [
                 "interview (2).txt",
+                "interview (3).txt",
+                "interview (incomplete) (2).txt",
                 "interview (incomplete).txt",
                 "interview.m4a",
                 "interview.txt"
@@ -3223,7 +3264,7 @@ mod tests {
             FileJobStatus::Completed,
             Some(transcript_of(&source, "Hi.", TranscriptStatus::Completed)),
         );
-        finish.saved = save_job_transcript(&finish, &txt_autosave(), None);
+        finish.saved = save_job_transcript(&finish, &txt_autosave(), None, None);
         assert!(matches!(finish.saved, Some(Err(_))));
 
         let snapshot = table.finish(1, finish).expect("job exists");
@@ -3248,7 +3289,7 @@ mod tests {
             FileJobStatus::Completed,
             Some(transcript_of(&source, "Hi.", TranscriptStatus::Completed)),
         );
-        finish.saved = save_job_transcript(&finish, &txt_autosave(), Some(&documents));
+        finish.saved = save_job_transcript(&finish, &txt_autosave(), Some(&documents), None);
 
         let snapshot = table.finish(1, finish).expect("job exists");
         let saved = snapshot.saved_file.expect("saved");
@@ -3288,33 +3329,50 @@ mod tests {
     }
 
     #[test]
-    fn speaker_progress_is_kept_and_never_goes_back() {
+    fn speaker_progress_is_sent_at_once_and_never_goes_back() {
         let mut table = table_with_queued(1);
         table
             .start_next(FileTranscriptionEngine::Handy, true)
             .expect("start");
         let start = Instant::now();
         let progress = |processed_ms| PipelineEvent::SpeakerProgress { processed_ms };
-        // Progress, so sent when due like transcription progress.
-        assert_eq!(
-            updated_count(&table.apply(1, "tiny", progress(60_000), start)),
-            1
+        table.apply(
+            1,
+            "tiny",
+            PipelineEvent::Transcribing {
+                chunk_index: 1,
+                processed_ms: 28_000,
+            },
+            start,
         );
+        // The last chunk finishes within the throttle window, so its
+        // progress is held back...
+        let at_100ms = start + Duration::from_millis(100);
+        let last_chunk = chunk_event(1, Some(segment(28_000, 59_000, "Bye.")), 59_000);
         assert_eq!(
-            table.record(1).expect("job").snapshot.speakers_processed_ms,
-            Some(60_000)
+            updated_count(&table.apply(1, "tiny", last_chunk, at_100ms)),
+            0
         );
-        assert_eq!(
-            updated_count(&table.apply(1, "tiny", progress(90_000), start)),
-            0,
-            "throttled"
-        );
-        let later = start + PROGRESS_EMIT_INTERVAL;
-        let events = table.apply(1, "tiny", progress(30_000), later);
-        assert_eq!(updated_count(&events), 1);
-        assert_eq!(
-            table.record(1).expect("job").snapshot.speakers_processed_ms,
-            Some(90_000)
-        );
+        // ...but the wait for labels that follows is sent at once, with it.
+        let events = table.apply(1, "tiny", progress(0), at_100ms);
+        match events.as_slice() {
+            [FileTranscriptionEvent::Updated { job }] => {
+                assert_eq!(job.processed_ms, 59_000);
+                assert_eq!(job.speakers_processed_ms, Some(0));
+                assert_eq!(job.status, FileJobStatus::Transcribing);
+            }
+            other => panic!("expected one Updated event, got {other:?}"),
+        }
+        // A burst of windows drained together is sent too, and the
+        // diarizer's position never goes back.
+        let at_150ms = start + Duration::from_millis(150);
+        for (processed_ms, expected) in [(1_200_000, 1_200_000), (600_000, 1_200_000)] {
+            let events = table.apply(1, "tiny", progress(processed_ms), at_150ms);
+            assert_eq!(updated_count(&events), 1);
+            assert_eq!(
+                table.record(1).expect("job").snapshot.speakers_processed_ms,
+                Some(expected)
+            );
+        }
     }
 }

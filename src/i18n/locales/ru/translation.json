@@ -15,6 +15,8 @@
     "transcribe": "Транскрипция",
     "transcribeProgress": "Транскрибирование: готово {{percent}}",
     "transcribeRunning": "Транскрибирование…",
+    "speakersProgress": "Определение спикеров: готово {{percent}}",
+    "speakersRunning": "Определение спикеров…",
     "models": "Модели",
     "advanced": "Продвинутые",
     "postProcessing": "Постобработка",

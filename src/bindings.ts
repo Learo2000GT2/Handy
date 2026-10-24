@@ -1582,8 +1582,9 @@ started_at: number | null;
  */
 finished_at: number | null; 
 /**
- * While a transcription job labels speakers: the end of the last
- * diarized window, which never goes back. None before the first one.
+ * Set once a transcription job's audio is all transcribed and it only
+ * waits for its speaker labels: the end of the last diarized window (0
+ * before the first), which never goes back. None until then.
  */
 speakers_processed_ms: number | null; 
 /**
@@ -1656,7 +1657,8 @@ export type FileTranscriptionEngine =
 export type FileTranscriptionEvent = 
 /**
  * Full job state after any change. Progress-only changes are throttled
- * to at most one per 250 ms per job; status changes are never throttled.
+ * to at most one per 250 ms per job; status changes and speaker
+ * progress are never throttled.
  */
 { kind: "updated"; job: FileJobSnapshot } | 
 /**
@@ -2141,8 +2143,9 @@ export type SavedTranscriptFile = {
 path: string; 
 /**
  * The folder it should have gone to (next to the recording, or the
- * chosen one) when that could not be written, so it went to
- * Documents/Handy Transcripts instead.
+ * chosen one) when that could not be written, or was the temporary
+ * folder (which is emptied later), so it went to Documents/Handy
+ * Transcripts instead.
  */
 unwritable_folder: string | null }
 export type SecretMap = Partial<{ [key in string]: string }>

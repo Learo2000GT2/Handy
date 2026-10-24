@@ -15,6 +15,8 @@
     "transcribe": "Transkrypcja",
     "transcribeProgress": "Transkrybowanie: ukończono {{percent}}",
     "transcribeRunning": "Transkrybowanie…",
+    "speakersProgress": "Rozpoznawanie mówców: ukończono {{percent}}",
+    "speakersRunning": "Rozpoznawanie mówców…",
     "models": "Modele",
     "advanced": "Zaawansowane",
     "postProcessing": "Postproces",

@@ -15,6 +15,8 @@
     "transcribe": "Transcripció",
     "transcribeProgress": "S'està transcrivint: {{percent}} fet",
     "transcribeRunning": "S'està transcrivint…",
+    "speakersProgress": "S'estan identificant els parlants: {{percent}} fet",
+    "speakersRunning": "S'estan identificant els parlants…",
     "models": "Models",
     "advanced": "Avançat",
     "postProcessing": "Postprocessament",

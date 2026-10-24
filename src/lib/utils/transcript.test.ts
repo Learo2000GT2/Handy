@@ -62,6 +62,7 @@ import {
   statusKey,
   timeLeftText,
   transcribeBadge,
+  transcribeBadgeSpeakers,
   updateRateEstimate,
 } from "./transcript";
 
@@ -600,6 +601,15 @@ assert.equal(
   }),
   false,
 );
+// The wait begins with speaker progress at 0.
+assert.equal(
+  awaitingSpeakers({
+    ...progressJob,
+    processed_ms: 59_500,
+    speakers_processed_ms: 0,
+  }),
+  true,
+);
 
 // progressPercent: whole percent, rounded down, null without a length.
 assert.equal(progressPercent(0, 60_000), 0);
@@ -641,6 +651,14 @@ assert.equal(
   jobProgressPercent({ ...speakerStep, speakers_processed_ms: 45_000 }),
   75,
 );
+assert.equal(
+  jobProgressPercent({
+    ...speakerStep,
+    processed_ms: 59_500,
+    speakers_processed_ms: 0,
+  }),
+  0,
+);
 // A speaker-label job: once its first window is done.
 const labelRunning = runningJob({
   labels_for: { kind: "history", history_id: 3 },
@@ -665,46 +683,102 @@ assert.equal(
   }),
   null,
 );
+// The badge's label says when its percent is the speaker step's.
+assert.equal(transcribeBadgeSpeakers({}), false);
+assert.equal(transcribeBadgeSpeakers({ 20: runningJob() }), false);
+assert.equal(
+  transcribeBadgeSpeakers({
+    20: { ...speakerStep, processed_ms: 59_500, speakers_processed_ms: 0 },
+  }),
+  true,
+);
+assert.equal(transcribeBadgeSpeakers({ 20: labelRunning }), true);
+assert.equal(
+  transcribeBadgeSpeakers({
+    1: { ...labelRunning, job_id: 1, status: "completed" },
+    20: runningJob(),
+  }),
+  false,
+);
 
-// updateRateEstimate: no speed until 2 minutes of audio or 30 seconds of
-// transcribing, then the average so far, then smoothed steps.
+// updateRateEstimate: the first chunk only starts the measuring; no speed
+// until 2 minutes of audio or 30 seconds of transcribing since, then the
+// average so far, then smoothed steps.
 const t0 = 1_000_000;
 let estimate: RateEstimate = updateRateEstimate(null, 0, true, t0);
 assert.equal(estimate.rate, null);
-// 28 s of audio in 7 s: not enough yet.
+// The first chunk (28 s of audio in 7 s) starts the measuring.
 estimate = updateRateEstimate(estimate, 28_000, true, t0 + 7_000);
 assert.equal(estimate.rate, null);
+assert.equal(estimate.measuring, true);
+assert.equal(estimate.audioMs, 0);
+assert.equal(estimate.activeMs, 0);
 assert.equal(estimateRemainingMs(estimate, 600_000, t0 + 7_000), null);
-// 2 minutes of audio (in 28 s): the average, 4x real time.
+// Not enough yet: 84 s of audio in 21 s.
 estimate = updateRateEstimate(estimate, 56_000, true, t0 + 14_000);
 estimate = updateRateEstimate(estimate, 84_000, true, t0 + 21_000);
-estimate = updateRateEstimate(estimate, 120_000, true, t0 + 30_000);
+estimate = updateRateEstimate(estimate, 112_000, true, t0 + 28_000);
+assert.equal(estimate.rate, null);
+// 2 minutes of audio since (in 30 s): the average, 4x real time.
+estimate = updateRateEstimate(estimate, 148_000, true, t0 + 37_000);
 assert.ok(estimate.audioMs >= ESTIMATE_MIN_AUDIO_MS);
 assert.equal(estimate.rate, 4);
-// 480 s of audio left at 4x: 120 s, counting down until the next snapshot.
-assert.equal(estimateRemainingMs(estimate, 600_000, t0 + 30_000), 120_000);
-assert.equal(estimateRemainingMs(estimate, 600_000, t0 + 40_000), 110_000);
+// 452 s of audio left at 4x: 113 s, counting down until the next snapshot.
+assert.equal(estimateRemainingMs(estimate, 600_000, t0 + 37_000), 113_000);
+assert.equal(estimateRemainingMs(estimate, 600_000, t0 + 47_000), 103_000);
 assert.equal(estimateRemainingMs(estimate, 600_000, t0 + 500_000), 0);
 // A slower step (28 s in 14 s: 2x) moves the speed only part of the way.
-estimate = updateRateEstimate(estimate, 148_000, true, t0 + 44_000);
+estimate = updateRateEstimate(estimate, 176_000, true, t0 + 51_000);
 assert.ok(estimate.rate !== null && estimate.rate < 4 && estimate.rate > 3);
 // Paused for dictation: the pause does not count as transcribing time.
-const paused = updateRateEstimate(estimate, 148_000, false, t0 + 50_000);
-const resumed = updateRateEstimate(paused, 148_000, true, t0 + 350_000);
+const paused = updateRateEstimate(estimate, 176_000, false, t0 + 57_000);
+const resumed = updateRateEstimate(paused, 176_000, true, t0 + 357_000);
 assert.equal(resumed.activeMs, paused.activeMs);
-const afterPause = updateRateEstimate(resumed, 176_000, true, t0 + 357_000);
+const afterPause = updateRateEstimate(resumed, 204_000, true, t0 + 364_000);
 // 28 s in the 13 s transcribed since the last step (6 + 7), not 313 s.
 assert.equal(afterPause.sinceAdvanceMs, 0);
 assert.ok(afterPause.rate !== null && afterPause.rate > 2.5);
 // While paused, the estimate does not count down.
 assert.equal(
-  estimateRemainingMs(paused, 600_000, t0 + 50_000),
-  estimateRemainingMs(paused, 600_000, t0 + 90_000),
+  estimateRemainingMs(paused, 600_000, t0 + 57_000),
+  estimateRemainingMs(paused, 600_000, t0 + 97_000),
 );
 // 30 s of transcribing is enough even for little audio (slow models).
 let slow = updateRateEstimate(null, 0, true, t0);
-slow = updateRateEstimate(slow, 10_000, true, t0 + ESTIMATE_MIN_ACTIVE_MS);
+slow = updateRateEstimate(slow, 10_000, true, t0 + 5_000);
+slow = updateRateEstimate(
+  slow,
+  20_000,
+  true,
+  t0 + 5_000 + ESTIMATE_MIN_ACTIVE_MS,
+);
 assert.equal(slow.rate, 10_000 / ESTIMATE_MIN_ACTIVE_MS);
+// A first chunk slowed by a model loading (5 minutes for the first 28 s of
+// an hour) never sets the speed: the first estimate shown is close to the
+// time really left at the speed of the chunks after it (9x).
+const hourMs = 3_600_000;
+let loading = updateRateEstimate(null, 0, true, t0);
+let loadingAt = t0;
+let loadingDone = 0;
+let firstShown: number | null = null;
+let trulyLeft = 0;
+for (let chunk = 0; firstShown === null && loadingDone < hourMs; chunk++) {
+  loadingDone += 28_000;
+  loadingAt += chunk === 0 ? 300_000 : 28_000 / 9;
+  loading = updateRateEstimate(loading, loadingDone, true, loadingAt);
+  firstShown = estimateRemainingMs(loading, hourMs, loadingAt);
+  trulyLeft = (hourMs - loadingDone) / 9;
+}
+assert.ok(firstShown !== null);
+assert.ok(
+  Math.abs(firstShown - trulyLeft) < trulyLeft * 0.1,
+  `first estimate ${firstShown} ms, truly left ${trulyLeft} ms`,
+);
+// A job first seen while it ran: the partly seen chunk doesn't count either.
+let joined = updateRateEstimate(null, 600_000, true, t0);
+joined = updateRateEstimate(joined, 628_000, true, t0 + 1_000);
+assert.equal(joined.audioMs, 0);
+assert.equal(joined.rate, null);
 // Time before the first snapshot, or spent preparing, never counts.
 let preparing = updateRateEstimate(null, 0, false, t0);
 preparing = updateRateEstimate(preparing, 0, true, t0 + 60_000);

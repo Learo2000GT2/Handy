@@ -320,8 +320,9 @@ pub struct FileJobSnapshot {
     pub started_at: Option<i64>,
     /// Unix milliseconds when the job finished.
     pub finished_at: Option<i64>,
-    /// While a transcription job labels speakers: the end of the last
-    /// diarized window, which never goes back. None before the first one.
+    /// Set once a transcription job's audio is all transcribed and it only
+    /// waits for its speaker labels: the end of the last diarized window (0
+    /// before the first), which never goes back. None until then.
     pub speakers_processed_ms: Option<u64>,
     /// The file the transcript was saved as automatically (Transcribe page
     /// setting), when it was. Later speaker edits do not change it.
@@ -337,8 +338,9 @@ pub struct SavedTranscriptFile {
     /// The file written: a new file, never one that existed before.
     pub path: String,
     /// The folder it should have gone to (next to the recording, or the
-    /// chosen one) when that could not be written, so it went to
-    /// Documents/Handy Transcripts instead.
+    /// chosen one) when that could not be written, or was the temporary
+    /// folder (which is emptied later), so it went to Documents/Handy
+    /// Transcripts instead.
     pub unwritable_folder: Option<String>,
 }
 
@@ -346,7 +348,8 @@ pub struct SavedTranscriptFile {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FileTranscriptionEvent {
     /// Full job state after any change. Progress-only changes are throttled
-    /// to at most one per 250 ms per job; status changes are never throttled.
+    /// to at most one per 250 ms per job; status changes and speaker
+    /// progress are never throttled.
     Updated { job: Box<FileJobSnapshot> },
     /// Post-processed segments of one finished chunk, in order. Append to the live view.
     Chunk {

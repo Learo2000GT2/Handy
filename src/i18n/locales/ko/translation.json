@@ -15,6 +15,8 @@
     "transcribe": "전사",
     "transcribeProgress": "전사 중: {{percent}} 완료",
     "transcribeRunning": "전사 중…",
+    "speakersProgress": "화자 식별 중: {{percent}} 완료",
+    "speakersRunning": "화자 식별 중…",
     "models": "모델",
     "advanced": "고급",
     "postProcessing": "후처리",
