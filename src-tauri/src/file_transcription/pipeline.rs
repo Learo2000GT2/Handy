@@ -19,7 +19,9 @@ use crate::file_transcription::chunker::{
 use crate::file_transcription::decode::{
     self, AudioProbe, DecodeError, DecodeOptions, DecodeOutcome,
 };
-use crate::file_transcription::diarize::{self, DiarizationHandle, DiarizeError, DiarizeRequest};
+use crate::file_transcription::diarize::{
+    self, DiarizationHandle, DiarizeError, DiarizeProgress, DiarizeRequest,
+};
 use crate::file_transcription::engine::{ChunkTranscriber, TranscribeError};
 use crate::file_transcription::export::format_clock;
 use crate::file_transcription::formats::DecodeRoute;
@@ -102,6 +104,11 @@ pub enum PipelineEvent {
     },
     /// Speaker labelling changed state (only when labels were requested).
     Speakers(SpeakerJobState),
+    /// While the transcript waits for its speaker labels: the diarizer is
+    /// done up to `processed_ms`, which never goes back.
+    SpeakerProgress {
+        processed_ms: u64,
+    },
 }
 
 #[derive(Debug)]
@@ -459,7 +466,7 @@ impl SpeakerLabels {
         };
         match result {
             Ok(mut output) => {
-                let state = label_speakers(handle, &mut output);
+                let state = label_speakers(handle, &mut output, on_event);
                 on_event(PipelineEvent::Speakers(state.clone()));
                 output.speakers = Some(state);
                 if self.job.is_cancelled() {
@@ -504,7 +511,11 @@ impl Drop for SpeakerLabels {
 
 /// Waits for the diarizer and merges its turns onto `output`'s transcript.
 /// Returns the final speaker state.
-fn label_speakers(handle: DiarizationHandle, output: &mut PipelineOutput) -> SpeakerJobState {
+fn label_speakers(
+    handle: DiarizationHandle,
+    output: &mut PipelineOutput,
+    on_event: &mut dyn FnMut(PipelineEvent),
+) -> SpeakerJobState {
     if output.transcript.paragraphs.is_empty() {
         // Nothing to label. The job is over, so cancelling its token only
         // stops the diarizer.
@@ -513,7 +524,14 @@ fn label_speakers(handle: DiarizationHandle, output: &mut PipelineOutput) -> Spe
             reason: SpeakerSkipReason::NoSpeech,
         };
     }
-    match handle.wait() {
+    let diarized = handle.wait_reporting(&mut |progress| {
+        if let DiarizeProgress::Diarized { through_ms } = progress {
+            on_event(PipelineEvent::SpeakerProgress {
+                processed_ms: through_ms,
+            });
+        }
+    });
+    match diarized {
         Ok(turns) => {
             let options = MergeOptions::for_transcript(&output.transcript);
             let stats = speakers::apply_speakers(

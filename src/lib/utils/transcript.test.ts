@@ -16,13 +16,18 @@ import type {
 import {
   activeLabelJobForHistory,
   awaitingSpeakers,
+  DEFAULT_TRANSCRIPT_AUTOSAVE,
   defaultExportName,
   downloadPercent,
+  ESTIMATE_MIN_ACTIVE_MS,
+  ESTIMATE_MIN_AUDIO_MS,
   errorKey,
+  estimateRemainingMs,
   extensionOf,
   fileNameFromPath,
   formatClock,
   formatDuration,
+  formatPercent,
   isFinishedStatus,
   isLabelJob,
   isLabelTarget,
@@ -31,6 +36,8 @@ import {
   isRunningStatus,
   isSupportedPath,
   isValidServerUrl,
+  jobElapsedMs,
+  jobProgressPercent,
   jobSpeakerView,
   labelJobFor,
   lemonadeErrorKey,
@@ -40,15 +47,21 @@ import {
   pickerExtensions,
   placeMenu,
   previewText,
+  progressPercent,
+  type RateEstimate,
   recordingsModelId,
   recordingsModelOptions,
   refocusTarget,
   runIfConfirmed,
+  savedJobFor,
   serverUrlHost,
   speakerName,
   speakerSkipKey,
   speakerStyle,
   statusKey,
+  timeLeftText,
+  transcribeBadge,
+  updateRateEstimate,
 } from "./transcript";
 
 // formatClock: "M:SS" under an hour, "H:MM:SS" from an hour, floored.
@@ -452,6 +465,11 @@ const snapshot = (
   history_id: null,
   enqueued_at: job_id,
   labels_for,
+  started_at: null,
+  finished_at: null,
+  speakers_processed_ms: null,
+  saved_file: null,
+  save_error: null,
 });
 const jobs: Record<number, FileJobSnapshot> = Object.fromEntries(
   [
@@ -509,6 +527,216 @@ assert.equal(
   false,
 );
 assert.equal(awaitingSpeakers({ ...progressJob, status: "completed" }), false);
+// Speaker progress means the audio is done, even if the probed length was
+// a little longer than the decoded audio.
+assert.equal(
+  awaitingSpeakers({
+    ...progressJob,
+    processed_ms: 59_500,
+    speakers_processed_ms: 30_000,
+  }),
+  true,
+);
+assert.equal(
+  awaitingSpeakers({
+    ...progressJob,
+    processed_ms: 59_500,
+    speakers_processed_ms: null,
+  }),
+  false,
+);
+
+// progressPercent: whole percent, rounded down, null without a length.
+assert.equal(progressPercent(0, 60_000), 0);
+assert.equal(progressPercent(25_200, 60_000), 42);
+assert.equal(progressPercent(59_999, 60_000), 99);
+assert.equal(progressPercent(60_000, 60_000), 100);
+assert.equal(progressPercent(90_000, 60_000), 100);
+assert.equal(progressPercent(-5, 60_000), 0);
+assert.equal(progressPercent(Number.NaN, 60_000), 0);
+assert.equal(progressPercent(1_000, null), null);
+assert.equal(progressPercent(1_000, 0), null);
+
+// formatPercent: the locale's percent style.
+assert.equal(formatPercent(42, "en"), "42%");
+assert.equal(formatPercent(0, "en"), "0%");
+assert.equal(formatPercent(100, "en"), "100%");
+assert.equal(formatPercent(42, "fr").replace(/\s/g, " "), "42 %");
+assert.equal(formatPercent(42, "not a locale!"), "42%");
+
+// jobProgressPercent and the sidebar badge.
+const runningJob = (
+  overrides: Partial<FileJobSnapshot> = {},
+): FileJobSnapshot => ({
+  ...snapshot(20, "transcribing", null),
+  processed_ms: 30_000,
+  ...overrides,
+});
+assert.equal(jobProgressPercent(runningJob()), 50);
+assert.equal(jobProgressPercent(runningJob({ status: "waiting" })), 50);
+assert.equal(jobProgressPercent(runningJob({ status: "preparing" })), null);
+assert.equal(jobProgressPercent(runningJob({ duration_ms: null })), null);
+// The speaker step shows the diarizer's progress once it reports any.
+const speakerStep = runningJob({
+  processed_ms: 60_000,
+  speakers: { state: "running" },
+});
+assert.equal(jobProgressPercent(speakerStep), null);
+assert.equal(
+  jobProgressPercent({ ...speakerStep, speakers_processed_ms: 45_000 }),
+  75,
+);
+// A speaker-label job: once its first window is done.
+const labelRunning = runningJob({
+  labels_for: { kind: "history", history_id: 3 },
+  speakers: { state: "running" },
+  processed_ms: 0,
+});
+assert.equal(jobProgressPercent(labelRunning), null);
+assert.equal(jobProgressPercent({ ...labelRunning, processed_ms: 15_000 }), 25);
+assert.equal(transcribeBadge({}), null);
+assert.equal(
+  transcribeBadge({ 1: snapshot(1, "completed", null), 20: runningJob() }),
+  50,
+);
+assert.equal(
+  transcribeBadge({ 20: runningJob({ status: "preparing" }) }),
+  "busy",
+);
+assert.equal(
+  transcribeBadge({
+    1: snapshot(1, "queued", null),
+    2: snapshot(2, "failed", null),
+  }),
+  null,
+);
+
+// updateRateEstimate: no speed until 2 minutes of audio or 30 seconds of
+// transcribing, then the average so far, then smoothed steps.
+const t0 = 1_000_000;
+let estimate: RateEstimate = updateRateEstimate(null, 0, true, t0);
+assert.equal(estimate.rate, null);
+// 28 s of audio in 7 s: not enough yet.
+estimate = updateRateEstimate(estimate, 28_000, true, t0 + 7_000);
+assert.equal(estimate.rate, null);
+assert.equal(estimateRemainingMs(estimate, 600_000, t0 + 7_000), null);
+// 2 minutes of audio (in 28 s): the average, 4x real time.
+estimate = updateRateEstimate(estimate, 56_000, true, t0 + 14_000);
+estimate = updateRateEstimate(estimate, 84_000, true, t0 + 21_000);
+estimate = updateRateEstimate(estimate, 120_000, true, t0 + 30_000);
+assert.ok(estimate.audioMs >= ESTIMATE_MIN_AUDIO_MS);
+assert.equal(estimate.rate, 4);
+// 480 s of audio left at 4x: 120 s, counting down until the next snapshot.
+assert.equal(estimateRemainingMs(estimate, 600_000, t0 + 30_000), 120_000);
+assert.equal(estimateRemainingMs(estimate, 600_000, t0 + 40_000), 110_000);
+assert.equal(estimateRemainingMs(estimate, 600_000, t0 + 500_000), 0);
+// A slower step (28 s in 14 s: 2x) moves the speed only part of the way.
+estimate = updateRateEstimate(estimate, 148_000, true, t0 + 44_000);
+assert.ok(estimate.rate !== null && estimate.rate < 4 && estimate.rate > 3);
+// Paused for dictation: the pause does not count as transcribing time.
+const paused = updateRateEstimate(estimate, 148_000, false, t0 + 50_000);
+const resumed = updateRateEstimate(paused, 148_000, true, t0 + 350_000);
+assert.equal(resumed.activeMs, paused.activeMs);
+const afterPause = updateRateEstimate(resumed, 176_000, true, t0 + 357_000);
+// 28 s in the 13 s transcribed since the last step (6 + 7), not 313 s.
+assert.equal(afterPause.sinceAdvanceMs, 0);
+assert.ok(afterPause.rate !== null && afterPause.rate > 2.5);
+// While paused, the estimate does not count down.
+assert.equal(
+  estimateRemainingMs(paused, 600_000, t0 + 50_000),
+  estimateRemainingMs(paused, 600_000, t0 + 90_000),
+);
+// 30 s of transcribing is enough even for little audio (slow models).
+let slow = updateRateEstimate(null, 0, true, t0);
+slow = updateRateEstimate(slow, 10_000, true, t0 + ESTIMATE_MIN_ACTIVE_MS);
+assert.equal(slow.rate, 10_000 / ESTIMATE_MIN_ACTIVE_MS);
+// Time before the first snapshot, or spent preparing, never counts.
+let preparing = updateRateEstimate(null, 0, false, t0);
+preparing = updateRateEstimate(preparing, 0, true, t0 + 60_000);
+assert.equal(preparing.activeMs, 0);
+// A job that went back (a retry) starts again.
+assert.equal(updateRateEstimate(estimate, 0, true, t0 + 60_000).rate, null);
+assert.equal(estimateRemainingMs(null, 600_000, t0), null);
+assert.equal(estimateRemainingMs(estimate, null, t0), null);
+
+// timeLeftText: to the nearest minute.
+assert.deepEqual(timeLeftText(0), { key: "lessThanMinute", values: {} });
+assert.deepEqual(timeLeftText(59_999), { key: "lessThanMinute", values: {} });
+assert.deepEqual(timeLeftText(60_000), {
+  key: "minutes",
+  values: { minutes: 1 },
+});
+assert.deepEqual(timeLeftText(3.6 * 60_000), {
+  key: "minutes",
+  values: { minutes: 4 },
+});
+assert.deepEqual(timeLeftText(59.4 * 60_000), {
+  key: "minutes",
+  values: { minutes: 59 },
+});
+assert.deepEqual(timeLeftText(59.6 * 60_000), {
+  key: "hoursOnly",
+  values: { hours: 1 },
+});
+assert.deepEqual(timeLeftText(85 * 60_000), {
+  key: "hours",
+  values: { hours: 1, minutes: 25 },
+});
+assert.deepEqual(timeLeftText(Number.NaN), {
+  key: "lessThanMinute",
+  values: {},
+});
+
+// jobElapsedMs: since the start, or until the finish.
+assert.equal(jobElapsedMs(null, null, 5_000), null);
+assert.equal(jobElapsedMs(1_000, null, 5_000), 4_000);
+assert.equal(jobElapsedMs(1_000, 3_500, 9_000), 2_500);
+assert.equal(jobElapsedMs(6_000, null, 5_000), 0);
+assert.equal(formatClock(jobElapsedMs(0, null, 750_000) ?? 0), "12:30");
+
+// savedJobFor: the job, or the newest job saved as the History entry.
+const savedFile = (path: string) => ({ path, unwritable_folder: null });
+const savedJobs: Record<number, FileJobSnapshot> = {
+  1: { ...snapshot(1, "completed", null), saved_file: savedFile("/a.docx") },
+  2: {
+    ...snapshot(2, "completed", null),
+    history_id: 9,
+    saved_file: savedFile("/b.docx"),
+  },
+  3: {
+    ...snapshot(3, "completed", null),
+    history_id: 9,
+    saved_file: savedFile("/b (2).docx"),
+  },
+  4: { ...snapshot(4, "completed", null), save_error: "disk full" },
+  5: snapshot(5, "completed", null),
+};
+assert.equal(
+  savedJobFor(savedJobs, { kind: "job", job_id: 1 }, null)?.job_id,
+  1,
+);
+assert.equal(
+  savedJobFor(savedJobs, { kind: "job", job_id: 4 }, null)?.job_id,
+  4,
+);
+assert.equal(savedJobFor(savedJobs, { kind: "job", job_id: 5 }, null), null);
+assert.equal(savedJobFor(savedJobs, { kind: "job", job_id: 99 }, null), null);
+assert.equal(
+  savedJobFor(savedJobs, { kind: "history", history_id: 9 }, 9)?.job_id,
+  3,
+);
+assert.equal(
+  savedJobFor(savedJobs, { kind: "history", history_id: 8 }, 8),
+  null,
+);
+
+// The auto-save defaults match settings.rs.
+assert.deepEqual(DEFAULT_TRANSCRIPT_AUTOSAVE, {
+  enabled: true,
+  location: "next_to_recording",
+  folder: "",
+  format: "docx",
+});
 
 // downloadPercent: whole percent, clamped, 0 while the total is unknown.
 assert.equal(downloadPercent(0, 139_310_336), 0);

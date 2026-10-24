@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Allgemein",
     "transcribe": "Transkribieren",
+    "transcribeProgress": "Transkription: {{percent}} erledigt",
+    "transcribeRunning": "Wird transkribiert…",
     "models": "Modelle",
     "advanced": "Erweitert",
     "postProcessing": "Nachbearbeitung",
@@ -598,6 +600,27 @@
         "label": "Im Verlauf speichern",
         "description": "Fertige Transkriptionen werden gespeichert und mit einem Stern markiert, damit die automatische Bereinigung sie nicht löscht."
       },
+      "autosave": {
+        "title": "Transkriptionen speichern",
+        "enabled": {
+          "label": "Transkriptionen automatisch speichern",
+          "description": "Wenn eine Datei oder ein Meeting transkribiert ist, wird die Transkription als Datei gespeichert, die du in Word oder jedem Texteditor öffnen kannst."
+        },
+        "location": {
+          "label": "Speichern in",
+          "description": "„Neben der Aufnahme“ legt die Transkription in den Ordner der Aufnahme (bei Meetings in den eigenen Ordner des Meetings). Kann in einen Ordner nicht geschrieben werden, verwendet Handy „Handy Transcripts“ in deinem Dokumente-Ordner.",
+          "nextToRecording": "Neben der Aufnahme",
+          "folder": "Ein Ordner meiner Wahl…"
+        },
+        "chooseFolder": "Ordner auswählen…",
+        "folderPicker": "Ordner für Transkriptionen auswählen",
+        "format": {
+          "label": "Dateiformat",
+          "description": "Word-Dokumente und Markdown enthalten Sprechernamen und Zeiten. Nur-Text enthält Sprechernamen."
+        },
+        "note": "Vorhandene Dateien werden nie ersetzt: Stattdessen wird ein neuer Name wie „interview (2).docx“ verwendet. Eine Transkription mit Lücken endet auf „(incomplete)“.",
+        "saveError": "Die Einstellung konnte nicht gespeichert werden: {{error}}"
+      },
       "engine": {
         "title": "Transkriptions-Engine",
         "label": "Transkribieren mit",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} von {{total}}",
       "progressNoTotal": "{{processed}} transkribiert",
+      "elapsed": "Verstrichen: {{time}}",
+      "took": "Dauerte {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Noch weniger als eine Minute",
+        "minutes": "Noch etwa {{minutes}} Min.",
+        "hours": "Noch etwa {{hours}} Std. {{minutes}} Min.",
+        "hoursOnly": "Noch etwa {{hours}} Std."
+      },
       "noSpeech": "In dieser Datei wurde keine Sprache erkannt.",
       "actions": {
         "cancel": "Abbrechen",
@@ -735,6 +766,21 @@
       "copied": "Transkription in die Zwischenablage kopiert.",
       "copyError": "Transkription konnte nicht kopiert werden.",
       "savedToHistory": "Im Verlauf gespeichert",
+      "ready": {
+        "title": "Transkription fertig: {{file}}",
+        "open": "In Handy öffnen",
+        "showFile": "Datei anzeigen"
+      },
+      "saved": {
+        "savedTo": "Gespeichert unter {{path}}",
+        "open": "Öffnen",
+        "showInFolder": "Im Ordner anzeigen",
+        "fallback": "In {{folder}} konnte nicht gespeichert werden, deshalb liegt die Transkription unter „Handy Transcripts“ in deinem Dokumente-Ordner.",
+        "failed": "Die Transkription konnte nicht als Datei gespeichert werden. Speichere sie mit „Exportieren“.",
+        "openError": "Die Transkription konnte nicht geöffnet werden: {{error}}",
+        "notFound": "Die gespeicherte Transkription wurde nicht gefunden. Sie wurde vielleicht verschoben oder gelöscht.",
+        "exportAgain": "Diese Datei ändert sich nicht, wenn du hier Sprecher bearbeitest. Exportiere erneut, um spätere Änderungen aufzunehmen."
+      },
       "errors": {
         "notFound": "Die Datei wurde nicht gefunden oder kann nicht geöffnet werden.",
         "unsupportedFormat": "Dieser Dateityp wird nicht unterstützt.",

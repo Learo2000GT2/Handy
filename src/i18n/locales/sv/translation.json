@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Allmänt",
     "transcribe": "Transkribera",
+    "transcribeProgress": "Transkriberar: {{percent}} klart",
+    "transcribeRunning": "Transkriberar…",
     "models": "Modeller",
     "advanced": "Avancerat",
     "postProcessing": "Efterbearbetning",
@@ -598,6 +600,27 @@
         "label": "Spara i historik",
         "description": "Färdiga transkriptioner sparas och stjärnmarkeras så att automatisk rensning behåller dem."
       },
+      "autosave": {
+        "title": "Spara transkriptioner",
+        "enabled": {
+          "label": "Spara transkriptioner automatiskt",
+          "description": "När en fil eller ett möte har transkriberats sparas transkriptionen som en fil som du kan öppna i Word eller valfri textredigerare."
+        },
+        "location": {
+          "label": "Spara i",
+          "description": "Bredvid inspelningen lägger transkriptionen i inspelningens mapp (för möten i mötets egen mapp). Om det inte går att skriva till en mapp använder Handy Handy Transcripts i mappen Dokument.",
+          "nextToRecording": "Bredvid inspelningen",
+          "folder": "En mapp som jag väljer…"
+        },
+        "chooseFolder": "Välj mapp…",
+        "folderPicker": "Välj en mapp för transkriptioner",
+        "format": {
+          "label": "Filformat",
+          "description": "Word-dokument och Markdown innehåller talarnamn och tider. Oformaterad text innehåller talarnamn."
+        },
+        "note": "Befintliga filer ersätts aldrig: ett nytt namn som ”interview (2).docx” används i stället. En transkription med luckor slutar på ”(incomplete)”.",
+        "saveError": "Det gick inte att spara inställningen: {{error}}"
+      },
       "engine": {
         "title": "Transkriberingsmotor",
         "label": "Transkribera med",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} av {{total}}",
       "progressNoTotal": "{{processed}} transkriberat",
+      "elapsed": "Förfluten tid: {{time}}",
+      "took": "Tog {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Mindre än en minut kvar",
+        "minutes": "Cirka {{minutes}} min kvar",
+        "hours": "Cirka {{hours}} tim {{minutes}} min kvar",
+        "hoursOnly": "Cirka {{hours}} tim kvar"
+      },
       "noSpeech": "Inget tal hittades i den här filen.",
       "actions": {
         "cancel": "Avbryt",
@@ -735,6 +766,21 @@
       "copied": "Transkriptionen har kopierats till urklipp.",
       "copyError": "Det gick inte att kopiera transkriptionen.",
       "savedToHistory": "Sparad i historik",
+      "ready": {
+        "title": "Transkriptionen är klar: {{file}}",
+        "open": "Öppna i Handy",
+        "showFile": "Visa fil"
+      },
+      "saved": {
+        "savedTo": "Sparad i {{path}}",
+        "open": "Öppna",
+        "showInFolder": "Visa i mapp",
+        "fallback": "Det gick inte att spara i {{folder}}, så transkriptionen sparades i Handy Transcripts i mappen Dokument.",
+        "failed": "Transkriptionen kunde inte sparas som en fil. Använd Exportera för att spara den.",
+        "openError": "Det gick inte att öppna transkriptionen: {{error}}",
+        "notFound": "Den sparade transkriptionen hittades inte. Den kan ha flyttats eller tagits bort.",
+        "exportAgain": "Den här filen ändras inte när du redigerar talare här. Exportera igen för att ta med senare ändringar."
+      },
       "errors": {
         "notFound": "Filen kan inte hittas eller öppnas.",
         "unsupportedFormat": "Den här filtypen stöds inte.",

@@ -18,7 +18,12 @@ import {
   isFinishedStatus,
   isLabelJob,
   isLabelTarget,
+  isRunningStatus,
+  updateRateEstimate,
+  type RateEstimate,
 } from "@/lib/utils/transcript";
+import { navigateTo } from "@/components/settings/meetings/MeetingChip";
+import { showTranscriptReady } from "@/components/settings/transcribe/TranscriptReadyToast";
 
 const SAVE_TO_HISTORY_STORAGE_KEY = "handy.transcribeFiles.saveToHistory";
 const LABEL_SPEAKERS_STORAGE_KEY = "handy.transcribeFiles.labelSpeakers";
@@ -67,6 +72,10 @@ interface FileTranscriptionState {
   speakerDownloadError: string | null;
   /** The recordings engine's state (its own model for recordings); null until loaded. */
   recordingsEngine: RecordingsEngineEvent | null;
+  /** How fast each running job goes, for its time left. */
+  estimates: Record<number, RateEstimate>;
+  /** A transcript to show on the Transcribe page (from a toast elsewhere). */
+  viewRequest: TranscriptViewRequest | null;
   initialized: boolean;
 
   initialize: () => Promise<void>;
@@ -90,6 +99,9 @@ interface FileTranscriptionState {
     replace: boolean,
     path?: string,
   ) => Promise<FileJobSnapshot | null>;
+  /** Shows the Transcribe page with this transcript open. */
+  requestView: (request: TranscriptViewRequest) => void;
+  clearViewRequest: () => void;
   setSaveToHistory: (value: boolean) => void;
   setLabelSpeakers: (value: boolean) => void;
   refreshSpeakerModel: () => Promise<void>;
@@ -97,6 +109,11 @@ interface FileTranscriptionState {
   downloadSpeakerModel: () => Promise<void>;
   cancelSpeakerModelDownload: () => Promise<void>;
   deleteSpeakerModel: () => Promise<void>;
+}
+
+export interface TranscriptViewRequest {
+  source: TranscriptSource;
+  fileName: string;
 }
 
 export interface SpeakerDownload {
@@ -138,24 +155,25 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
         delete state.jobs[jobId];
         delete state.liveSegments[jobId];
         delete state.noSpeech[jobId];
+        delete state.estimates[jobId];
         state.order = state.order.filter((id) => id !== jobId);
       }),
     );
   };
 
   // A completed job can still have an empty transcript (every chunk was
-  // silent). The snapshot doesn't say, so look at the text once.
-  const checkCompletedText = async (job: FileJobSnapshot) => {
+  // silent). The snapshot doesn't say, so look at the text once. Announces
+  // the transcript when `announce` (the job has just finished).
+  const checkCompletedText = async (job: FileJobSnapshot, announce = false) => {
     // A speaker-label job has no transcript of its own.
     if (job.status !== "completed" || isLabelJob(job)) return;
     if (checkedCompletedJobIds.has(job.job_id)) return;
     checkedCompletedJobIds.add(job.job_id);
 
-    // Only non-empty transcripts are saved to History.
-    if (job.history_id !== null) return;
-
-    let empty = !job.has_transcript;
-    if (!empty) {
+    // Only non-empty transcripts are saved to History or as a file.
+    const saved = job.history_id !== null || job.saved_file !== null;
+    let empty = !saved && !job.has_transcript;
+    if (!saved && !empty) {
       try {
         const result = await commands.getFileTranscript({
           kind: "job",
@@ -169,14 +187,26 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
       }
     }
 
-    if (empty && get().jobs[job.job_id]) {
+    if (!get().jobs[job.job_id]) return;
+    if (empty) {
       set(
         produce((state: FileTranscriptionState) => {
           state.noSpeech[job.job_id] = true;
         }),
       );
+    } else if (announce) {
+      announceReady(get().jobs[job.job_id] ?? job);
     }
   };
+
+  /** "Transcript ready: FILE", with Open in Handy and Show File. */
+  const announceReady = (job: FileJobSnapshot) =>
+    showTranscriptReady(job, () =>
+      get().requestView({
+        source: { kind: "job", job_id: job.job_id },
+        fileName: job.file_name,
+      }),
+    );
 
   /**
    * Adds jobs from a command response. Events are the newer source of
@@ -205,15 +235,32 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
       case "updated": {
         const { job } = event;
         if (removedJobIds.has(job.job_id)) return;
+        const previous = get().jobs[job.job_id];
+        // Seen running and now finished: tell the user, wherever they are.
+        const justFinished =
+          previous !== undefined &&
+          !isFinishedStatus(previous.status) &&
+          isFinishedStatus(job.status);
+        const now = Date.now();
         set(
           produce((state: FileTranscriptionState) => {
             if (!state.jobs[job.job_id]) {
               insertJobId(state.order, job.job_id);
             }
             state.jobs[job.job_id] = job;
+            if (isRunningStatus(job.status)) {
+              state.estimates[job.job_id] = updateRateEstimate(
+                state.estimates[job.job_id] ?? null,
+                job.processed_ms,
+                job.status === "transcribing",
+                now,
+              );
+            } else {
+              delete state.estimates[job.job_id];
+            }
           }),
         );
-        void checkCompletedText(job);
+        void checkCompletedText(job, justFinished);
         break;
       }
       case "chunk": {
@@ -300,6 +347,8 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
     speakerDownload: null,
     speakerDownloadError: null,
     recordingsEngine: null,
+    estimates: {},
+    viewRequest: null,
     initialized: false,
 
     initialize: async () => {
@@ -485,6 +534,13 @@ export const useFileTranscriptionStore = create<FileTranscriptionState>()((
       );
       return null;
     },
+
+    requestView: (request) => {
+      set({ viewRequest: request });
+      navigateTo("transcribe");
+    },
+
+    clearViewRequest: () => set({ viewRequest: null }),
 
     setSaveToHistory: (value) => {
       writeFlag(SAVE_TO_HISTORY_STORAGE_KEY, value);

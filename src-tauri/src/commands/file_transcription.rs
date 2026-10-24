@@ -9,10 +9,11 @@ use crate::managers::history::HistoryManager;
 use crate::managers::model::{EngineType, ModelInfo, ModelManager};
 use crate::managers::recordings_engine::RecordingsEngineEvent;
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings;
+use crate::settings::{self, TranscriptAutoSave, TranscriptSaveLocation};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, State};
+use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
 #[specta::specta]
@@ -134,6 +135,55 @@ pub fn change_file_transcription_model_setting(
     settings::write_settings(&app, settings);
     transcription_manager.release_recordings_model_unless(&model_id);
     Ok(())
+}
+
+/// Stores how finished transcripts are saved automatically (Transcribe
+/// page). Err when a chosen folder is missing or not an absolute path.
+#[tauri::command]
+#[specta::specta]
+pub fn change_transcript_autosave_settings(
+    app: AppHandle,
+    autosave: TranscriptAutoSave,
+) -> Result<(), String> {
+    let autosave = checked_autosave(autosave)?;
+    let mut settings = settings::get_settings(&app);
+    settings.transcript_autosave = autosave;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+/// Opens the file job `job_id`'s transcript was saved as automatically, in
+/// the program the system opens it with. Only that file: the path comes
+/// from the job, never from the window.
+#[tauri::command]
+#[specta::specta]
+pub fn open_saved_transcript(
+    app: AppHandle,
+    manager: State<'_, Arc<FileTranscriptionManager>>,
+    job_id: u64,
+) -> Result<(), String> {
+    let path = manager
+        .saved_file_path(job_id)
+        .ok_or_else(|| "This transcript was not saved as a file".to_string())?;
+    if !path.is_file() {
+        return Err(format!("{} was moved or deleted", path.to_string_lossy()));
+    }
+    app.opener()
+        .open_path(path.to_string_lossy().into_owned(), None::<String>)
+        .map_err(|e| format!("Failed to open {}: {}", path.display(), e))
+}
+
+/// `autosave` with its folder trimmed; Err when it asks for a chosen folder
+/// without an absolute one.
+fn checked_autosave(autosave: TranscriptAutoSave) -> Result<TranscriptAutoSave, String> {
+    let folder = autosave.folder.trim().to_string();
+    if !folder.is_empty() && !Path::new(&folder).is_absolute() {
+        return Err(format!("The folder must be a full path: {}", folder));
+    }
+    if autosave.location == TranscriptSaveLocation::Folder && folder.is_empty() {
+        return Err("Choose a folder for transcripts".to_string());
+    }
+    Ok(TranscriptAutoSave { folder, ..autosave })
 }
 
 /// The recordings engine's state now (see `RecordingsEngineEvent`).
@@ -275,6 +325,44 @@ mod tests {
                 Err("Model can't be used for recordings: m".to_string())
             );
         }
+    }
+
+    #[test]
+    fn autosave_settings_need_a_full_folder_path_when_one_is_chosen() {
+        let defaults = TranscriptAutoSave::default();
+        assert_eq!(checked_autosave(defaults.clone()), Ok(defaults.clone()));
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let folder = dir.path().to_string_lossy().into_owned();
+        let chosen = TranscriptAutoSave {
+            location: TranscriptSaveLocation::Folder,
+            folder: format!("  {folder} "),
+            ..defaults.clone()
+        };
+        assert_eq!(
+            checked_autosave(chosen.clone()),
+            Ok(TranscriptAutoSave {
+                folder: folder.clone(),
+                ..chosen.clone()
+            })
+        );
+        // The folder is remembered when saving next to the recording again.
+        let next_to = TranscriptAutoSave {
+            location: TranscriptSaveLocation::NextToRecording,
+            ..chosen.clone()
+        };
+        assert_eq!(checked_autosave(next_to).map(|a| a.folder), Ok(folder));
+
+        let none_chosen = TranscriptAutoSave {
+            folder: " ".to_string(),
+            ..chosen.clone()
+        };
+        assert!(checked_autosave(none_chosen).is_err());
+        let relative = TranscriptAutoSave {
+            folder: "transcripts".to_string(),
+            ..chosen
+        };
+        assert!(checked_autosave(relative).is_err());
     }
 
     #[test]

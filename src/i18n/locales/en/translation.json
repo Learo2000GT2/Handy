@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "General",
     "transcribe": "Transcribe",
+    "transcribeProgress": "Transcribing: {{percent}} done",
+    "transcribeRunning": "Transcribing…",
     "models": "Models",
     "advanced": "Advanced",
     "postProcessing": "Post Process",
@@ -598,6 +600,27 @@
         "label": "Save to History",
         "description": "Finished transcripts are saved and starred so automatic cleanup keeps them."
       },
+      "autosave": {
+        "title": "Saving Transcripts",
+        "enabled": {
+          "label": "Save Transcripts Automatically",
+          "description": "When a file or a meeting is transcribed, save the transcript as a file you can open in Word or any text editor."
+        },
+        "location": {
+          "label": "Save In",
+          "description": "Next to the recording puts the transcript in the recording's folder (a meeting's own folder for meetings). If a folder can't be written to, Handy uses Handy Transcripts in your Documents folder.",
+          "nextToRecording": "Next to the recording",
+          "folder": "A folder I choose…"
+        },
+        "chooseFolder": "Choose Folder…",
+        "folderPicker": "Choose a Folder for Transcripts",
+        "format": {
+          "label": "File Format",
+          "description": "Word documents and Markdown include speaker names and times. Plain text includes speaker names."
+        },
+        "note": "Existing files are never replaced: a new name such as “interview (2).docx” is used instead. A transcript with gaps ends in “(incomplete)”.",
+        "saveError": "Couldn't save the setting: {{error}}"
+      },
       "engine": {
         "title": "Transcription Engine",
         "label": "Transcribe With",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} of {{total}}",
       "progressNoTotal": "{{processed}} transcribed",
+      "elapsed": "{{time}} elapsed",
+      "took": "Took {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Less than a minute left",
+        "minutes": "About {{minutes}} min left",
+        "hours": "About {{hours}} hr {{minutes}} min left",
+        "hoursOnly": "About {{hours}} hr left"
+      },
       "noSpeech": "No speech found in this file.",
       "actions": {
         "cancel": "Cancel",
@@ -735,6 +766,21 @@
       "copied": "Transcript copied to clipboard.",
       "copyError": "Failed to copy the transcript.",
       "savedToHistory": "Saved to History",
+      "ready": {
+        "title": "Transcript ready: {{file}}",
+        "open": "Open in Handy",
+        "showFile": "Show File"
+      },
+      "saved": {
+        "savedTo": "Saved to {{path}}",
+        "open": "Open",
+        "showInFolder": "Show in Folder",
+        "fallback": "Couldn't save in {{folder}}, so the transcript went to Handy Transcripts in your Documents folder.",
+        "failed": "The transcript couldn't be saved as a file. Use Export to save it.",
+        "openError": "Couldn't open the transcript: {{error}}",
+        "notFound": "The saved transcript can't be found. It may have been moved or deleted.",
+        "exportAgain": "This file doesn't change when you edit speakers here. Export again to include later changes."
+      },
       "errors": {
         "notFound": "The file can't be found or opened.",
         "unsupportedFormat": "This file type isn't supported.",

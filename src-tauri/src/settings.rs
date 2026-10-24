@@ -486,6 +486,63 @@ impl fmt::Debug for LemonadeSettings {
     }
 }
 
+/// Where finished recording transcripts are saved automatically.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TranscriptSaveLocation {
+    /// In the recording's folder (a meeting's own folder for meetings).
+    #[default]
+    NextToRecording,
+    /// In `TranscriptAutoSave::folder`.
+    Folder,
+}
+
+/// The file format of automatically saved transcripts.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TranscriptSaveFormat {
+    #[default]
+    Docx,
+    Txt,
+    Md,
+}
+
+impl TranscriptSaveFormat {
+    /// The export format that renders it.
+    pub fn transcript_format(self) -> crate::file_transcription::types::TranscriptFormat {
+        use crate::file_transcription::types::TranscriptFormat;
+        match self {
+            Self::Docx => TranscriptFormat::Docx,
+            Self::Txt => TranscriptFormat::Txt,
+            Self::Md => TranscriptFormat::Md,
+        }
+    }
+}
+
+/// Saving each finished recording transcript (Transcribe page and meetings)
+/// as a file. The CLI never saves automatically.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+#[serde(default)]
+pub struct TranscriptAutoSave {
+    pub enabled: bool,
+    pub location: TranscriptSaveLocation,
+    /// The chosen folder (absolute) for `TranscriptSaveLocation::Folder`;
+    /// "" = none chosen, which saves next to the recording.
+    pub folder: String,
+    pub format: TranscriptSaveFormat,
+}
+
+impl Default for TranscriptAutoSave {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            location: TranscriptSaveLocation::NextToRecording,
+            folder: String::new(),
+            format: TranscriptSaveFormat::Docx,
+        }
+    }
+}
+
 /* still handy for composing the initial JSON in the store ------------- */
 /// The container-level `serde(default)` (backed by the `Default` impl below)
 /// guarantees every field — including ones added in the future — falls back to
@@ -675,6 +732,9 @@ pub struct AppSettings {
     pub file_transcription_model: String,
     #[serde(default)]
     pub lemonade: LemonadeSettings,
+    /// Saving finished recording transcripts as files (Transcribe page).
+    #[serde(default)]
+    pub transcript_autosave: TranscriptAutoSave,
 }
 
 fn default_model() -> String {
@@ -1287,6 +1347,7 @@ pub fn get_default_settings() -> AppSettings {
         file_transcription_engine: FileTranscriptionEngine::Handy,
         file_transcription_model: String::new(),
         lemonade: LemonadeSettings::default(),
+        transcript_autosave: TranscriptAutoSave::default(),
     }
 }
 
@@ -1838,6 +1899,60 @@ mod tests {
         assert_eq!(settings.recordings_model(), "x");
         settings.file_transcription_model = " x ".to_string();
         assert_eq!(settings.recordings_model(), "x");
+    }
+
+    #[test]
+    fn transcripts_are_saved_next_to_the_recording_as_word_by_default() {
+        let expected = TranscriptAutoSave {
+            enabled: true,
+            location: TranscriptSaveLocation::NextToRecording,
+            folder: String::new(),
+            format: TranscriptSaveFormat::Docx,
+        };
+        assert_eq!(get_default_settings().transcript_autosave, expected);
+
+        // A store written before the setting existed gets the defaults.
+        let mut stored = default_settings_json();
+        stored
+            .as_object_mut()
+            .unwrap()
+            .remove("transcript_autosave");
+        let settings: AppSettings = serde_json::from_value(stored.clone()).unwrap();
+        assert_eq!(settings.transcript_autosave, expected);
+
+        // Fields missing from a stored value keep their defaults.
+        stored["transcript_autosave"] = serde_json::json!({"format": "md"});
+        let settings: AppSettings = serde_json::from_value(stored).unwrap();
+        assert_eq!(
+            settings.transcript_autosave,
+            TranscriptAutoSave {
+                format: TranscriptSaveFormat::Md,
+                ..expected.clone()
+            }
+        );
+
+        let value = serde_json::to_value(&expected).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "enabled": true,
+                "location": "next_to_recording",
+                "folder": "",
+                "format": "docx"
+            })
+        );
+        assert_eq!(
+            TranscriptSaveFormat::Txt.transcript_format().extension(),
+            "txt"
+        );
+        assert_eq!(
+            TranscriptSaveFormat::Md.transcript_format().extension(),
+            "md"
+        );
+        assert_eq!(
+            TranscriptSaveFormat::Docx.transcript_format().extension(),
+            "docx"
+        );
     }
 
     #[test]

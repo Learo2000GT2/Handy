@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Umum",
     "transcribe": "Transkripsi",
+    "transcribeProgress": "Mentranskripsikan: {{percent}} selesai",
+    "transcribeRunning": "Mentranskripsikan…",
     "models": "Model",
     "advanced": "Lanjutan",
     "postProcessing": "Pascaproses",
@@ -598,6 +600,27 @@
         "label": "Simpan ke Riwayat",
         "description": "Transkripsi yang selesai akan disimpan dan diberi bintang agar tidak dihapus oleh pembersihan otomatis."
       },
+      "autosave": {
+        "title": "Menyimpan Transkripsi",
+        "enabled": {
+          "label": "Simpan Transkripsi Secara Otomatis",
+          "description": "Setelah file atau rapat selesai ditranskripsi, transkripsi disimpan sebagai file yang dapat Anda buka di Word atau editor teks apa pun."
+        },
+        "location": {
+          "label": "Simpan di",
+          "description": "Di samping rekaman menyimpan transkripsi di folder rekaman (untuk rapat, di folder rapat itu sendiri). Jika folder tidak dapat ditulisi, Handy menggunakan Handy Transcripts di folder Dokumen Anda.",
+          "nextToRecording": "Di samping rekaman",
+          "folder": "Folder pilihan saya…"
+        },
+        "chooseFolder": "Pilih Folder…",
+        "folderPicker": "Pilih Folder untuk Transkripsi",
+        "format": {
+          "label": "Format File",
+          "description": "Dokumen Word dan Markdown menyertakan nama pembicara dan waktu. Teks biasa menyertakan nama pembicara."
+        },
+        "note": "File yang sudah ada tidak pernah diganti: nama baru seperti “interview (2).docx” digunakan sebagai gantinya. Transkripsi yang tidak lengkap diakhiri dengan “(incomplete)”.",
+        "saveError": "Tidak dapat menyimpan pengaturan: {{error}}"
+      },
       "engine": {
         "title": "Mesin Transkripsi",
         "label": "Transkripsikan dengan",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} dari {{total}}",
       "progressNoTotal": "{{processed}} ditranskripsikan",
+      "elapsed": "Waktu berjalan: {{time}}",
+      "took": "Selesai dalam {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Kurang dari satu menit lagi",
+        "minutes": "Sekitar {{minutes}} menit lagi",
+        "hours": "Sekitar {{hours}} jam {{minutes}} menit lagi",
+        "hoursOnly": "Sekitar {{hours}} jam lagi"
+      },
       "noSpeech": "Tidak ada ucapan yang ditemukan dalam file ini.",
       "actions": {
         "cancel": "Batal",
@@ -735,6 +766,21 @@
       "copied": "Transkripsi disalin ke papan klip.",
       "copyError": "Gagal menyalin transkripsi.",
       "savedToHistory": "Disimpan ke Riwayat",
+      "ready": {
+        "title": "Transkripsi siap: {{file}}",
+        "open": "Buka di Handy",
+        "showFile": "Tampilkan File"
+      },
+      "saved": {
+        "savedTo": "Disimpan di {{path}}",
+        "open": "Buka",
+        "showInFolder": "Tampilkan di Folder",
+        "fallback": "Tidak dapat menyimpan di {{folder}}, jadi transkripsi disimpan di Handy Transcripts dalam folder Dokumen Anda.",
+        "failed": "Transkripsi tidak dapat disimpan sebagai file. Gunakan Ekspor untuk menyimpannya.",
+        "openError": "Tidak dapat membuka transkripsi: {{error}}",
+        "notFound": "Transkripsi yang disimpan tidak ditemukan. Mungkin sudah dipindahkan atau dihapus.",
+        "exportAgain": "File ini tidak berubah saat Anda mengedit pembicara di sini. Ekspor lagi untuk menyertakan perubahan berikutnya."
+      },
       "errors": {
         "notFound": "File tidak dapat ditemukan atau dibuka.",
         "unsupportedFormat": "Jenis file ini tidak didukung.",

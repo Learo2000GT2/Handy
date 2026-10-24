@@ -27,21 +27,29 @@ import { useFileTranscriptionStore } from "@/stores/fileTranscriptionStore";
 import {
   awaitingSpeakers,
   errorKey,
+  estimateRemainingMs,
+  formatClock,
   formatDuration,
+  formatPercent,
   isFinishedStatus,
   isLabelJob,
   isolateLtr,
   isRunningStatus,
+  jobElapsedMs,
+  jobProgressPercent,
   jobSpeakerView,
   speakerSkipKey,
   statusKey,
+  timeLeftText,
   type JobSpeakerView,
   type JobStatusKey,
 } from "@/lib/utils/transcript";
+import { useNow } from "@/hooks/useNow";
 import { IconButton } from "../../ui/IconButton";
 import { copyToClipboard } from "../history/clipboard";
 import { ExportMenu } from "./ExportMenu";
-import { PROGRESS_CLASSES } from "./progress";
+import { JOB_PROGRESS_CLASSES } from "./progress";
+import { SavedTranscript } from "./SavedTranscript";
 
 const STATUS_ICONS: Record<
   JobStatusKey,
@@ -110,9 +118,12 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
   noSpeech,
   onView,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const cancel = useFileTranscriptionStore((state) => state.cancel);
   const dismiss = useFileTranscriptionStore((state) => state.dismiss);
+  const estimate = useFileTranscriptionStore(
+    (state) => state.estimates[job.job_id],
+  );
   const [showCopied, setShowCopied] = useState(false);
 
   useEffect(() => {
@@ -161,32 +172,65 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
       ? null
       : jobSpeakerView(job);
   let statusText = t(`settings.transcribeFiles.status.${status}`);
-  if (labelJob && running) {
+  if ((labelJob || speakerWait) && running) {
     statusText =
       job.status === "waiting"
         ? t("settings.transcribeFiles.status.waiting")
         : t("settings.transcribeFiles.speakers.state.running");
   }
+
+  // Where the running job is: the diarizer's position while speakers are
+  // identified (once it reports one), else the audio transcribed so far.
+  const position =
+    !running || job.status === "preparing"
+      ? null
+      : labelJob
+        ? job.processed_ms > 0
+          ? job.processed_ms
+          : null
+        : speakerWait
+          ? job.speakers_processed_ms
+          : job.processed_ms;
   let progressText: string | null = null;
-  if (labelJob) {
-    // Shown once the first window is done.
-    if (running && duration !== null && job.processed_ms > 0) {
-      progressText = t("settings.transcribeFiles.progress", {
-        processed: isolateLtr(formatDuration(job.processed_ms)),
-        total: isolateLtr(formatDuration(duration)),
-      });
-    }
-  } else if (speakerWait) {
-    progressText = t("settings.transcribeFiles.speakers.state.running");
-  } else if (running && duration !== null) {
+  if (position !== null && duration !== null) {
     progressText = t("settings.transcribeFiles.progress", {
-      processed: isolateLtr(formatDuration(job.processed_ms)),
+      processed: isolateLtr(formatDuration(Math.min(position, duration))),
       total: isolateLtr(formatDuration(duration)),
     });
-  } else if (running && job.processed_ms > 0) {
+  } else if (position !== null && position > 0) {
     progressText = t("settings.transcribeFiles.progressNoTotal", {
-      processed: isolateLtr(formatDuration(job.processed_ms)),
+      processed: isolateLtr(formatDuration(position)),
     });
+  }
+  const percent = running ? jobProgressPercent(job) : null;
+  const percentText =
+    percent === null ? null : formatPercent(percent, i18n.language);
+
+  // Elapsed time ticks every second while the job runs.
+  const now = useNow(running);
+  const elapsed = jobElapsedMs(job.started_at, job.finished_at, now);
+  const elapsedText =
+    running && elapsed !== null
+      ? t("settings.transcribeFiles.elapsed", {
+          time: isolateLtr(formatClock(elapsed)),
+        })
+      : null;
+  const tookText =
+    finished && !labelJob && job.finished_at !== null && elapsed !== null
+      ? t("settings.transcribeFiles.took", {
+          time: isolateLtr(formatClock(elapsed)),
+        })
+      : null;
+  // The time left, only while transcribing (not paused for dictation, not
+  // identifying speakers) and once there is enough to estimate from.
+  const remaining =
+    job.status === "transcribing" && !speakerWait
+      ? estimateRemainingMs(estimate, duration, now)
+      : null;
+  let timeLeft: string | null = null;
+  if (remaining !== null) {
+    const { key, values } = timeLeftText(remaining);
+    timeLeft = t(`settings.transcribeFiles.timeLeft.${key}`, values);
   }
 
   const handleCopy = async () => {
@@ -236,9 +280,7 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
           </p>
           <p className="text-xs text-text/60 flex flex-wrap gap-x-2">
             <span>{statusText}</span>
-            {progressText && (
-              <span className="tabular-nums">{progressText}</span>
-            )}
+            {tookText && <span className="tabular-nums">{tookText}</span>}
             {speakerView && <SpeakerStatus view={speakerView} />}
             {labelJob ? (
               <span className="text-text/50">
@@ -311,18 +353,35 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
       </div>
 
       {running && (
-        <progress
-          className={`${PROGRESS_CLASSES} ${duration === null || speakerWait || (labelJob && job.processed_ms === 0) ? "animate-pulse" : ""}`}
-          max={duration ?? undefined}
-          value={
-            duration === null || (labelJob && job.processed_ms === 0)
-              ? undefined
-              : Math.min(job.processed_ms, duration)
-          }
-          aria-label={job.file_name}
-          aria-valuetext={progressText ?? undefined}
-        />
+        <div className="flex flex-col gap-1.5">
+          <progress
+            className={`${JOB_PROGRESS_CLASSES} ${duration === null || position === null ? "animate-pulse" : ""}`}
+            max={duration ?? undefined}
+            value={
+              duration === null || position === null
+                ? undefined
+                : Math.min(position, duration)
+            }
+            aria-label={job.file_name}
+            aria-valuetext={
+              [percentText, progressText].filter(Boolean).join(", ") ||
+              undefined
+            }
+          />
+          <p className="text-xs text-text/70 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 tabular-nums">
+            {percentText && (
+              <span className="text-sm font-semibold text-text">
+                {percentText}
+              </span>
+            )}
+            {progressText && <span>{progressText}</span>}
+            {elapsedText && <span>{elapsedText}</span>}
+            {timeLeft && <span>{timeLeft}</span>}
+          </p>
+        </div>
       )}
+
+      {finished && !labelJob && <SavedTranscript job={job} />}
 
       {onFirstChunk && firstChunkSlow && (
         <p className="text-xs text-text/60">

@@ -1176,6 +1176,31 @@ async getRecordingsEngineStatus() : Promise<Result<RecordingsEngineEvent, string
 }
 },
 /**
+ * Stores how finished transcripts are saved automatically (Transcribe
+ * page). Err when a chosen folder is missing or not an absolute path.
+ */
+async changeTranscriptAutosaveSettings(autosave: TranscriptAutoSave) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_transcript_autosave_settings", { autosave }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Opens the file job `job_id`'s transcript was saved as automatically, in
+ * the program the system opens it with. Only that file: the path comes
+ * from the job, never from the window.
+ */
+async openSavedTranscript(jobId: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("open_saved_transcript", { jobId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Lists the server's transcription models. Server problems are reported in
  * `LemonadeCheck.error`; Err only for internal failures.
  */
@@ -1445,7 +1470,11 @@ file_transcription_engine?: FileTranscriptionEngine;
  * Handy model for file transcription (Transcribe page; default of the CLI's --model).
  * "" = the dictation model (`selected_model`), today's behaviour. transcribe-cpp models only.
  */
-file_transcription_model?: string; lemonade?: LemonadeSettings }
+file_transcription_model?: string; lemonade?: LemonadeSettings; 
+/**
+ * Saving finished recording transcripts as files (Transcribe page).
+ */
+transcript_autosave?: TranscriptAutoSave }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }
@@ -1541,7 +1570,30 @@ labels_for: TranscriptSource | null;
 /**
  * Runs on dictation's loaded model; switching the dictation model stops it.
  */
-shares_dictation_model?: boolean }
+shares_dictation_model?: boolean; 
+/**
+ * Unix milliseconds when the job left the queue; None while queued.
+ */
+started_at: number | null; 
+/**
+ * Unix milliseconds when the job finished.
+ */
+finished_at: number | null; 
+/**
+ * While a transcription job labels speakers: the end of the last
+ * diarized window, which never goes back. None before the first one.
+ */
+speakers_processed_ms: number | null; 
+/**
+ * The file the transcript was saved as automatically (Transcribe page
+ * setting), when it was. Later speaker edits do not change it.
+ */
+saved_file: SavedTranscriptFile | null; 
+/**
+ * English reason the transcript could not be saved automatically. The
+ * job itself did not fail.
+ */
+save_error: string | null }
 export type FileJobStatus = "queued" | 
 /**
  * Probing the file and loading the model.
@@ -2063,6 +2115,20 @@ on_gpu: boolean;
  * both models, so it runs on the processor.
  */
 gpu_memory_fallback: boolean }
+/**
+ * A transcript Handy saved as a file automatically.
+ */
+export type SavedTranscriptFile = { 
+/**
+ * The file written: a new file, never one that existed before.
+ */
+path: string; 
+/**
+ * The folder it should have gone to (next to the recording, or the
+ * chosen one) when that could not be written, so it went to
+ * Documents/Handy Transcripts instead.
+ */
+unwritable_folder: string | null }
 export type SecretMap = Partial<{ [key in string]: string }>
 export type SecureInputStatus = { 
 /**
@@ -2215,7 +2281,33 @@ export type TimingGrain =
  */
 "segment"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
+/**
+ * Saving each finished recording transcript (Transcribe page and meetings)
+ * as a file. The CLI never saves automatically.
+ */
+export type TranscriptAutoSave = { enabled: boolean; location: TranscriptSaveLocation; 
+/**
+ * The chosen folder (absolute) for `TranscriptSaveLocation::Folder`;
+ * "" = none chosen, which saves next to the recording.
+ */
+folder: string; format: TranscriptSaveFormat }
 export type TranscriptFormat = "txt" | "md" | "srt" | "vtt" | "json" | "docx"
+/**
+ * The file format of automatically saved transcripts.
+ */
+export type TranscriptSaveFormat = "docx" | "txt" | "md"
+/**
+ * Where finished recording transcripts are saved automatically.
+ */
+export type TranscriptSaveLocation = 
+/**
+ * In the recording's folder (a meeting's own folder for meetings).
+ */
+"next_to_recording" | 
+/**
+ * In `TranscriptAutoSave::folder`.
+ */
+"folder"
 /**
  * One timed piece of transcript text. Milliseconds from the start of the
  * source file; `end_ms > start_ms`; `text` is trimmed and non-empty.

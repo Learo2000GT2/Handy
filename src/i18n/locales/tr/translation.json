@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Genel",
     "transcribe": "Transkripsiyon",
+    "transcribeProgress": "Transkribe ediliyor: {{percent}} tamamlandı",
+    "transcribeRunning": "Transkribe ediliyor…",
     "models": "Modeller",
     "advanced": "Gelişmiş",
     "postProcessing": "Son İşlem",
@@ -598,6 +600,27 @@
         "label": "Geçmişe Kaydet",
         "description": "Tamamlanan transkriptler kaydedilir ve otomatik temizlemede korunmaları için yıldızlanır."
       },
+      "autosave": {
+        "title": "Transkriptleri Kaydetme",
+        "enabled": {
+          "label": "Transkriptleri Otomatik Kaydet",
+          "description": "Bir dosya veya toplantı transkribe edildiğinde transkript, Word'de ya da herhangi bir metin düzenleyicide açabileceğiniz bir dosya olarak kaydedilir."
+        },
+        "location": {
+          "label": "Kaydetme Yeri",
+          "description": "Kaydın yanında seçeneği transkripti kaydın klasörüne koyar (toplantılarda toplantının kendi klasörüne). Bir klasöre yazılamıyorsa Handy, Belgeler klasörünüzdeki Handy Transcripts klasörünü kullanır.",
+          "nextToRecording": "Kaydın yanında",
+          "folder": "Seçtiğim bir klasör…"
+        },
+        "chooseFolder": "Klasör Seç…",
+        "folderPicker": "Transkriptler İçin Klasör Seçin",
+        "format": {
+          "label": "Dosya Biçimi",
+          "description": "Word belgeleri ve Markdown konuşmacı adlarını ve zamanları içerir. Düz metin konuşmacı adlarını içerir."
+        },
+        "note": "Mevcut dosyalar asla değiştirilmez: bunun yerine “interview (2).docx” gibi yeni bir ad kullanılır. Eksik kısımları olan bir transkriptin adı “(incomplete)” ile biter.",
+        "saveError": "Ayar kaydedilemedi: {{error}}"
+      },
       "engine": {
         "title": "Transkripsiyon Motoru",
         "label": "Kullanılacak Motor",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} / {{total}}",
       "progressNoTotal": "{{processed}} transkribe edildi",
+      "elapsed": "Geçen süre: {{time}}",
+      "took": "{{time}} sürdü",
+      "timeLeft": {
+        "lessThanMinute": "Bir dakikadan az kaldı",
+        "minutes": "Yaklaşık {{minutes}} dk kaldı",
+        "hours": "Yaklaşık {{hours}} sa {{minutes}} dk kaldı",
+        "hoursOnly": "Yaklaşık {{hours}} sa kaldı"
+      },
       "noSpeech": "Bu dosyada konuşma bulunamadı.",
       "actions": {
         "cancel": "İptal",
@@ -735,6 +766,21 @@
       "copied": "Transkript panoya kopyalandı.",
       "copyError": "Transkript kopyalanamadı.",
       "savedToHistory": "Geçmişe kaydedildi",
+      "ready": {
+        "title": "Transkript hazır: {{file}}",
+        "open": "Handy'de Aç",
+        "showFile": "Dosyayı Göster"
+      },
+      "saved": {
+        "savedTo": "Kaydedildi: {{path}}",
+        "open": "Aç",
+        "showInFolder": "Klasörde Göster",
+        "fallback": "{{folder}} konumuna kaydedilemedi, bu yüzden transkript Belgeler klasörünüzdeki Handy Transcripts klasörüne kaydedildi.",
+        "failed": "Transkript dosya olarak kaydedilemedi. Kaydetmek için Dışa Aktar'ı kullanın.",
+        "openError": "Transkript açılamadı: {{error}}",
+        "notFound": "Kaydedilen transkript bulunamadı. Taşınmış veya silinmiş olabilir.",
+        "exportAgain": "Konuşmacıları burada düzenlediğinizde bu dosya değişmez. Sonraki değişiklikleri eklemek için yeniden dışa aktarın."
+      },
       "errors": {
         "notFound": "Dosya bulunamıyor veya açılamıyor.",
         "unsupportedFormat": "Bu dosya türü desteklenmiyor.",

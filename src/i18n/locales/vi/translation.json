@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Chung",
     "transcribe": "Phiên âm",
+    "transcribeProgress": "Đang phiên âm: xong {{percent}}",
+    "transcribeRunning": "Đang phiên âm…",
     "models": "Mô hình",
     "advanced": "Nâng cao",
     "postProcessing": "Xử lý sau",
@@ -598,6 +600,27 @@
         "label": "Lưu vào lịch sử",
         "description": "Bản chép lời hoàn tất được lưu và gắn sao để tính năng tự động dọn dẹp giữ lại chúng."
       },
+      "autosave": {
+        "title": "Lưu bản chép lời",
+        "enabled": {
+          "label": "Tự động lưu bản chép lời",
+          "description": "Khi một tệp hoặc cuộc họp được phiên âm xong, bản chép lời sẽ được lưu thành tệp mà bạn có thể mở bằng Word hoặc bất kỳ trình soạn thảo văn bản nào."
+        },
+        "location": {
+          "label": "Lưu vào",
+          "description": "“Cạnh bản ghi âm” đặt bản chép lời trong thư mục của bản ghi âm (với cuộc họp là thư mục riêng của cuộc họp). Nếu không thể ghi vào một thư mục, Handy sẽ dùng Handy Transcripts trong thư mục Tài liệu của bạn.",
+          "nextToRecording": "Cạnh bản ghi âm",
+          "folder": "Thư mục do tôi chọn…"
+        },
+        "chooseFolder": "Chọn thư mục…",
+        "folderPicker": "Chọn thư mục cho bản chép lời",
+        "format": {
+          "label": "Định dạng tệp",
+          "description": "Tài liệu Word và Markdown có tên người nói và thời gian. Văn bản thuần có tên người nói."
+        },
+        "note": "Tệp hiện có không bao giờ bị thay thế: thay vào đó sẽ dùng tên mới như “interview (2).docx”. Bản chép lời bị thiếu đoạn có tên kết thúc bằng “(incomplete)”.",
+        "saveError": "Không thể lưu cài đặt: {{error}}"
+      },
       "engine": {
         "title": "Công cụ phiên âm",
         "label": "Phiên âm bằng",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} / {{total}}",
       "progressNoTotal": "Đã phiên âm {{processed}}",
+      "elapsed": "Thời gian đã qua: {{time}}",
+      "took": "Mất {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Còn chưa đến một phút",
+        "minutes": "Còn khoảng {{minutes}} phút",
+        "hours": "Còn khoảng {{hours}} giờ {{minutes}} phút",
+        "hoursOnly": "Còn khoảng {{hours}} giờ"
+      },
       "noSpeech": "Không tìm thấy giọng nói trong tệp này.",
       "actions": {
         "cancel": "Hủy",
@@ -735,6 +766,21 @@
       "copied": "Đã sao chép bản chép lời vào bảng nhớ tạm.",
       "copyError": "Không thể sao chép bản chép lời.",
       "savedToHistory": "Đã lưu vào lịch sử",
+      "ready": {
+        "title": "Bản chép lời đã sẵn sàng: {{file}}",
+        "open": "Mở trong Handy",
+        "showFile": "Hiển thị tệp"
+      },
+      "saved": {
+        "savedTo": "Đã lưu vào {{path}}",
+        "open": "Mở",
+        "showInFolder": "Hiển thị trong thư mục",
+        "fallback": "Không thể lưu vào {{folder}}, vì vậy bản chép lời đã được lưu vào Handy Transcripts trong thư mục Tài liệu của bạn.",
+        "failed": "Không thể lưu bản chép lời thành tệp. Hãy dùng Xuất để lưu.",
+        "openError": "Không thể mở bản chép lời: {{error}}",
+        "notFound": "Không tìm thấy bản chép lời đã lưu. Có thể tệp đã bị di chuyển hoặc xóa.",
+        "exportAgain": "Tệp này không thay đổi khi bạn chỉnh sửa người nói ở đây. Hãy xuất lại để bao gồm các thay đổi sau này."
+      },
       "errors": {
         "notFound": "Không thể tìm thấy hoặc mở tệp.",
         "unsupportedFormat": "Loại tệp này không được hỗ trợ.",

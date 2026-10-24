@@ -909,9 +909,10 @@ impl Progress {
                 self.chunk = index.saturating_add(1);
                 self.processed_ms = processed_ms;
             }
-            PipelineEvent::ModelReady | PipelineEvent::Waiting | PipelineEvent::Speakers(_) => {
-                return
-            }
+            PipelineEvent::ModelReady
+            | PipelineEvent::Waiting
+            | PipelineEvent::Speakers(_)
+            | PipelineEvent::SpeakerProgress { .. } => return,
         }
         let now = Instant::now();
         if self.due(now) {

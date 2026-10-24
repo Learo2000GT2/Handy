@@ -18,6 +18,7 @@ import { EngineCard } from "./EngineCard";
 import { FileDropZone } from "./FileDropZone";
 import { FileJobRow } from "./FileJobRow";
 import { SpeakerLabelsToggle } from "./SpeakerLabelsToggle";
+import { TranscriptAutoSaveSettings } from "./TranscriptAutoSaveSettings";
 import { TranscriptDialog } from "./TranscriptDialog";
 
 interface ViewedJob {
@@ -48,7 +49,18 @@ export const TranscribeFilesSettings: React.FC = () => {
   const clearFinished = useFileTranscriptionStore(
     (state) => state.clearFinished,
   );
+  const viewRequest = useFileTranscriptionStore((state) => state.viewRequest);
+  const clearViewRequest = useFileTranscriptionStore(
+    (state) => state.clearViewRequest,
+  );
   const [viewed, setViewed] = useState<ViewedJob | null>(null);
+
+  // "Open" on a "Transcript ready" toast, from any page.
+  useEffect(() => {
+    if (viewRequest === null) return;
+    setViewed(viewRequest);
+    clearViewRequest();
+  }, [viewRequest, clearViewRequest]);
 
   // ffmpeg may have been installed since the list was loaded.
   useEffect(() => {
@@ -202,6 +214,8 @@ export const TranscribeFilesSettings: React.FC = () => {
           </div>
         </div>
       )}
+
+      <TranscriptAutoSaveSettings />
 
       <TranscriptDialog
         source={viewed?.source ?? null}

@@ -7,6 +7,7 @@ import type {
   ChineseScript,
   FileTranscriptionEngine,
   LemonadeSettings,
+  TranscriptAutoSave,
   PostProcessProblem,
   TranscribeAcceleratorSetting,
   OrtAcceleratorSetting,
@@ -241,6 +242,20 @@ const settingUpdaters: {
       toast.error(
         i18n.t("settings.transcribeFiles.lemonade.saveError", {
           error: i18n.t("settings.transcribeFiles.lemonade.errors.invalidUrl"),
+        }),
+      );
+      throw new Error(result.error);
+    }
+  },
+  transcript_autosave: async (value) => {
+    const result = await commands.changeTranscriptAutosaveSettings(
+      value as TranscriptAutoSave,
+    );
+    if (result.status === "error") {
+      // The value rolls back via the throw below; the toast says why.
+      toast.error(
+        i18n.t("settings.transcribeFiles.autosave.saveError", {
+          error: result.error,
         }),
       );
       throw new Error(result.error);

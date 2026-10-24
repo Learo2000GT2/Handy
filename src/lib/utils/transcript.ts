@@ -16,6 +16,7 @@ import type {
   ModelInfo,
   SpeakerSkipReason,
   SupportedAudioFormats,
+  TranscriptAutoSave,
   TranscriptFormat,
   TranscriptSegment,
   TranscriptSource,
@@ -269,6 +270,14 @@ export const DEFAULT_LEMONADE_SETTINGS: LemonadeSettings = {
   api_key: "",
 };
 
+/** Auto-save settings before the user changes them (as in `settings.rs`). */
+export const DEFAULT_TRANSCRIPT_AUTOSAVE: TranscriptAutoSave = {
+  enabled: true,
+  location: "next_to_recording",
+  folder: "",
+  format: "docx",
+};
+
 /**
  * Lower-case host of a Lemonade Server address, or null when the backend
  * would refuse it. Follows `normalize_base_url` in
@@ -408,6 +417,33 @@ export const labelJobFor = (
   return newest;
 };
 
+/**
+ * The transcription job whose automatic save (or failure to save) belongs
+ * to the transcript shown from `source`: that job, or for History entry
+ * `historyId` the newest job saved as that entry. Null when there is none.
+ */
+export const savedJobFor = (
+  jobs: Record<number, FileJobSnapshot>,
+  source: TranscriptSource,
+  historyId: number | null | undefined,
+): FileJobSnapshot | null => {
+  const hasSave = (job: FileJobSnapshot | undefined): job is FileJobSnapshot =>
+    job !== undefined &&
+    job.labels_for === null &&
+    (job.saved_file !== null || job.save_error !== null);
+  if (source.kind === "job") {
+    const job = jobs[source.job_id];
+    return hasSave(job) ? job : null;
+  }
+  const entry = historyId ?? source.history_id;
+  let newest: FileJobSnapshot | null = null;
+  for (const job of Object.values(jobs)) {
+    if (!hasSave(job) || job.history_id !== entry) continue;
+    if (newest === null || job.job_id > newest.job_id) newest = job;
+  }
+  return newest;
+};
+
 /** The queued or running speaker-label job for History entry `historyId`. */
 export const activeLabelJobForHistory = (
   jobs: Record<number, FileJobSnapshot>,
@@ -443,19 +479,232 @@ export const awaitingSpeakers = (
   job: Pick<
     FileJobSnapshot,
     "status" | "speakers" | "duration_ms" | "processed_ms"
-  >,
+  > &
+    Partial<Pick<FileJobSnapshot, "speakers_processed_ms">>,
 ): boolean =>
   job.status === "transcribing" &&
-  job.duration_ms !== null &&
-  job.duration_ms > 0 &&
-  job.processed_ms >= job.duration_ms &&
-  (job.speakers?.state === "pending" || job.speakers?.state === "running");
+  (job.speakers?.state === "pending" || job.speakers?.state === "running") &&
+  // Speaker progress is only reported once the audio is transcribed (the
+  // probed length can be a little longer than the decoded audio).
+  ((job.speakers_processed_ms ?? null) !== null ||
+    (job.duration_ms !== null &&
+      job.duration_ms > 0 &&
+      job.processed_ms >= job.duration_ms));
 
 /** Whole percent of a download; 0 while the total is unknown. */
 export const downloadPercent = (downloaded: number, total: number): number =>
   total > 0 && downloaded > 0
     ? Math.min(100, Math.floor((downloaded / total) * 100))
     : 0;
+
+/**
+ * Whole percent of `processedMs` out of `durationMs`, rounded down so a job
+ * never reads 100% before it is done; null while the length is unknown.
+ */
+export const progressPercent = (
+  processedMs: number,
+  durationMs: number | null,
+): number | null => {
+  if (durationMs === null || !Number.isFinite(durationMs) || durationMs <= 0) {
+    return null;
+  }
+  const processed = Number.isFinite(processedMs) ? Math.max(0, processedMs) : 0;
+  return Math.min(100, Math.floor((processed / durationMs) * 100));
+};
+
+/** `percent` (0-100) as `locale` writes it: "42%", "42 %" in French. */
+export const formatPercent = (percent: number, locale?: string): string => {
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "percent",
+      maximumFractionDigits: 0,
+    }).format(percent / 100);
+  } catch {
+    // An unknown locale tag.
+    return `${percent}%`;
+  }
+};
+
+/**
+ * The percent a running job's row and the sidebar show, or null while there
+ * is none yet: a speaker-label job's (or a transcription's speaker step's)
+ * diarizer progress, else the transcribed share of the audio.
+ */
+export const jobProgressPercent = (
+  job: Pick<
+    FileJobSnapshot,
+    | "status"
+    | "speakers"
+    | "duration_ms"
+    | "processed_ms"
+    | "speakers_processed_ms"
+    | "labels_for"
+  >,
+): number | null => {
+  if (job.status === "preparing" || job.status === "queued") return null;
+  const duration =
+    job.duration_ms !== null && job.duration_ms > 0 ? job.duration_ms : null;
+  if (isLabelJob(job)) {
+    return job.processed_ms > 0
+      ? progressPercent(job.processed_ms, duration)
+      : null;
+  }
+  if (awaitingSpeakers(job)) {
+    return job.speakers_processed_ms === null
+      ? null
+      : progressPercent(job.speakers_processed_ms, duration);
+  }
+  return progressPercent(job.processed_ms, duration);
+};
+
+/**
+ * What the sidebar's Transcribe item shows: the running job's percent,
+ * "busy" while it has none (preparing, or its length is unknown), or null
+ * when no job runs.
+ */
+export const transcribeBadge = (
+  jobs: Record<number, FileJobSnapshot>,
+): number | "busy" | null => {
+  const running = Object.values(jobs).find((job) =>
+    isRunningStatus(job.status),
+  );
+  if (!running) return null;
+  return jobProgressPercent(running) ?? "busy";
+};
+
+/** An estimate needs this much transcribed audio, or this much time spent. */
+export const ESTIMATE_MIN_AUDIO_MS = 120_000;
+export const ESTIMATE_MIN_ACTIVE_MS = 30_000;
+// Weight of each new measurement in the smoothed speed.
+const RATE_SMOOTHING = 0.3;
+
+/**
+ * How fast a job gets through its audio, from the snapshots seen so far.
+ * Only time spent transcribing counts: not preparing, nor paused for
+ * dictation.
+ */
+export interface RateEstimate {
+  /** When the last snapshot was seen (Unix ms). */
+  at: number;
+  /** Its `processed_ms`. */
+  processedMs: number;
+  /** It was transcribing, so the time since counts. */
+  transcribing: boolean;
+  /** Time spent transcribing since the estimate began (ms). */
+  activeMs: number;
+  /** Audio done since the estimate began (ms). */
+  audioMs: number;
+  /** Time spent transcribing since `processedMs` last grew (ms). */
+  sinceAdvanceMs: number;
+  /** Smoothed audio ms done per ms; null until there is enough to go on. */
+  rate: number | null;
+}
+
+/**
+ * The estimate after a snapshot with `processedMs`, seen at `now` while the
+ * job was (or was not) `transcribing`. Starts afresh from null, or when the
+ * job went back. The speed is first the average so far, once 2 minutes of
+ * audio or 30 seconds of transcribing are done; each later step moves it
+ * part of the way towards that step's speed, so it follows real changes
+ * without jumping at every chunk.
+ */
+export const updateRateEstimate = (
+  previous: RateEstimate | null,
+  processedMs: number,
+  transcribing: boolean,
+  now: number,
+): RateEstimate => {
+  if (previous === null || processedMs < previous.processedMs) {
+    return {
+      at: now,
+      processedMs,
+      transcribing,
+      activeMs: 0,
+      audioMs: 0,
+      sinceAdvanceMs: 0,
+      rate: null,
+    };
+  }
+  const spent = previous.transcribing ? Math.max(0, now - previous.at) : 0;
+  const activeMs = previous.activeMs + spent;
+  const sinceAdvanceMs = previous.sinceAdvanceMs + spent;
+  const advanced = processedMs - previous.processedMs;
+  const next: RateEstimate = {
+    at: now,
+    processedMs,
+    transcribing,
+    activeMs,
+    audioMs: previous.audioMs + advanced,
+    sinceAdvanceMs,
+    rate: previous.rate,
+  };
+  if (advanced <= 0) return next;
+
+  next.sinceAdvanceMs = 0;
+  const enough =
+    next.audioMs >= ESTIMATE_MIN_AUDIO_MS || activeMs >= ESTIMATE_MIN_ACTIVE_MS;
+  if (!enough || activeMs <= 0) return next;
+  if (previous.rate === null) {
+    next.rate = next.audioMs / activeMs;
+  } else if (sinceAdvanceMs > 0) {
+    const stepRate = advanced / sinceAdvanceMs;
+    next.rate = previous.rate + RATE_SMOOTHING * (stepRate - previous.rate);
+  }
+  return next;
+};
+
+/**
+ * Time left for a job of `durationMs` at `now` (ms), or null without an
+ * estimate. Counts down between snapshots while the job transcribes.
+ */
+export const estimateRemainingMs = (
+  estimate: RateEstimate | null | undefined,
+  durationMs: number | null,
+  now: number,
+): number | null => {
+  if (!estimate || estimate.rate === null || !(estimate.rate > 0)) return null;
+  if (durationMs === null || durationMs <= 0) return null;
+  const left = Math.max(0, durationMs - estimate.processedMs) / estimate.rate;
+  const since = estimate.transcribing ? Math.max(0, now - estimate.at) : 0;
+  return Math.max(0, left - since);
+};
+
+/** Keys under `settings.transcribeFiles.timeLeft`, with their values. */
+export type TimeLeftText =
+  | { key: "lessThanMinute"; values: Record<string, never> }
+  | { key: "minutes"; values: { minutes: number } }
+  | { key: "hours"; values: { hours: number; minutes: number } }
+  | { key: "hoursOnly"; values: { hours: number } };
+
+/**
+ * `ms` left, to the nearest minute: "Less than a minute left", "About 4
+ * min left", "About 1 hr 5 min left", "About 2 hr left".
+ */
+export const timeLeftText = (ms: number): TimeLeftText => {
+  const minutes = Number.isFinite(ms)
+    ? Math.round(Math.max(0, ms) / 60_000)
+    : 0;
+  if (ms < 60_000 || minutes < 1) {
+    return { key: "lessThanMinute", values: {} };
+  }
+  if (minutes < 60) return { key: "minutes", values: { minutes } };
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0
+    ? { key: "hoursOnly", values: { hours } }
+    : { key: "hours", values: { hours, minutes: rest } };
+};
+
+/**
+ * Time since `startedAt` (Unix ms) at `now`, or between the two when the job
+ * finished at `finishedAt`; null when it has not started.
+ */
+export const jobElapsedMs = (
+  startedAt: number | null,
+  finishedAt: number | null,
+  now: number,
+): number | null =>
+  startedAt === null ? null : Math.max(0, (finishedAt ?? now) - startedAt);
 
 /**
  * Runs `action` only after `confirm` (a dialog asking the user) resolves

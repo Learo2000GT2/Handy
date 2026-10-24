@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "General",
     "transcribe": "Transcripció",
+    "transcribeProgress": "S'està transcrivint: {{percent}} fet",
+    "transcribeRunning": "S'està transcrivint…",
     "models": "Models",
     "advanced": "Avançat",
     "postProcessing": "Postprocessament",
@@ -598,6 +600,27 @@
         "label": "Desa a l'historial",
         "description": "Les transcripcions acabades es desen i es marquen amb una estrella perquè la neteja automàtica les conservi."
       },
+      "autosave": {
+        "title": "Desament de transcripcions",
+        "enabled": {
+          "label": "Desa les transcripcions automàticament",
+          "description": "Quan s'acaba de transcriure un fitxer o una reunió, la transcripció es desa com un fitxer que podeu obrir amb Word o qualsevol editor de text."
+        },
+        "location": {
+          "label": "Desa a",
+          "description": "«Al costat de l'enregistrament» posa la transcripció a la carpeta de l'enregistrament (a la carpeta pròpia de cada reunió, per a les reunions). Si no es pot escriure en una carpeta, Handy fa servir Handy Transcripts, dins de la carpeta Documents.",
+          "nextToRecording": "Al costat de l'enregistrament",
+          "folder": "Una carpeta que triï…"
+        },
+        "chooseFolder": "Tria una carpeta…",
+        "folderPicker": "Trieu una carpeta per a les transcripcions",
+        "format": {
+          "label": "Format del fitxer",
+          "description": "Els documents de Word i Markdown inclouen els noms dels parlants i els temps. El text sense format inclou els noms dels parlants."
+        },
+        "note": "Els fitxers existents no se substitueixen mai: es fa servir un nom nou com ara «interview (2).docx». Una transcripció amb llacunes acaba en «(incomplete)».",
+        "saveError": "No s'ha pogut desar el paràmetre: {{error}}"
+      },
       "engine": {
         "title": "Motor de transcripció",
         "label": "Transcriu amb",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} de {{total}}",
       "progressNoTotal": "{{processed}} transcrits",
+      "elapsed": "Temps transcorregut: {{time}}",
+      "took": "Processat en {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Temps restant: menys d'un minut",
+        "minutes": "Temps restant: aprox. {{minutes}} min",
+        "hours": "Temps restant: aprox. {{hours}} h {{minutes}} min",
+        "hoursOnly": "Temps restant: aprox. {{hours}} h"
+      },
       "noSpeech": "No s'ha detectat parla en aquest fitxer.",
       "actions": {
         "cancel": "Cancel·la",
@@ -735,6 +766,21 @@
       "copied": "S'ha copiat la transcripció al porta-retalls.",
       "copyError": "No s'ha pogut copiar la transcripció.",
       "savedToHistory": "Desat a l'historial",
+      "ready": {
+        "title": "Transcripció a punt: {{file}}",
+        "open": "Obre a Handy",
+        "showFile": "Mostra el fitxer"
+      },
+      "saved": {
+        "savedTo": "Desat a {{path}}",
+        "open": "Obre",
+        "showInFolder": "Mostra a la carpeta",
+        "fallback": "No s'ha pogut desar a {{folder}}, així que la transcripció s'ha desat a Handy Transcripts, dins de la carpeta Documents.",
+        "failed": "No s'ha pogut desar la transcripció com a fitxer. Feu servir Exporta per desar-la.",
+        "openError": "No s'ha pogut obrir la transcripció: {{error}}",
+        "notFound": "No es troba la transcripció desada. Potser s'ha mogut o suprimit.",
+        "exportAgain": "Aquest fitxer no canvia quan editeu els parlants aquí. Torneu a exportar per incloure els canvis posteriors."
+      },
       "errors": {
         "notFound": "No es pot trobar o obrir el fitxer.",
         "unsupportedFormat": "Aquest tipus de fitxer no és compatible.",

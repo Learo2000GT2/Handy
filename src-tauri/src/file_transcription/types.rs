@@ -316,6 +316,30 @@ pub struct FileJobSnapshot {
     /// Runs on dictation's loaded model; switching the dictation model stops it.
     #[serde(default)]
     pub shares_dictation_model: bool,
+    /// Unix milliseconds when the job left the queue; None while queued.
+    pub started_at: Option<i64>,
+    /// Unix milliseconds when the job finished.
+    pub finished_at: Option<i64>,
+    /// While a transcription job labels speakers: the end of the last
+    /// diarized window, which never goes back. None before the first one.
+    pub speakers_processed_ms: Option<u64>,
+    /// The file the transcript was saved as automatically (Transcribe page
+    /// setting), when it was. Later speaker edits do not change it.
+    pub saved_file: Option<SavedTranscriptFile>,
+    /// English reason the transcript could not be saved automatically. The
+    /// job itself did not fail.
+    pub save_error: Option<String>,
+}
+
+/// A transcript Handy saved as a file automatically.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct SavedTranscriptFile {
+    /// The file written: a new file, never one that existed before.
+    pub path: String,
+    /// The folder it should have gone to (next to the recording, or the
+    /// chosen one) when that could not be written, so it went to
+    /// Documents/Handy Transcripts instead.
+    pub unwritable_folder: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, tauri_specta::Event)]
@@ -323,7 +347,7 @@ pub struct FileJobSnapshot {
 pub enum FileTranscriptionEvent {
     /// Full job state after any change. Progress-only changes are throttled
     /// to at most one per 250 ms per job; status changes are never throttled.
-    Updated { job: FileJobSnapshot },
+    Updated { job: Box<FileJobSnapshot> },
     /// Post-processed segments of one finished chunk, in order. Append to the live view.
     Chunk {
         job_id: u64,
@@ -439,10 +463,31 @@ mod tests {
             enqueued_at: 1,
             labels_for: None,
             shares_dictation_model: true,
+            started_at: None,
+            finished_at: None,
+            speakers_processed_ms: None,
+            saved_file: None,
+            save_error: None,
         };
         let value = serde_json::to_value(&snapshot).expect("serialize");
         assert_eq!(value["labels_for"], serde_json::Value::Null);
         assert_eq!(value["shares_dictation_model"], json!(true));
+        assert_eq!(value["saved_file"], serde_json::Value::Null);
+
+        let saved = FileJobSnapshot {
+            started_at: Some(10),
+            saved_file: Some(SavedTranscriptFile {
+                path: "/audio/talk.docx".to_string(),
+                unwritable_folder: None,
+            }),
+            ..snapshot.clone()
+        };
+        let value = serde_json::to_value(&saved).expect("serialize");
+        assert_eq!(value["started_at"], json!(10));
+        assert_eq!(
+            value["saved_file"],
+            json!({"path": "/audio/talk.docx", "unwritable_folder": null})
+        );
 
         let label_job = FileJobSnapshot {
             labels_for: Some(TranscriptSource::History { history_id: 7 }),

@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "일반",
     "transcribe": "전사",
+    "transcribeProgress": "전사 중: {{percent}} 완료",
+    "transcribeRunning": "전사 중…",
     "models": "모델",
     "advanced": "고급",
     "postProcessing": "후처리",
@@ -598,6 +600,27 @@
         "label": "히스토리에 저장",
         "description": "완료된 전사 내용은 저장되고 별표가 표시되어 자동 정리 시 삭제되지 않습니다."
       },
+      "autosave": {
+        "title": "전사 내용 저장",
+        "enabled": {
+          "label": "전사 내용 자동 저장",
+          "description": "파일이나 회의의 전사가 끝나면 Word나 텍스트 편집기에서 열 수 있는 파일로 저장합니다."
+        },
+        "location": {
+          "label": "저장 위치",
+          "description": "'녹음 파일 옆'을 선택하면 녹음 파일과 같은 폴더에 저장합니다(회의는 회의별 폴더). 폴더에 쓸 수 없으면 문서 폴더의 Handy Transcripts를 사용합니다.",
+          "nextToRecording": "녹음 파일 옆",
+          "folder": "직접 선택한 폴더…"
+        },
+        "chooseFolder": "폴더 선택…",
+        "folderPicker": "전사 내용을 저장할 폴더 선택",
+        "format": {
+          "label": "파일 형식",
+          "description": "Word 문서와 Markdown에는 화자 이름과 시간이 포함됩니다. 일반 텍스트에는 화자 이름이 포함됩니다."
+        },
+        "note": "기존 파일은 절대 대체되지 않으며 대신 'interview (2).docx' 같은 새 이름을 사용합니다. 누락된 부분이 있는 전사 파일 이름은 '(incomplete)'로 끝납니다.",
+        "saveError": "설정을 저장하지 못했습니다: {{error}}"
+      },
       "engine": {
         "title": "전사 엔진",
         "label": "전사에 사용할 엔진",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} / {{total}}",
       "progressNoTotal": "{{processed}} 전사됨",
+      "elapsed": "경과 시간 {{time}}",
+      "took": "소요 시간 {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "1분 미만 남음",
+        "minutes": "약 {{minutes}}분 남음",
+        "hours": "약 {{hours}}시간 {{minutes}}분 남음",
+        "hoursOnly": "약 {{hours}}시간 남음"
+      },
       "noSpeech": "이 파일에서 음성을 찾을 수 없습니다.",
       "actions": {
         "cancel": "취소",
@@ -735,6 +766,21 @@
       "copied": "전사 내용을 클립보드에 복사했습니다.",
       "copyError": "전사 내용을 복사하지 못했습니다.",
       "savedToHistory": "히스토리에 저장됨",
+      "ready": {
+        "title": "전사 완료: {{file}}",
+        "open": "Handy에서 열기",
+        "showFile": "파일 표시"
+      },
+      "saved": {
+        "savedTo": "저장 위치: {{path}}",
+        "open": "열기",
+        "showInFolder": "폴더에서 보기",
+        "fallback": "{{folder}}에 저장할 수 없어 전사 내용을 문서 폴더의 Handy Transcripts에 저장했습니다.",
+        "failed": "전사 내용을 파일로 저장하지 못했습니다. 내보내기로 저장하세요.",
+        "openError": "전사 내용을 열지 못했습니다: {{error}}",
+        "notFound": "저장된 전사 파일을 찾을 수 없습니다. 이동되었거나 삭제되었을 수 있습니다.",
+        "exportAgain": "여기에서 화자를 편집해도 이 파일은 바뀌지 않습니다. 이후 변경 사항을 포함하려면 다시 내보내세요."
+      },
       "errors": {
         "notFound": "파일을 찾거나 열 수 없습니다.",
         "unsupportedFormat": "지원하지 않는 파일 형식입니다.",

@@ -378,6 +378,12 @@ pub fn single_line(text: &str, language: Option<&str>) -> String {
 /// some platform forbids in file names become `_`; an empty stem becomes
 /// "transcript".
 pub fn default_export_file_name(source_name: &str, format: TranscriptFormat) -> String {
+    format!("{}.{}", export_file_stem(source_name), format.extension())
+}
+
+/// The suggested export file name without its extension; see
+/// [`default_export_file_name`].
+pub fn export_file_stem(source_name: &str) -> String {
     let stem = match source_name.rfind('.') {
         Some(dot) if dot > 0 && !source_name[dot..].contains(['/', '\\']) => &source_name[..dot],
         _ => source_name,
@@ -393,12 +399,67 @@ pub fn default_export_file_name(source_name: &str, format: TranscriptFormat) -> 
         })
         .collect();
     let sanitized = sanitized.trim();
-    let stem = if sanitized.chars().all(|c| c == '.') {
-        "transcript"
+    if sanitized.chars().all(|c| c == '.') {
+        "transcript".to_string()
     } else {
-        sanitized
-    };
-    format!("{stem}.{}", format.extension())
+        sanitized.to_string()
+    }
+}
+
+/// Numbered names tried by [`write_new_file`] before it gives up.
+const MAX_NUMBERED_NAMES: u32 = 999;
+
+/// `<stem>.<extension>` for `number` 1, else `<stem> (<number>).<extension>`
+/// ("interview (2).docx").
+pub fn numbered_file_name(stem: &str, extension: &str, number: u32) -> String {
+    if number <= 1 {
+        format!("{stem}.{extension}")
+    } else {
+        format!("{stem} ({number}).{extension}")
+    }
+}
+
+/// Writes `contents` to a new file in `folder` named `<stem>.<extension>`,
+/// or "<stem> (2).<extension>", "<stem> (3).<extension>"… when a file (or
+/// folder, or link) already has the name, and returns its path. Never
+/// replaces anything: the name is taken by creating the file exclusively
+/// (an empty placeholder), whose contents [`write_atomic`] then replaces,
+/// so the finished file appears at once. The placeholder is removed again
+/// if writing fails.
+pub fn write_new_file(
+    folder: &Path,
+    stem: &str,
+    extension: &str,
+    contents: &[u8],
+) -> io::Result<PathBuf> {
+    for number in 1..=MAX_NUMBERED_NAMES {
+        let path = folder.join(numbered_file_name(stem, extension, number));
+        if fs::symlink_metadata(&path).is_ok() {
+            continue;
+        }
+        match OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(placeholder) => drop(placeholder),
+            // Taken since the check above.
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+        return match write_atomic(&path, contents) {
+            Ok(()) => Ok(path),
+            Err(e) => {
+                let _ = fs::remove_file(&path);
+                Err(e)
+            }
+        };
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        format!(
+            "{} files named like {} already exist in {}",
+            MAX_NUMBERED_NAMES,
+            numbered_file_name(stem, extension, 1),
+            folder.display()
+        ),
+    ))
 }
 
 /// Symbolic links followed before giving up, as the OS does.
@@ -1638,6 +1699,62 @@ Speaker 2: Almost the whole shift.
         write_atomic(&path, "second\n").unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), "second\n");
         assert_eq!(dir_entries(dir.path()), vec!["transcript.srt"]);
+    }
+
+    #[test]
+    fn numbered_file_names_start_at_two() {
+        assert_eq!(numbered_file_name("interview", "docx", 1), "interview.docx");
+        assert_eq!(
+            numbered_file_name("interview", "docx", 2),
+            "interview (2).docx"
+        );
+        assert_eq!(
+            numbered_file_name("interview (incomplete)", "md", 12),
+            "interview (incomplete) (12).md"
+        );
+        assert_eq!(export_file_stem("interview.final.m4a"), "interview.final");
+        assert_eq!(export_file_stem("a:b.wav"), "a_b");
+        assert_eq!(export_file_stem("..."), "transcript");
+    }
+
+    #[test]
+    fn write_new_file_never_replaces_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path();
+        // Somebody else's file, a folder and a dangling link take names.
+        fs::write(folder.join("interview.docx"), b"theirs").unwrap();
+        fs::create_dir(folder.join("interview (2).docx")).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(folder.join("gone"), folder.join("interview (3).docx")).unwrap();
+
+        let written = write_new_file(folder, "interview", "docx", b"ours").unwrap();
+        #[cfg(unix)]
+        assert_eq!(written, folder.join("interview (4).docx"));
+        #[cfg(not(unix))]
+        assert_eq!(written, folder.join("interview (3).docx"));
+        assert_eq!(fs::read(&written).unwrap(), b"ours");
+        assert_eq!(fs::read(folder.join("interview.docx")).unwrap(), b"theirs");
+        assert!(folder.join("interview (2).docx").is_dir());
+        // No temporary file is left behind.
+        assert!(!dir_entries(folder)
+            .iter()
+            .any(|name| name.contains(".tmp-")));
+
+        // A free name is used as is.
+        let first = write_new_file(folder, "notes", "txt", b"text\n").unwrap();
+        assert_eq!(first, folder.join("notes.txt"));
+        let second = write_new_file(folder, "notes", "txt", b"more\n").unwrap();
+        assert_eq!(second, folder.join("notes (2).txt"));
+        assert_eq!(fs::read_to_string(&first).unwrap(), "text\n");
+    }
+
+    #[test]
+    fn write_new_file_fails_cleanly_in_a_missing_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing");
+        let err = write_new_file(&missing, "interview", "docx", b"x").unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        assert!(!missing.exists());
     }
 
     #[test]

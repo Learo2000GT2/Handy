@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Général",
     "transcribe": "Transcrire",
+    "transcribeProgress": "Transcription : {{percent}} effectué",
+    "transcribeRunning": "Transcription en cours…",
     "models": "Modèles",
     "advanced": "Avancé",
     "postProcessing": "Post-traitement",
@@ -598,6 +600,27 @@
         "label": "Enregistrer dans l'historique",
         "description": "Les transcriptions terminées sont enregistrées et ajoutées aux favoris pour que le nettoyage automatique les conserve."
       },
+      "autosave": {
+        "title": "Enregistrement des transcriptions",
+        "enabled": {
+          "label": "Enregistrer automatiquement les transcriptions",
+          "description": "Quand un fichier ou une réunion est transcrit, la transcription est enregistrée dans un fichier que vous pouvez ouvrir dans Word ou tout éditeur de texte."
+        },
+        "location": {
+          "label": "Enregistrer dans",
+          "description": "« À côté de l'enregistrement » place la transcription dans le dossier de l'enregistrement (le dossier propre à chaque réunion pour les réunions). Si un dossier n'est pas accessible en écriture, Handy utilise Handy Transcripts dans votre dossier Documents.",
+          "nextToRecording": "À côté de l'enregistrement",
+          "folder": "Un dossier de mon choix…"
+        },
+        "chooseFolder": "Choisir un dossier…",
+        "folderPicker": "Choisir un dossier pour les transcriptions",
+        "format": {
+          "label": "Format de fichier",
+          "description": "Les documents Word et Markdown incluent les noms des intervenants et les horaires. Le texte brut inclut les noms des intervenants."
+        },
+        "note": "Les fichiers existants ne sont jamais remplacés : un nouveau nom comme « interview (2).docx » est utilisé à la place. Une transcription incomplète se termine par « (incomplete) ».",
+        "saveError": "Impossible d'enregistrer le paramètre : {{error}}"
+      },
       "engine": {
         "title": "Moteur de transcription",
         "label": "Transcrire avec",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} sur {{total}}",
       "progressNoTotal": "Transcrit : {{processed}}",
+      "elapsed": "Temps écoulé : {{time}}",
+      "took": "Traité en {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Temps restant : moins d'une minute",
+        "minutes": "Temps restant : environ {{minutes}} min",
+        "hours": "Temps restant : environ {{hours}} h {{minutes}} min",
+        "hoursOnly": "Temps restant : environ {{hours}} h"
+      },
       "noSpeech": "Aucune parole détectée dans ce fichier.",
       "actions": {
         "cancel": "Annuler",
@@ -735,6 +766,21 @@
       "copied": "Transcription copiée dans le presse-papiers.",
       "copyError": "Impossible de copier la transcription.",
       "savedToHistory": "Enregistré dans l'historique",
+      "ready": {
+        "title": "Transcription prête : {{file}}",
+        "open": "Ouvrir dans Handy",
+        "showFile": "Afficher le fichier"
+      },
+      "saved": {
+        "savedTo": "Enregistrée dans {{path}}",
+        "open": "Ouvrir",
+        "showInFolder": "Afficher dans le dossier",
+        "fallback": "Impossible d'enregistrer dans {{folder}} ; la transcription a donc été enregistrée dans Handy Transcripts, dans votre dossier Documents.",
+        "failed": "La transcription n'a pas pu être enregistrée dans un fichier. Utilisez Exporter pour l'enregistrer.",
+        "openError": "Impossible d'ouvrir la transcription : {{error}}",
+        "notFound": "La transcription enregistrée est introuvable. Elle a peut-être été déplacée ou supprimée.",
+        "exportAgain": "Ce fichier ne change pas quand vous modifiez les intervenants ici. Exportez à nouveau pour inclure les modifications ultérieures."
+      },
       "errors": {
         "notFound": "Le fichier est introuvable ou ne peut pas être ouvert.",
         "unsupportedFormat": "Ce type de fichier n'est pas pris en charge.",

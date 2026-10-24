@@ -617,6 +617,8 @@ pub fn run(cli_args: CliArgs) {
             commands::file_transcription::export_file_transcript,
             commands::file_transcription::change_file_transcription_model_setting,
             commands::file_transcription::get_recordings_engine_status,
+            commands::file_transcription::change_transcript_autosave_settings,
+            commands::file_transcription::open_saved_transcript,
             commands::lemonade::check_lemonade_server,
             commands::lemonade::change_file_transcription_engine_setting,
             commands::lemonade::change_lemonade_settings,

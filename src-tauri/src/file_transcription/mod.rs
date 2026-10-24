@@ -1,5 +1,6 @@
 //! Transcription of existing audio/video files:
 //! decode → 16 kHz mono → silence-aware chunks → transcribe → export.
+pub mod autosave;
 pub mod chunker;
 pub mod decode;
 pub mod diarize;

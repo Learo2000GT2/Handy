@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Obecné",
     "transcribe": "Přepis",
+    "transcribeProgress": "Přepisuji: hotovo {{percent}}",
+    "transcribeRunning": "Přepisuji…",
     "models": "Modely",
     "advanced": "Pokročilé",
     "postProcessing": "Následné zpracování",
@@ -598,6 +600,27 @@
         "label": "Uložit do historie",
         "description": "Dokončené přepisy se uloží a označí hvězdičkou, takže je automatické mazání ponechá."
       },
+      "autosave": {
+        "title": "Ukládání přepisů",
+        "enabled": {
+          "label": "Automaticky ukládat přepisy",
+          "description": "Po přepsání souboru nebo schůzky se přepis uloží jako soubor, který otevřete ve Wordu nebo v libovolném textovém editoru."
+        },
+        "location": {
+          "label": "Uložit do",
+          "description": "Možnost Vedle nahrávky uloží přepis do složky nahrávky (u schůzek do vlastní složky schůzky). Pokud do složky nelze zapisovat, Handy použije složku Handy Transcripts ve vašich Dokumentech.",
+          "nextToRecording": "Vedle nahrávky",
+          "folder": "Do složky, kterou vyberu…"
+        },
+        "chooseFolder": "Vybrat složku…",
+        "folderPicker": "Vyberte složku pro přepisy",
+        "format": {
+          "label": "Formát souboru",
+          "description": "Dokumenty Word a Markdown obsahují jména mluvčích a časy. Prostý text obsahuje jména mluvčích."
+        },
+        "note": "Existující soubory se nikdy nenahrazují: místo toho se použije nový název, například „interview (2).docx“. Přepis s mezerami končí na „(incomplete)“.",
+        "saveError": "Nastavení se nepodařilo uložit: {{error}}"
+      },
       "engine": {
         "title": "Nástroj pro přepis",
         "label": "Přepisovat pomocí",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} z {{total}}",
       "progressNoTotal": "Přepsáno {{processed}}",
+      "elapsed": "Uplynulo {{time}}",
+      "took": "Trvalo {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Zbývá méně než minuta",
+        "minutes": "Zbývá asi {{minutes}} min",
+        "hours": "Zbývá asi {{hours}} h {{minutes}} min",
+        "hoursOnly": "Zbývá asi {{hours}} h"
+      },
       "noSpeech": "V tomto souboru nebyla nalezena žádná řeč.",
       "actions": {
         "cancel": "Zrušit",
@@ -735,6 +766,21 @@
       "copied": "Přepis byl zkopírován do schránky.",
       "copyError": "Přepis se nepodařilo zkopírovat.",
       "savedToHistory": "Uloženo do historie",
+      "ready": {
+        "title": "Přepis je hotový: {{file}}",
+        "open": "Otevřít v Handy",
+        "showFile": "Zobrazit soubor"
+      },
+      "saved": {
+        "savedTo": "Uloženo do {{path}}",
+        "open": "Otevřít",
+        "showInFolder": "Zobrazit ve složce",
+        "fallback": "Do složky {{folder}} nelze ukládat, proto byl přepis uložen do složky Handy Transcripts ve vašich Dokumentech.",
+        "failed": "Přepis se nepodařilo uložit jako soubor. Uložte ho pomocí Exportovat.",
+        "openError": "Přepis se nepodařilo otevřít: {{error}}",
+        "notFound": "Uložený přepis nebyl nalezen. Možná byl přesunut nebo smazán.",
+        "exportAgain": "Tento soubor se nezmění, když zde upravíte mluvčí. Pozdější změny zahrnete opětovným exportem."
+      },
       "errors": {
         "notFound": "Soubor nelze najít ani otevřít.",
         "unsupportedFormat": "Tento typ souboru není podporován.",

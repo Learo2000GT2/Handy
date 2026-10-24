@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "一般",
     "transcribe": "轉錄",
+    "transcribeProgress": "正在轉錄：已完成 {{percent}}",
+    "transcribeRunning": "正在轉錄…",
     "models": "模型",
     "advanced": "進階",
     "postProcessing": "後處理",
@@ -598,6 +600,27 @@
         "label": "儲存到歷史紀錄",
         "description": "完成的轉錄會被儲存並加上星號，讓自動清理保留它們。"
       },
+      "autosave": {
+        "title": "儲存轉錄",
+        "enabled": {
+          "label": "自動儲存轉錄",
+          "description": "檔案或會議轉錄完成後，將轉錄儲存為可用 Word 或任何文字編輯器開啟的檔案。"
+        },
+        "location": {
+          "label": "儲存位置",
+          "description": "「錄音旁邊」會將轉錄儲存在錄音所在的資料夾中（會議則儲存在該會議自己的資料夾中）。如果無法寫入某個資料夾，Handy 會使用「文件」資料夾中的 Handy Transcripts。",
+          "nextToRecording": "錄音旁邊",
+          "folder": "我選擇的資料夾…"
+        },
+        "chooseFolder": "選擇資料夾…",
+        "folderPicker": "選擇用來儲存轉錄的資料夾",
+        "format": {
+          "label": "檔案格式",
+          "description": "Word 文件和 Markdown 包含說話者名稱和時間。純文字包含說話者名稱。"
+        },
+        "note": "絕不會取代現有檔案：會改用新名稱，例如「interview (2).docx」。有缺漏部分的轉錄，檔名以「(incomplete)」結尾。",
+        "saveError": "無法儲存設定：{{error}}"
+      },
       "engine": {
         "title": "轉錄引擎",
         "label": "轉錄方式",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} / {{total}}",
       "progressNoTotal": "已轉錄 {{processed}}",
+      "elapsed": "已耗時 {{time}}",
+      "took": "耗時 {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "剩餘不到 1 分鐘",
+        "minutes": "剩餘約 {{minutes}} 分鐘",
+        "hours": "剩餘約 {{hours}} 小時 {{minutes}} 分鐘",
+        "hoursOnly": "剩餘約 {{hours}} 小時"
+      },
       "noSpeech": "此檔案中未偵測到語音。",
       "actions": {
         "cancel": "取消",
@@ -735,6 +766,21 @@
       "copied": "轉錄已複製到剪貼簿。",
       "copyError": "複製轉錄失敗。",
       "savedToHistory": "已儲存到歷史紀錄",
+      "ready": {
+        "title": "轉錄完成：{{file}}",
+        "open": "在 Handy 中開啟",
+        "showFile": "顯示檔案"
+      },
+      "saved": {
+        "savedTo": "已儲存到 {{path}}",
+        "open": "開啟",
+        "showInFolder": "在資料夾中顯示",
+        "fallback": "無法儲存到 {{folder}}，因此轉錄已儲存到「文件」資料夾中的 Handy Transcripts。",
+        "failed": "無法將轉錄儲存為檔案。請使用「匯出」來儲存。",
+        "openError": "無法開啟轉錄：{{error}}",
+        "notFound": "找不到已儲存的轉錄。它可能已被移動或刪除。",
+        "exportAgain": "在此編輯說話者不會變更此檔案。如需包含之後的變更，請重新匯出。"
+      },
       "errors": {
         "notFound": "找不到或無法開啟此檔案。",
         "unsupportedFormat": "不支援此檔案類型。",

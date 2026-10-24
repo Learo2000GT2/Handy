@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Geral",
     "transcribe": "Transcrever",
+    "transcribeProgress": "Transcrevendo: {{percent}} concluído",
+    "transcribeRunning": "Transcrevendo…",
     "models": "Modelos",
     "advanced": "Avançado",
     "postProcessing": "Pós-Processamento",
@@ -598,6 +600,27 @@
         "label": "Salvar no Histórico",
         "description": "As transcrições concluídas são salvas e marcadas com estrela para que a limpeza automática as mantenha."
       },
+      "autosave": {
+        "title": "Salvamento de Transcrições",
+        "enabled": {
+          "label": "Salvar Transcrições Automaticamente",
+          "description": "Quando um arquivo ou uma reunião é transcrito, a transcrição é salva como um arquivo que você pode abrir no Word ou em qualquer editor de texto."
+        },
+        "location": {
+          "label": "Salvar em",
+          "description": "“Ao lado da gravação” coloca a transcrição na pasta da gravação (na pasta própria de cada reunião, no caso de reuniões). Se não for possível gravar em uma pasta, o Handy usa Handy Transcripts na sua pasta Documentos.",
+          "nextToRecording": "Ao lado da gravação",
+          "folder": "Uma pasta que eu escolher…"
+        },
+        "chooseFolder": "Escolher Pasta…",
+        "folderPicker": "Escolha uma Pasta para as Transcrições",
+        "format": {
+          "label": "Formato do Arquivo",
+          "description": "Documentos do Word e Markdown incluem nomes dos locutores e horários. Texto simples inclui nomes dos locutores."
+        },
+        "note": "Arquivos existentes nunca são substituídos: em vez disso, é usado um novo nome, como “interview (2).docx”. Uma transcrição com lacunas termina em “(incomplete)”.",
+        "saveError": "Não foi possível salvar a configuração: {{error}}"
+      },
       "engine": {
         "title": "Mecanismo de Transcrição",
         "label": "Transcrever com",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} de {{total}}",
       "progressNoTotal": "{{processed}} transcritos",
+      "elapsed": "Tempo decorrido: {{time}}",
+      "took": "Processado em {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Tempo restante: menos de um minuto",
+        "minutes": "Tempo restante: cerca de {{minutes}} min",
+        "hours": "Tempo restante: cerca de {{hours}} h {{minutes}} min",
+        "hoursOnly": "Tempo restante: cerca de {{hours}} h"
+      },
       "noSpeech": "Nenhuma fala encontrada neste arquivo.",
       "actions": {
         "cancel": "Cancelar",
@@ -735,6 +766,21 @@
       "copied": "Transcrição copiada para a área de transferência.",
       "copyError": "Falha ao copiar a transcrição.",
       "savedToHistory": "Salvo no Histórico",
+      "ready": {
+        "title": "Transcrição pronta: {{file}}",
+        "open": "Abrir no Handy",
+        "showFile": "Mostrar Arquivo"
+      },
+      "saved": {
+        "savedTo": "Salvo em {{path}}",
+        "open": "Abrir",
+        "showInFolder": "Mostrar na Pasta",
+        "fallback": "Não foi possível salvar em {{folder}}, então a transcrição foi salva em Handy Transcripts, na sua pasta Documentos.",
+        "failed": "Não foi possível salvar a transcrição como arquivo. Use Exportar para salvá-la.",
+        "openError": "Não foi possível abrir a transcrição: {{error}}",
+        "notFound": "A transcrição salva não foi encontrada. Ela pode ter sido movida ou excluída.",
+        "exportAgain": "Este arquivo não muda quando você edita os locutores aqui. Exporte novamente para incluir alterações posteriores."
+      },
       "errors": {
         "notFound": "Não é possível encontrar ou abrir o arquivo.",
         "unsupportedFormat": "Este tipo de arquivo não é compatível.",

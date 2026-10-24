@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Algemeen",
     "transcribe": "Transcriberen",
+    "transcribeProgress": "Transcriberen: {{percent}} klaar",
+    "transcribeRunning": "Transcriberen…",
     "models": "Modellen",
     "advanced": "Geavanceerd",
     "postProcessing": "Naverwerking",
@@ -598,6 +600,27 @@
         "label": "Opslaan in geschiedenis",
         "description": "Voltooide transcripties worden opgeslagen en met een ster gemarkeerd, zodat automatisch opschonen ze bewaart."
       },
+      "autosave": {
+        "title": "Transcripties opslaan",
+        "enabled": {
+          "label": "Transcripties automatisch opslaan",
+          "description": "Als een bestand of vergadering is getranscribeerd, wordt de transcriptie opgeslagen als bestand dat je in Word of een teksteditor kunt openen."
+        },
+        "location": {
+          "label": "Opslaan in",
+          "description": "‘Naast de opname’ zet de transcriptie in de map van de opname (bij vergaderingen in de eigen map van de vergadering). Als er niet naar een map kan worden geschreven, gebruikt Handy Handy Transcripts in je map Documenten.",
+          "nextToRecording": "Naast de opname",
+          "folder": "Een map die ik kies…"
+        },
+        "chooseFolder": "Map kiezen…",
+        "folderPicker": "Kies een map voor transcripties",
+        "format": {
+          "label": "Bestandsindeling",
+          "description": "Word-documenten en Markdown bevatten sprekersnamen en tijden. Platte tekst bevat sprekersnamen."
+        },
+        "note": "Bestaande bestanden worden nooit vervangen: in plaats daarvan wordt een nieuwe naam zoals ‘interview (2).docx’ gebruikt. Een transcriptie met gaten eindigt op ‘(incomplete)’.",
+        "saveError": "Kan de instelling niet opslaan: {{error}}"
+      },
       "engine": {
         "title": "Transcriptie-engine",
         "label": "Transcriberen met",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} van {{total}}",
       "progressNoTotal": "{{processed}} getranscribeerd",
+      "elapsed": "Verstreken: {{time}}",
+      "took": "Duurde {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Nog minder dan een minuut",
+        "minutes": "Nog ongeveer {{minutes}} min",
+        "hours": "Nog ongeveer {{hours}} u {{minutes}} min",
+        "hoursOnly": "Nog ongeveer {{hours}} u"
+      },
       "noSpeech": "Geen spraak gevonden in dit bestand.",
       "actions": {
         "cancel": "Annuleren",
@@ -735,6 +766,21 @@
       "copied": "Transcriptie naar klembord gekopieerd.",
       "copyError": "Transcriptie kopiëren mislukt.",
       "savedToHistory": "Opgeslagen in geschiedenis",
+      "ready": {
+        "title": "Transcriptie klaar: {{file}}",
+        "open": "Openen in Handy",
+        "showFile": "Bestand tonen"
+      },
+      "saved": {
+        "savedTo": "Opgeslagen in {{path}}",
+        "open": "Openen",
+        "showInFolder": "Tonen in map",
+        "fallback": "Opslaan in {{folder}} lukte niet, dus de transcriptie is opgeslagen in Handy Transcripts in je map Documenten.",
+        "failed": "De transcriptie kon niet als bestand worden opgeslagen. Gebruik Exporteren om haar op te slaan.",
+        "openError": "Kan de transcriptie niet openen: {{error}}",
+        "notFound": "De opgeslagen transcriptie is niet gevonden. Misschien is ze verplaatst of verwijderd.",
+        "exportAgain": "Dit bestand verandert niet als je hier sprekers bewerkt. Exporteer opnieuw om latere wijzigingen op te nemen."
+      },
       "errors": {
         "notFound": "Het bestand kan niet worden gevonden of geopend.",
         "unsupportedFormat": "Dit bestandstype wordt niet ondersteund.",

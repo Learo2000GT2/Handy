@@ -13,12 +13,14 @@ import {
   isRunningStatus,
   labelJobFor,
   mergeLiveSegments,
+  savedJobFor,
 } from "@/lib/utils/transcript";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { copyToClipboard } from "../history/clipboard";
 import { ExportMenu } from "./ExportMenu";
+import { SavedTranscript } from "./SavedTranscript";
 import { SpeakerLabelPrompt } from "./SpeakerLabelPrompt";
 import { SpeakerPanel } from "./SpeakerPanel";
 import { TranscriptSegments, type TurnRef } from "./TranscriptSegments";
@@ -83,6 +85,10 @@ export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
     source === null ? null : labelJobFor(state.jobs, source, historyId),
   );
   const labelling = labelJob !== null && !isFinishedStatus(labelJob.status);
+  // The file this transcript was saved as automatically, if it was.
+  const savedJob = useFileTranscriptionStore((state) =>
+    source === null ? null : savedJobFor(state.jobs, source, historyId),
+  );
   const labelTranscriptSpeakers = useFileTranscriptionStore(
     (state) => state.labelTranscriptSpeakers,
   );
@@ -320,6 +326,9 @@ export const TranscriptDialog: React.FC<TranscriptDialogProps> = ({
   } else {
     body = (
       <div className="space-y-3">
+        {!live && savedJob !== null && (
+          <SavedTranscript job={savedJob} showExportHint={true} />
+        )}
         {!live && transcript?.status === "partial" && (
           <Alert variant="warning">
             {transcript.status_detail

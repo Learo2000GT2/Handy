@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Generelt",
     "transcribe": "Transskription",
+    "transcribeProgress": "Transskriberer: {{percent}} færdig",
+    "transcribeRunning": "Transskriberer…",
     "models": "Modeller",
     "advanced": "Avanceret",
     "postProcessing": "Efterbehandling",
@@ -598,6 +600,27 @@
         "label": "Gem i historik",
         "description": "Færdige transskriptioner gemmes og stjernemarkeres, så automatisk oprydning beholder dem."
       },
+      "autosave": {
+        "title": "Gemning af transskriptioner",
+        "enabled": {
+          "label": "Gem transskriptioner automatisk",
+          "description": "Når en fil eller et møde er transskriberet, gemmes transskriptionen som en fil, du kan åbne i Word eller en hvilken som helst teksteditor."
+        },
+        "location": {
+          "label": "Gem i",
+          "description": "Ved siden af optagelsen lægger transskriptionen i optagelsens mappe (for møder i mødets egen mappe). Hvis der ikke kan skrives til en mappe, bruger Handy Handy Transcripts i din Dokumenter-mappe.",
+          "nextToRecording": "Ved siden af optagelsen",
+          "folder": "En mappe, jeg vælger…"
+        },
+        "chooseFolder": "Vælg mappe…",
+        "folderPicker": "Vælg en mappe til transskriptioner",
+        "format": {
+          "label": "Filformat",
+          "description": "Word-dokumenter og Markdown indeholder talernavne og tidspunkter. Almindelig tekst indeholder talernavne."
+        },
+        "note": "Eksisterende filer erstattes aldrig: Der bruges i stedet et nyt navn som “interview (2).docx”. En transskription med huller ender på “(incomplete)”.",
+        "saveError": "Kunne ikke gemme indstillingen: {{error}}"
+      },
       "engine": {
         "title": "Transskriptionsmotor",
         "label": "Transskribér med",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} af {{total}}",
       "progressNoTotal": "{{processed}} transskriberet",
+      "elapsed": "Forløbet tid: {{time}}",
+      "took": "Tog {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Under et minut tilbage",
+        "minutes": "Ca. {{minutes}} min. tilbage",
+        "hours": "Ca. {{hours}} t. {{minutes}} min. tilbage",
+        "hoursOnly": "Ca. {{hours}} t. tilbage"
+      },
       "noSpeech": "Der blev ikke fundet tale i denne fil.",
       "actions": {
         "cancel": "Annuller",
@@ -735,6 +766,21 @@
       "copied": "Transskription kopieret til udklipsholder.",
       "copyError": "Kunne ikke kopiere transskriptionen.",
       "savedToHistory": "Gemt i historik",
+      "ready": {
+        "title": "Transskription klar: {{file}}",
+        "open": "Åbn i Handy",
+        "showFile": "Vis fil"
+      },
+      "saved": {
+        "savedTo": "Gemt i {{path}}",
+        "open": "Åbn",
+        "showInFolder": "Vis i mappe",
+        "fallback": "Kunne ikke gemme i {{folder}}, så transskriptionen blev gemt i Handy Transcripts i din Dokumenter-mappe.",
+        "failed": "Transskriptionen kunne ikke gemmes som en fil. Brug Eksportér til at gemme den.",
+        "openError": "Kunne ikke åbne transskriptionen: {{error}}",
+        "notFound": "Den gemte transskription blev ikke fundet. Den er måske flyttet eller slettet.",
+        "exportAgain": "Denne fil ændres ikke, når du redigerer talere her. Eksportér igen for at få senere ændringer med."
+      },
       "errors": {
         "notFound": "Filen kan ikke findes eller åbnes.",
         "unsupportedFormat": "Denne filtype understøttes ikke.",

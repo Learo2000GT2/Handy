@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "Ogólne",
     "transcribe": "Transkrypcja",
+    "transcribeProgress": "Transkrybowanie: ukończono {{percent}}",
+    "transcribeRunning": "Transkrybowanie…",
     "models": "Modele",
     "advanced": "Zaawansowane",
     "postProcessing": "Postproces",
@@ -598,6 +600,27 @@
         "label": "Zapisuj w historii",
         "description": "Gotowe transkrypcje są zapisywane i oznaczane gwiazdką, dzięki czemu automatyczne czyszczenie ich nie usuwa."
       },
+      "autosave": {
+        "title": "Zapisywanie transkrypcji",
+        "enabled": {
+          "label": "Automatycznie zapisuj transkrypcje",
+          "description": "Po transkrypcji pliku lub spotkania transkrypcja jest zapisywana jako plik, który otworzysz w Wordzie lub dowolnym edytorze tekstu."
+        },
+        "location": {
+          "label": "Zapisuj w",
+          "description": "„Obok nagrania” zapisuje transkrypcję w folderze nagrania (w przypadku spotkań w folderze danego spotkania). Jeśli do folderu nie da się zapisywać, Handy używa folderu Handy Transcripts w Twoich Dokumentach.",
+          "nextToRecording": "Obok nagrania",
+          "folder": "W wybranym przeze mnie folderze…"
+        },
+        "chooseFolder": "Wybierz folder…",
+        "folderPicker": "Wybierz folder na transkrypcje",
+        "format": {
+          "label": "Format pliku",
+          "description": "Dokumenty Word i Markdown zawierają imiona mówców i czasy. Zwykły tekst zawiera imiona mówców."
+        },
+        "note": "Istniejące pliki nigdy nie są zastępowane: zamiast tego używana jest nowa nazwa, np. „interview (2).docx”. Transkrypcja z lukami kończy się na „(incomplete)”.",
+        "saveError": "Nie udało się zapisać ustawienia: {{error}}"
+      },
       "engine": {
         "title": "Silnik transkrypcji",
         "label": "Transkrybuj za pomocą",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} z {{total}}",
       "progressNoTotal": "Przetranskrybowano {{processed}}",
+      "elapsed": "Upłynęło {{time}}",
+      "took": "Trwało {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Pozostało mniej niż minutę",
+        "minutes": "Pozostało około {{minutes}} min",
+        "hours": "Pozostało około {{hours}} godz. {{minutes}} min",
+        "hoursOnly": "Pozostało około {{hours}} godz."
+      },
       "noSpeech": "Nie wykryto mowy w tym pliku.",
       "actions": {
         "cancel": "Anuluj",
@@ -735,6 +766,21 @@
       "copied": "Skopiowano transkrypcję do schowka.",
       "copyError": "Nie udało się skopiować transkrypcji.",
       "savedToHistory": "Zapisano w historii",
+      "ready": {
+        "title": "Transkrypcja gotowa: {{file}}",
+        "open": "Otwórz w Handy",
+        "showFile": "Pokaż plik"
+      },
+      "saved": {
+        "savedTo": "Zapisano w {{path}}",
+        "open": "Otwórz",
+        "showInFolder": "Pokaż w folderze",
+        "fallback": "Nie udało się zapisać w {{folder}}, więc transkrypcja została zapisana w folderze Handy Transcripts w Twoich Dokumentach.",
+        "failed": "Nie udało się zapisać transkrypcji jako pliku. Zapisz ją za pomocą opcji Eksportuj.",
+        "openError": "Nie udało się otworzyć transkrypcji: {{error}}",
+        "notFound": "Nie znaleziono zapisanej transkrypcji. Mogła zostać przeniesiona lub usunięta.",
+        "exportAgain": "Ten plik nie zmienia się, gdy edytujesz tu mówców. Wyeksportuj ponownie, aby uwzględnić późniejsze zmiany."
+      },
       "errors": {
         "notFound": "Nie można znaleźć ani otworzyć pliku.",
         "unsupportedFormat": "Ten typ pliku nie jest obsługiwany.",

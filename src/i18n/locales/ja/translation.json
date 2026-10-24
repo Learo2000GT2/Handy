@@ -13,6 +13,8 @@
   "sidebar": {
     "general": "一般",
     "transcribe": "文字起こし",
+    "transcribeProgress": "文字起こし中: {{percent}} 完了",
+    "transcribeRunning": "文字起こし中…",
     "models": "モデル",
     "advanced": "詳細設定",
     "postProcessing": "後処理",
@@ -598,6 +600,27 @@
         "label": "履歴に保存",
         "description": "完了した文字起こしは保存されてスターが付き、自動削除の対象外になります。"
       },
+      "autosave": {
+        "title": "文字起こしの保存",
+        "enabled": {
+          "label": "文字起こしを自動で保存",
+          "description": "ファイルや会議の文字起こしが終わると、Word やテキスト エディターで開けるファイルとして保存します。"
+        },
+        "location": {
+          "label": "保存先",
+          "description": "「録音と同じ場所」を選ぶと、録音のフォルダーに保存します (会議の場合は会議ごとのフォルダー)。フォルダーに書き込めない場合は、ドキュメント フォルダー内の Handy Transcripts を使用します。",
+          "nextToRecording": "録音と同じ場所",
+          "folder": "選択したフォルダー…"
+        },
+        "chooseFolder": "フォルダーを選択…",
+        "folderPicker": "文字起こしの保存先フォルダーを選択",
+        "format": {
+          "label": "ファイル形式",
+          "description": "Word 文書と Markdown には話者名と時刻が含まれます。プレーンテキストには話者名が含まれます。"
+        },
+        "note": "既存のファイルが置き換えられることはありません。代わりに「interview (2).docx」のような新しい名前が使われます。欠けている部分がある文字起こしの名前は「(incomplete)」で終わります。",
+        "saveError": "設定を保存できませんでした: {{error}}"
+      },
       "engine": {
         "title": "文字起こしエンジン",
         "label": "使用するエンジン",
@@ -724,6 +747,14 @@
       },
       "progress": "{{processed}} / {{total}}",
       "progressNoTotal": "文字起こし済み: {{processed}}",
+      "elapsed": "経過時間 {{time}}",
+      "took": "所要時間 {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "残り 1 分未満",
+        "minutes": "残り約 {{minutes}} 分",
+        "hours": "残り約 {{hours}} 時間 {{minutes}} 分",
+        "hoursOnly": "残り約 {{hours}} 時間"
+      },
       "noSpeech": "このファイルに音声が見つかりませんでした。",
       "actions": {
         "cancel": "キャンセル",
@@ -735,6 +766,21 @@
       "copied": "文字起こしをクリップボードにコピーしました。",
       "copyError": "文字起こしをコピーできませんでした。",
       "savedToHistory": "履歴に保存済み",
+      "ready": {
+        "title": "文字起こしが完了しました: {{file}}",
+        "open": "Handy で開く",
+        "showFile": "ファイルを表示"
+      },
+      "saved": {
+        "savedTo": "保存先: {{path}}",
+        "open": "開く",
+        "showInFolder": "フォルダーで表示",
+        "fallback": "{{folder}} に保存できなかったため、文字起こしはドキュメント フォルダー内の Handy Transcripts に保存されました。",
+        "failed": "文字起こしをファイルとして保存できませんでした。エクスポートで保存してください。",
+        "openError": "文字起こしを開けませんでした: {{error}}",
+        "notFound": "保存した文字起こしが見つかりません。移動または削除された可能性があります。",
+        "exportAgain": "ここで話者を編集しても、このファイルは変わりません。後からの変更を含めるには、もう一度エクスポートしてください。"
+      },
       "errors": {
         "notFound": "ファイルが見つからないか、開けません。",
         "unsupportedFormat": "このファイル形式には対応していません。",
