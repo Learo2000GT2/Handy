@@ -118,6 +118,8 @@ impl From<&CatalogModel> for ModelDescriptor {
                 supports_streaming: Some(m.capabilities.streaming),
                 supports_translation: Some(m.capabilities.translate),
                 supports_language_detect: Some(m.capabilities.lang_detect),
+                // The catalog's own `timestamps` capability decides that.
+                supports_word_timestamps: None,
             },
             files: m.files.clone(),
             default_quant: m.default_quant.clone(),

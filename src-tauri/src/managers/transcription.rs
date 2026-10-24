@@ -760,13 +760,7 @@ impl TranscriptionManager {
                 // reflect runtime truth, not the pre-download probe. The
                 // load-completed event below triggers the frontend refresh.
                 let caps = &info.capabilities;
-                self.model_manager.set_runtime_capabilities(
-                    model_id,
-                    caps.supports_streaming,
-                    caps.supports_translate,
-                    caps.supports_language_detect,
-                    caps.languages.clone(),
-                );
+                self.model_manager.set_runtime_capabilities(model_id, caps);
                 // The bound backend may differ from the request (e.g. CPU
                 // fallback under Auto or after a GPU crash); log what loaded.
                 info!(
@@ -2583,14 +2577,8 @@ impl TranscriptionManager {
                 return Err(error);
             }
         };
-        let caps = &info.capabilities;
-        self.model_manager.set_runtime_capabilities(
-            model_id,
-            caps.supports_streaming,
-            caps.supports_translate,
-            caps.supports_language_detect,
-            caps.languages.clone(),
-        );
+        self.model_manager
+            .set_runtime_capabilities(model_id, &info.capabilities);
         self.recordings.set_model_id(Some(model_id.to_string()));
         self.recordings.touch();
         self.emit_recordings_state();

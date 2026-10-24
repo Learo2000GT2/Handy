@@ -250,8 +250,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
 
       <hr className="w-full border-mid-gray/20" />
 
-      {/* Bottom row: tags + action buttons (full width) */}
-      <div className="flex items-center gap-3 w-full -mb-0.5 mt-0.5 h-5">
+      {/* Bottom row: tags + action buttons (full width). Wraps rather than
+          overflowing when the tags don't fit (longer locales, narrow window). */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 w-full -mb-0.5 mt-0.5 min-h-5">
         {capabilityLanguages.length > 0 && (
           <div
             className="flex items-center gap-1 text-xs text-text/50"
@@ -311,7 +312,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
             size="sm"
             onClick={handleDelete}
             title={t("modelSelector.deleteModel", { modelName: displayName })}
-            className="flex items-center gap-1.5 text-logo-primary/85 hover:text-logo-primary hover:bg-logo-primary/10"
+            // -my-[3px]: the button is a few px taller than the row; it
+            // overhangs it as before instead of making a one-line row taller.
+            className="flex items-center gap-1.5 -my-[3px] text-logo-primary/85 hover:text-logo-primary hover:bg-logo-primary/10"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>{t("common.delete")}</span>

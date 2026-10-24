@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tar::Archive;
 use tauri::{AppHandle, Emitter, Manager};
+use transcribe_cpp::{Capabilities, TimestampKind};
 
 mod download;
 
@@ -88,16 +89,39 @@ pub struct ModelInfo {
     /// recordings and meetings: accurate, and with real timestamps so
     /// transcripts and speaker labels line up with the audio. Catalog models
     /// take it from `catalog::RECOMMENDED_FOR_RECORDINGS`; the legacy table
-    /// sets it per entry.
+    /// sets it per entry. Only transcribe-cpp models carry it, because the
+    /// Model for Recordings picker offers no others: a badge on an ONNX model
+    /// could only be followed by making it the dictation model.
     #[serde(default)]
     pub is_recommended_for_recordings: bool,
 }
 
-/// Whether a transcribe-cpp model of `architecture` gives real timestamps
-/// when the catalog does not say: only the whisper and parakeet families are
-/// known to. Any other or unknown architecture counts as untimed.
-fn architecture_supports_timestamps(architecture: Option<&str>) -> bool {
-    matches!(architecture, Some("whisper" | "parakeet"))
+/// Whether a transcribe-cpp model gives real timestamps when the catalog does
+/// not say, judged from its GGUF header the way transcribe-cpp's loaders
+/// decide it: the whisper, parakeet, gigaam, medasr and moss families always
+/// do, and granite only in its -plus variant, which writes
+/// `stt.capability.word_timestamps`. Any other or unknown architecture counts
+/// as untimed. Once the model loads, its own answer replaces this guess
+/// ([`ModelManager::set_runtime_capabilities`]).
+fn probe_supports_timestamps(probe: &CapabilityProbe) -> bool {
+    match probe.architecture.as_deref() {
+        Some("whisper" | "parakeet" | "gigaam" | "medasr" | "moss") => true,
+        Some("granite_speech") => probe.supports_word_timestamps == Some(true),
+        _ => false,
+    }
+}
+
+/// Whether a loaded model whose finest timestamps are `kind` gives real
+/// timestamps: segment level or finer, so file runs get a time for each
+/// sentence (see `file_run_timestamps` in the transcription manager). `None`
+/// for `Auto`, which says nothing about the model (no family reports it as
+/// its finest).
+fn timestamp_kind_is_timed(kind: TimestampKind) -> Option<bool> {
+    match kind {
+        TimestampKind::None => Some(false),
+        TimestampKind::Segment | TimestampKind::Word | TimestampKind::Token => Some(true),
+        TimestampKind::Auto => None,
+    }
 }
 
 const CHINESE_LANGUAGE_CODE: &str = "zh";
@@ -419,7 +443,7 @@ struct LocalCaps {
     supports_language_selection: bool,
     supports_language_detection: bool,
     supported_languages: Vec<String>,
-    /// From the probed architecture ([`architecture_supports_timestamps`]).
+    /// From the probed header ([`probe_supports_timestamps`]).
     supports_timestamps: bool,
 }
 
@@ -432,7 +456,31 @@ fn local_caps(probe: &CapabilityProbe) -> LocalCaps {
         supports_language_selection: languages.len() > 1,
         supports_language_detection: probe.supports_language_detect.unwrap_or(false),
         supported_languages: languages,
-        supports_timestamps: architecture_supports_timestamps(probe.architecture.as_deref()),
+        supports_timestamps: probe_supports_timestamps(probe),
+    }
+}
+
+/// Write a loaded model's capabilities `caps` into its registry entry (see
+/// [`ModelManager::set_runtime_capabilities`]). Returns whether the
+/// timestamps label changed.
+fn apply_runtime_capabilities(model: &mut ModelInfo, caps: &Capabilities) -> bool {
+    model.supports_streaming = caps.supports_streaming;
+    model.supports_translation = caps.supports_translate;
+    model.supports_language_detection = caps.supports_language_detect;
+    // An empty set means the model is language-agnostic — but it is also
+    // what a failed capability read leaves behind, so keep the probed /
+    // catalog list rather than blanking a known one to nothing.
+    let supported_languages = canonicalize_supported_languages(caps.languages.clone());
+    if !supported_languages.is_empty() {
+        model.supports_language_selection = supported_languages.len() > 1;
+        model.supported_languages = supported_languages;
+    }
+    match timestamp_kind_is_timed(caps.max_timestamp_kind) {
+        Some(timed) if timed != model.supports_timestamps => {
+            model.supports_timestamps = timed;
+            true
+        }
+        _ => false,
     }
 }
 
@@ -804,7 +852,9 @@ impl ModelManager {
                 supports_streaming: false,
                 supports_language_detection: true,
                 supports_timestamps: true,
-                is_recommended_for_recordings: true,
+                // ONNX: the recordings picker can't offer it (the catalog's
+                // GGUF Parakeet TDT 0.6B v2 carries the badge instead).
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -848,7 +898,8 @@ impl ModelManager {
                 supports_streaming: false,
                 supports_language_detection: true,
                 supports_timestamps: true,
-                is_recommended_for_recordings: true,
+                // As for V2: the GGUF Parakeet TDT 0.6B v3 carries the badge.
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -1372,28 +1423,19 @@ impl ModelManager {
     /// **supported-language set**, which feed [`effective_language`]; a mislabeled
     /// header would otherwise coerce an "auto" intent to a forced language for good.
     /// Translate is reconciled too for badge accuracy, though run paths re-read it
-    /// live regardless.
-    pub fn set_runtime_capabilities(
-        &self,
-        model_id: &str,
-        supports_streaming: bool,
-        supports_translation: bool,
-        supports_language_detection: bool,
-        supported_languages: Vec<String>,
-    ) {
-        let supported_languages = canonicalize_supported_languages(supported_languages);
-        let mut models = self.available_models.lock().unwrap();
-        if let Some(model) = models.get_mut(model_id) {
-            model.supports_streaming = supports_streaming;
-            model.supports_translation = supports_translation;
-            model.supports_language_detection = supports_language_detection;
-            // An empty set means the model is language-agnostic — but it is also
-            // what a failed capability read leaves behind, so keep the probed /
-            // catalog list rather than blanking a known one to nothing.
-            if !supported_languages.is_empty() {
-                model.supports_language_selection = supported_languages.len() > 1;
-                model.supported_languages = supported_languages;
-            }
+    /// live regardless. So is **timestamps**, which the header probe can only
+    /// guess from the architecture ([`probe_supports_timestamps`]); when that
+    /// label changes, `models-updated` tells the frontend, since a load for
+    /// the recordings engine emits no model-state event of its own.
+    pub fn set_runtime_capabilities(&self, model_id: &str, caps: &Capabilities) {
+        let timestamps_changed = {
+            let mut models = self.available_models.lock().unwrap();
+            models
+                .get_mut(model_id)
+                .is_some_and(|model| apply_runtime_capabilities(model, caps))
+        };
+        if timestamps_changed {
+            let _ = self.app_handle.emit("models-updated", ());
         }
     }
 
@@ -3199,12 +3241,23 @@ mod tests {
     }
 
     fn write_synthetic_gguf(path: &Path, arch: &str, languages: &[&str]) {
+        write_synthetic_gguf_with_flags(path, arch, languages, &[]);
+    }
+
+    /// [`write_synthetic_gguf`] plus one bool key per `flags` entry.
+    fn write_synthetic_gguf_with_flags(
+        path: &Path,
+        arch: &str,
+        languages: &[&str],
+        flags: &[(&str, bool)],
+    ) {
         let mut out: Vec<u8> = Vec::new();
         out.extend_from_slice(&0x4655_4747u32.to_le_bytes()); // magic "GGUF"
         out.extend_from_slice(&3u32.to_le_bytes()); // version
         out.extend_from_slice(&0u64.to_le_bytes()); // tensor_count
-        out.extend_from_slice(&2u64.to_le_bytes()); // kv_count
-                                                    // general.architecture : string
+                                                    // kv_count: architecture, languages, then the flags.
+        out.extend_from_slice(&(2 + flags.len() as u64).to_le_bytes());
+        // general.architecture : string
         push_gguf_str(&mut out, "general.architecture");
         out.extend_from_slice(&8u32.to_le_bytes()); // STRING
         push_gguf_str(&mut out, arch);
@@ -3215,6 +3268,11 @@ mod tests {
         out.extend_from_slice(&(languages.len() as u64).to_le_bytes());
         for l in languages {
             push_gguf_str(&mut out, l);
+        }
+        for (key, value) in flags {
+            push_gguf_str(&mut out, key);
+            out.extend_from_slice(&7u32.to_le_bytes()); // BOOL
+            out.push(u8::from(*value));
         }
         fs::write(path, out).unwrap();
     }
@@ -3287,6 +3345,12 @@ mod tests {
             assert_eq!(model.supports_timestamps, timed, "{}", model.id);
             if model.is_recommended_for_recordings {
                 assert!(model.supports_timestamps, "{}", model.id);
+                // The Model for Recordings picker lists only these.
+                assert!(
+                    matches!(model.engine_type, EngineType::TranscribeCpp),
+                    "{}",
+                    model.id
+                );
             }
         }
         let mut picks: Vec<&str> = models
@@ -3295,15 +3359,10 @@ mod tests {
             .map(|model| model.id.as_str())
             .collect();
         picks.sort_unstable();
-        assert_eq!(
-            picks,
-            [
-                "large",
-                "parakeet-tdt-0.6b-v2",
-                "parakeet-tdt-0.6b-v3",
-                "turbo"
-            ]
-        );
+        assert_eq!(picks, ["large", "turbo"]);
+        // The ONNX Parakeets still give timestamps; they just can't be picked.
+        assert!(models["parakeet-tdt-0.6b-v2"].supports_timestamps);
+        assert!(models["parakeet-tdt-0.6b-v3"].supports_timestamps);
         assert!(!models["moonshine-base"].supports_timestamps);
         assert!(!models["sense-voice-int8"].supports_timestamps);
         assert!(!models["canary-1b-v2"].supports_timestamps);
@@ -3344,6 +3403,10 @@ mod tests {
             assert!(!model.is_recommended_for_recordings, "{untimed}");
         }
 
+        assert!(models
+            .values()
+            .filter(|model| model.is_recommended_for_recordings)
+            .all(|model| matches!(model.engine_type, EngineType::TranscribeCpp)));
         let mut picks: Vec<String> = models
             .values()
             .filter(|model| model.is_recommended_for_recordings)
@@ -3367,33 +3430,140 @@ mod tests {
 
     #[test]
     fn local_models_take_timestamps_from_their_architecture() {
-        assert!(architecture_supports_timestamps(Some("whisper")));
-        assert!(architecture_supports_timestamps(Some("parakeet")));
-        assert!(!architecture_supports_timestamps(Some("moonshine")));
-        assert!(!architecture_supports_timestamps(Some("qwen3_asr")));
-        assert!(!architecture_supports_timestamps(None));
+        let probe = |architecture: Option<&str>, word_timestamps: Option<bool>| CapabilityProbe {
+            architecture: architecture.map(str::to_string),
+            supports_word_timestamps: word_timestamps,
+            ..Default::default()
+        };
+        // The families transcribe-cpp times (whisper and moss by segment,
+        // parakeet, gigaam and medasr by token)...
+        for timed in ["whisper", "parakeet", "gigaam", "medasr", "moss"] {
+            assert!(
+                probe_supports_timestamps(&probe(Some(timed), None)),
+                "{timed}"
+            );
+        }
+        // ...granite only when its header says so (the -plus variant)...
+        assert!(probe_supports_timestamps(&probe(
+            Some("granite_speech"),
+            Some(true)
+        )));
+        assert!(!probe_supports_timestamps(&probe(
+            Some("granite_speech"),
+            Some(false)
+        )));
+        assert!(!probe_supports_timestamps(&probe(
+            Some("granite_speech"),
+            None
+        )));
+        // ...and nothing else, whatever its header claims.
+        for untimed in ["moonshine", "qwen3_asr", "canary", "granite_speech_nar"] {
+            assert!(
+                !probe_supports_timestamps(&probe(Some(untimed), Some(true))),
+                "{untimed}"
+            );
+        }
+        assert!(!probe_supports_timestamps(&probe(None, None)));
 
         let temp_dir = TempDir::new().unwrap();
         // A legacy GGML file is whisper; a GGUF says its architecture.
         fs::write(temp_dir.path().join("my-whisper.bin"), b"").unwrap();
-        write_synthetic_gguf(
-            &temp_dir.path().join("my-parakeet.gguf"),
-            "parakeet",
+        for (file, arch) in [
+            ("my-parakeet.gguf", "parakeet"),
+            ("my-moonshine.gguf", "moonshine"),
+            ("my-gigaam.gguf", "gigaam"),
+            ("my-medasr.gguf", "medasr"),
+            ("my-moss.gguf", "moss"),
+            ("my-granite.gguf", "granite_speech"),
+        ] {
+            write_synthetic_gguf(&temp_dir.path().join(file), arch, &["en"]);
+        }
+        write_synthetic_gguf_with_flags(
+            &temp_dir.path().join("my-granite-plus.gguf"),
+            "granite_speech",
             &["en"],
-        );
-        write_synthetic_gguf(
-            &temp_dir.path().join("my-moonshine.gguf"),
-            "moonshine",
-            &["en"],
+            &[("stt.capability.word_timestamps", true)],
         );
         let mut models = HashMap::new();
         ModelManager::discover_custom_transcribe_models(temp_dir.path(), &mut models).unwrap();
-        assert!(models["my-whisper"].supports_timestamps);
-        assert!(models["my-parakeet"].supports_timestamps);
+        for timed in [
+            "my-whisper",
+            "my-parakeet",
+            "my-gigaam",
+            "my-medasr",
+            "my-moss",
+            "my-granite-plus",
+        ] {
+            assert!(models[timed].supports_timestamps, "{timed}");
+        }
         assert!(!models["my-moonshine"].supports_timestamps);
+        assert!(!models["my-granite"].supports_timestamps);
         assert!(models
             .values()
             .all(|model| !model.is_recommended_for_recordings));
+
+        // A GigaAM GGUF from a repo outside the catalog, in the HF cache.
+        let cache = TempDir::new().unwrap();
+        let repo = cache.path().join("models--someone--gigaam-v3-gguf");
+        fs::create_dir_all(repo.join("snapshots").join("abc123")).unwrap();
+        fs::create_dir_all(repo.join("refs")).unwrap();
+        fs::write(repo.join("refs").join("main"), "abc123").unwrap();
+        write_synthetic_gguf(
+            &repo.join("snapshots").join("abc123").join("gigaam-q8.gguf"),
+            "gigaam",
+            &["ru"],
+        );
+        let mut cached = HashMap::new();
+        ModelManager::discover_hf_cache_models_in(cache.path(), &mut cached);
+        assert!(cached["someone/gigaam-v3-gguf/gigaam-q8.gguf"].supports_timestamps);
+    }
+
+    #[test]
+    fn a_loaded_model_corrects_the_timestamps_label() {
+        let caps = |max_timestamp_kind: TimestampKind| Capabilities {
+            native_sample_rate: 16_000,
+            languages: Vec::new(),
+            translate_target_languages: Vec::new(),
+            max_timestamp_kind,
+            supports_language_detect: true,
+            supports_translate: false,
+            supports_streaming: false,
+            supports_spec_decode: false,
+            max_audio_ms: 0,
+        };
+        // Say a header probe read a timed model as untimed.
+        let mut model = ModelManager::legacy_models()["turbo"].clone();
+        model.supports_timestamps = false;
+        let languages = model.supported_languages.clone();
+
+        // Token (or word) timestamps count: file runs ask for segments.
+        assert!(apply_runtime_capabilities(
+            &mut model,
+            &caps(TimestampKind::Token)
+        ));
+        assert!(model.supports_timestamps);
+        // Nothing changed the second time, so nothing to tell the frontend.
+        assert!(!apply_runtime_capabilities(
+            &mut model,
+            &caps(TimestampKind::Segment)
+        ));
+        assert!(model.supports_timestamps);
+        // Auto says nothing about the model: the label stays.
+        assert!(!apply_runtime_capabilities(
+            &mut model,
+            &caps(TimestampKind::Auto)
+        ));
+        assert!(model.supports_timestamps);
+        assert!(apply_runtime_capabilities(
+            &mut model,
+            &caps(TimestampKind::None)
+        ));
+        assert!(!model.supports_timestamps);
+
+        // The other capabilities come across as before; an empty language
+        // list keeps the known one.
+        assert!(model.supports_language_detection);
+        assert_eq!(model.supported_languages, languages);
     }
 
     #[test]
