@@ -11,8 +11,8 @@ use crate::file_transcription::types::{TimingGrain, TranscriptSegment};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::{EngineType, ModelManager};
 use crate::managers::recordings_engine::{
-    recordings_linger, should_unload_recordings, vram_need, FileModelSlot, RecordingsEngine,
-    RecordingsEngineEvent,
+    dictation_may_use_gpu, recordings_linger, should_unload_recordings, vram_need, vram_reserve,
+    FileModelSlot, RecordingsEngine, RecordingsEngineEvent,
 };
 use crate::settings::{
     get_settings, AppSettings, ChineseScript, ModelUnloadTimeout, OrtAcceleratorSetting,
@@ -401,7 +401,9 @@ impl TranscriptionManager {
                     let settings = get_settings(&app_handle_cloned);
                     let timeout = settings.model_unload_timeout;
 
-                    // The recordings model keeps its own, shorter linger.
+                    // The recordings model keeps its own, shorter linger
+                    // (with Immediately it is freed when the file queue
+                    // drains, and this is a safety net).
                     manager_cloned.unload_idle_recordings(timeout);
 
                     // Skip Immediately — that variant is handled by
@@ -1435,6 +1437,7 @@ impl TranscriptionManager {
                 validated_language,
                 active_model,
                 file,
+                None,
             ),
             None => self.transcribe_onnx(&audio, settings, validated_language, active_model),
         }
@@ -1446,7 +1449,10 @@ impl TranscriptionManager {
     /// the ModelManager copy. The whisper run extension is kind-tagged, so
     /// non-whisper archs (parakeet, voxtral, …) reject it with INVALID_ARG;
     /// attach it — and translate — only where supported. `slot` is the
-    /// engine `info` was read from.
+    /// engine `info` was read from. `interrupts_seen`, for a file chunk that
+    /// yields to dictations, is the engine's interrupt count as read before
+    /// its last check for a dictation (see
+    /// [`EngineSupervisor::transcribe_interruptible`]).
     #[allow(clippy::too_many_arguments)]
     fn transcribe_cpp(
         &self,
@@ -1457,6 +1463,7 @@ impl TranscriptionManager {
         validated_language: &str,
         active_model: &str,
         file: Option<&WorkToken>,
+        interrupts_seen: Option<u64>,
     ) -> Result<RunOutcome> {
         // Whether the model advertises Feature::InitialPrompt. Informational
         // (logged below); the whisper run extension and the fuzzy-correction
@@ -1524,9 +1531,12 @@ impl TranscriptionManager {
             EngineSlot::Dictation => &self.engine,
             EngineSlot::Recordings => &self.recordings.engine,
         };
-        let result = match file {
-            Some(token) => engine.transcribe_scoped(audio, run_options, token),
-            None => engine.transcribe(audio, run_options),
+        let result = match (file, interrupts_seen) {
+            (Some(token), Some(seen)) => {
+                engine.transcribe_interruptible(audio, run_options, token, seen)
+            }
+            (Some(token), None) => engine.transcribe_scoped(audio, run_options, token),
+            (None, _) => engine.transcribe(audio, run_options),
         };
         let transcript = match result {
             Ok(transcript) => transcript,
@@ -1998,9 +2008,10 @@ impl FileJobLease {
     /// [`transcribe_chunk`](Self::transcribe_chunk) on the recordings
     /// engine. There is no run gate: a chunk never starts while a dictation
     /// is active (it yields instead), and one a dictation interrupted (see
-    /// [`TranscriptionManager::hold_for_dictation`]) is redone once the
-    /// dictation is over. A global cancel (Escape) never reaches it. The
-    /// model is reloaded if it was unloaded or its engine was lost.
+    /// [`TranscriptionManager::hold_for_dictation`]), even before it ran, is
+    /// redone once the dictation is over. A global cancel (Escape) never
+    /// reaches it. The model is reloaded if it was unloaded or its engine
+    /// was lost.
     fn transcribe_own_chunk(
         &self,
         samples: &[f32],
@@ -2029,6 +2040,12 @@ impl FileJobLease {
                 }
                 continue;
             };
+            // Read before the check below. A key release counts its
+            // dictation before it interrupts, so an interrupt this read
+            // misses either shows as that dictation below, or stops the call
+            // even before it runs (while the engine still replaces the worker
+            // an earlier interrupt stopped, there is no call to stop).
+            let interrupts = tm.recordings.engine.interrupts();
             // Checked again right before the call: a dictation that began
             // since makes this chunk wait instead.
             if tm.dictation_active() {
@@ -2045,6 +2062,7 @@ impl FileJobLease {
                 &language,
                 &self.model_id,
                 Some(&self.token),
+                Some(interrupts),
             );
             tm.emit_recordings_state();
 
@@ -2473,10 +2491,11 @@ impl TranscriptionManager {
 // ---------------------------------------------------------------------------
 
 impl TranscriptionManager {
-    /// GPU memory to keep free for the dictation model when a recordings
-    /// model loads: its file size while it isn't loaded yet but will go to
-    /// the GPU (a downloaded transcribe-cpp model, accelerator not CPU).
-    /// Once loaded, the GPU's free memory already accounts for it.
+    /// The dictation model's file size while it isn't loaded yet but will go
+    /// to the GPU (a downloaded transcribe-cpp model, accelerator not CPU):
+    /// a recordings model load keeps room for it (see [`vram_reserve`]).
+    /// Once loaded, the GPU's free memory already accounts for it. A load
+    /// in progress isn't loaded yet.
     fn dictation_reserve_bytes(&self) -> u64 {
         if self.is_model_loaded() {
             return 0;
@@ -2502,7 +2521,10 @@ impl TranscriptionManager {
     /// Fails with "Model not found: …", "Model not downloaded" or "Model …
     /// can't be used for recordings" (only transcribe-cpp models can) before
     /// anything is unloaded. On a GPU, it loads on the CPU instead when the
-    /// GPU lacks the free memory for it beside the dictation model.
+    /// GPU lacks the free memory for it beside the dictation model. Room for
+    /// a dictation model not loaded yet is kept on this load only; a worker
+    /// the engine starts later for the model finds the dictation model
+    /// loaded and counted in the GPU's free memory.
     fn load_recordings_model(
         &self,
         model_id: &str,
@@ -2524,26 +2546,35 @@ impl TranscriptionManager {
         }
         let path = self.model_manager.get_model_path(model_id)?;
         let (backend, device) = self.transcribe_cpp_target(device_index);
-        let min_gpu_free_bytes =
-            if backend != Backend::Cpu && !matches!(device, DeviceSelector::Index(_)) {
-                std::fs::metadata(&path)
-                    .ok()
-                    .map(|metadata| vram_need(metadata.len(), self.dictation_reserve_bytes()))
-            } else {
-                None
-            };
+        let checks_gpu_memory =
+            backend != Backend::Cpu && !matches!(device, DeviceSelector::Index(_));
+        let min_gpu_free_bytes = if checks_gpu_memory {
+            std::fs::metadata(&path)
+                .ok()
+                .map(|metadata| vram_need(metadata.len()))
+        } else {
+            None
+        };
+        let reserve_bytes = if min_gpu_free_bytes.is_some() {
+            vram_reserve(self.dictation_reserve_bytes())
+        } else {
+            0
+        };
         let requested_device = format!("{:?}", device);
 
         self.recordings.set_model_id(None);
         let info = self
             .recordings
             .engine
-            .load(LoadSpec {
-                path,
-                backend,
-                device,
-                min_gpu_free_bytes,
-            })
+            .load_reserving(
+                LoadSpec {
+                    path,
+                    backend,
+                    device,
+                    min_gpu_free_bytes,
+                },
+                reserve_bytes,
+            )
             .map_err(|e| anyhow::anyhow!("Failed to load model {}: {}", model_id, e));
         let info = match info {
             Ok(info) => info,
@@ -2566,7 +2597,7 @@ impl TranscriptionManager {
         info!(
             "Loaded recordings model '{}' in {}ms (requested {:?}, requested device {}, \
              bound backend '{}', bound device '{}', on_gpu={}, gpu_memory_fallback={}, \
-             min_gpu_free_mb={:?})",
+             min_gpu_free_mb={:?}, dictation_reserve_mb={})",
             model_id,
             load_start.elapsed().as_millis(),
             backend,
@@ -2575,7 +2606,8 @@ impl TranscriptionManager {
             info.device,
             info.on_gpu,
             info.gpu_memory_fallback,
-            min_gpu_free_bytes.map(|bytes| bytes / (1024 * 1024))
+            min_gpu_free_bytes.map(|bytes| bytes / (1024 * 1024)),
+            reserve_bytes / (1024 * 1024)
         );
         Ok(info)
     }
@@ -2583,7 +2615,10 @@ impl TranscriptionManager {
     /// Make `model_id` the recordings engine's loaded model. Never loads
     /// while a dictation is active: at a job's start (`at_start`) it waits
     /// for the dictation, mid-job it yields. A pending accelerator change is
-    /// applied at a job's start.
+    /// applied at a job's start. A dictation model on its way to the GPU
+    /// (the job start's preload) is waited for first, so the GPU's free
+    /// memory counts it once, loaded, instead of partly loaded and again as
+    /// a reserve.
     fn ensure_recordings_model(
         &self,
         model_id: &str,
@@ -2610,6 +2645,9 @@ impl TranscriptionManager {
                 }
                 thread::sleep(FILE_JOB_DICTATION_POLL);
                 continue;
+            }
+            if self.dictation_reserve_bytes() > 0 {
+                self.wait_for_model_load(token)?;
             }
             let _loading = self.recordings.hold_loads();
             // Decide again under the lock: a load or a model deletion may
@@ -2780,21 +2818,47 @@ impl TranscriptionManager {
     }
 
     /// At a dictation's key release: stop a recordings chunk running on the
-    /// GPU, so the dictation's final decode never shares the GPU with it.
-    /// The chunk is redone after the dictation. On the CPU the recordings
-    /// worker's low priority is enough.
+    /// GPU, or about to, when the dictation may use the GPU too, so its
+    /// final decode never shares the GPU with the chunk. The chunk is redone
+    /// after the dictation. When either runs on the CPU the recordings
+    /// worker's low priority is enough, and stopping the chunk would only
+    /// cost a reload of its model and a redo.
     fn clear_gpu_for_dictation(&self) {
-        if self
+        let recordings_on_gpu = self
             .recordings
             .engine
             .loaded()
-            .is_some_and(|info| info.on_gpu)
+            .is_some_and(|info| info.on_gpu);
+        if recordings_on_gpu
+            && self.dictation_shares_gpu()
             && self.recordings.engine.interrupt_scoped_work()
         {
             info!(
                 "Stopped the recording chunk in flight so the dictation has the GPU; it will be redone"
             );
         }
+    }
+
+    /// Whether a dictation may share the GPU with the recordings engine (see
+    /// [`dictation_may_use_gpu`]): where its loaded transcribe-cpp model
+    /// runs, else where the model it runs on (the loaded ONNX model, or the
+    /// selected one) would.
+    fn dictation_shares_gpu(&self) -> bool {
+        let loaded_on_gpu = self.engine.loaded().map(|info| info.on_gpu);
+        let settings = get_settings(&self.app_handle);
+        let model_id = self
+            .get_current_model()
+            .unwrap_or_else(|| settings.selected_model.clone());
+        let onnx = self
+            .model_manager
+            .get_model_info(&model_id)
+            .is_some_and(|info| !matches!(info.engine_type, EngineType::TranscribeCpp));
+        dictation_may_use_gpu(
+            loaded_on_gpu,
+            onnx,
+            ort_may_use_gpu(settings.ort_accelerator),
+            select_transcribe_backend(settings.transcribe_accelerator) != Backend::Cpu,
+        )
     }
 }
 
@@ -3550,6 +3614,23 @@ fn transcribe_gpu_disabled_for_host() -> bool {
     crate::utils::is_windows_x64_emulated_on_arm64()
 }
 
+/// Whether ONNX models may run on a GPU: the setting isn't the CPU and this
+/// build's ONNX Runtime offers a GPU accelerator. Builds today offer only
+/// the CPU (see Cargo.toml).
+fn ort_may_use_gpu(setting: OrtAcceleratorSetting) -> bool {
+    ort_may_use_gpu_with(setting, &transcribe_rs::accel::OrtAccelerator::available())
+}
+
+fn ort_may_use_gpu_with(
+    setting: OrtAcceleratorSetting,
+    available: &[transcribe_rs::accel::OrtAccelerator],
+) -> bool {
+    setting != OrtAcceleratorSetting::Cpu
+        && available
+            .iter()
+            .any(|accelerator| *accelerator != transcribe_rs::accel::OrtAccelerator::CpuOnly)
+}
+
 fn effective_transcribe_accelerator(
     setting: TranscribeAcceleratorSetting,
     gpu_disabled: bool,
@@ -3716,6 +3797,32 @@ mod tests {
         assert_eq!(
             select_transcribe_backend_for_host(TranscribeAcceleratorSetting::Gpu, false),
             Backend::Auto
+        );
+    }
+
+    #[test]
+    fn onnx_uses_a_gpu_only_with_a_gpu_accelerator_built_in_and_allowed() {
+        use transcribe_rs::accel::OrtAccelerator;
+        let cpu_only = [OrtAccelerator::CpuOnly];
+        let with_cuda = [OrtAccelerator::CpuOnly, OrtAccelerator::Cuda];
+        let cases = [
+            (OrtAcceleratorSetting::Auto, &cpu_only[..], false),
+            (OrtAcceleratorSetting::Cuda, &cpu_only[..], false),
+            (OrtAcceleratorSetting::Auto, &with_cuda[..], true),
+            (OrtAcceleratorSetting::Cuda, &with_cuda[..], true),
+            (OrtAcceleratorSetting::Cpu, &with_cuda[..], false),
+        ];
+        for (setting, available, expected) in cases {
+            assert_eq!(
+                ort_may_use_gpu_with(setting, available),
+                expected,
+                "{setting:?} with {available:?}"
+            );
+        }
+        // As built: a GPU only if this build has a GPU accelerator.
+        assert_eq!(
+            ort_may_use_gpu(OrtAcceleratorSetting::Auto),
+            OrtAccelerator::available().len() > 1
         );
     }
 

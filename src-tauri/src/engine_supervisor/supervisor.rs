@@ -121,7 +121,9 @@ pub struct LoadSpec {
     /// each time a worker starts for it (see [`gpu_fits`]). With less, the
     /// model loads in a CPU-only worker instead and its
     /// [`LoadedInfo::gpu_memory_fallback`] is set. `None` never checks; nor
-    /// does a CPU or pinned spec.
+    /// does a CPU or pinned spec. Room kept for another model only on the
+    /// load itself is [`EngineSupervisor::load_reserving`]'s, never part of
+    /// the spec.
     pub min_gpu_free_bytes: Option<u64>,
 }
 
@@ -169,6 +171,18 @@ fn gpu_fits(devices: &[DeviceInfo], selector: &DeviceSelector, need: u64) -> boo
     }
 }
 
+/// The free GPU memory a new worker for `spec` must find to load it there:
+/// the spec's own need plus `reserve_bytes` (the load's room for another
+/// model, 0 for a worker that replaces a lost one). `None` checks nothing: a
+/// spec without a need, a pinned device, or a worker that won't use the GPU.
+fn gpu_need(spec: &LoadSpec, reserve_bytes: u64, cpu_only_worker: bool) -> Option<u64> {
+    if cpu_only_worker || spec.pinned() {
+        return None;
+    }
+    spec.min_gpu_free_bytes
+        .map(|need| need.saturating_add(reserve_bytes))
+}
+
 #[derive(Debug)]
 pub enum EngineError {
     /// [`EngineSupervisor::cancel`] (or, for scoped work,
@@ -211,7 +225,12 @@ type Reply<T> = mpsc::Sender<T>;
 type OnProgress = Box<dyn FnMut(StreamProgress) + Send>;
 
 enum Command {
-    Load(LoadSpec, Reply<Result<LoadedInfo, EngineError>>),
+    Load {
+        spec: LoadSpec,
+        /// See [`EngineSupervisor::load_reserving`].
+        reserve_bytes: u64,
+        reply: Reply<Result<LoadedInfo, EngineError>>,
+    },
     Unload(Reply<()>),
     Transcribe {
         pcm: Vec<f32>,
@@ -220,6 +239,10 @@ enum Command {
         /// Set for scoped work (a file transcription); see
         /// [`EngineSupervisor::cancel_work`].
         token: Option<WorkToken>,
+        /// Set for scoped work that yields to interrupts: the interrupt
+        /// count its caller read; see
+        /// [`EngineSupervisor::transcribe_interruptible`].
+        interrupts: Option<u64>,
         reply: Reply<Result<Transcript, EngineError>>,
     },
     StreamBegin {
@@ -269,6 +292,10 @@ struct Shared {
     /// The call the owner is waiting on, if any. A cancel takes it and kills
     /// its worker.
     in_flight: Mutex<Option<InFlight>>,
+    /// Bumped by every [`EngineSupervisor::interrupt_scoped_work`] under the
+    /// `in_flight` lock, whether or not a call was in flight, so an
+    /// interruptible call that has not started yet sees it too.
+    interrupts: AtomicU64,
     /// Bumped by every [`EngineSupervisor::unload`] as it is called, so the
     /// model reads as unloaded at once, even while the unload waits its turn.
     unloads_requested: AtomicU64,
@@ -348,6 +375,19 @@ impl Shared {
         self.epoch() != epoch
     }
 
+    fn interrupts(&self) -> u64 {
+        self.interrupts.load(Ordering::SeqCst)
+    }
+
+    /// Whether work must not start: a cancel came after `epoch`, its
+    /// `token` was cancelled, or, for work that yields to interrupts, an
+    /// interrupt came after its caller read `interrupts`.
+    fn stopped(&self, epoch: u64, token: Option<&WorkToken>, interrupts: Option<u64>) -> bool {
+        self.cancelled_since(epoch)
+            || token.is_some_and(WorkToken::is_cancelled)
+            || interrupts.is_some_and(|seen| self.interrupts() != seen)
+    }
+
     fn next_id(&self) -> u64 {
         self.next_id.fetch_add(1, Ordering::Relaxed) + 1
     }
@@ -413,8 +453,26 @@ impl EngineSupervisor {
     /// exited before the new one starts, so two models are never held at
     /// once.
     pub fn load(&self, spec: LoadSpec) -> Result<LoadedInfo, EngineError> {
-        self.ask(|reply| Command::Load(spec, reply))
-            .unwrap_or_else(|| Err(engine_stopped()))
+        self.load_reserving(spec, 0)
+    }
+
+    /// [`load`](Self::load), keeping `reserve_bytes` of GPU memory free
+    /// beyond the spec's [`LoadSpec::min_gpu_free_bytes`] for another model
+    /// that will go to the same GPU but isn't there yet. Only this load
+    /// checks for it: a worker started later for the model (after a crash,
+    /// cancel or interrupt) checks the spec's own need, because by then the
+    /// GPU's free memory already counts that other model.
+    pub fn load_reserving(
+        &self,
+        spec: LoadSpec,
+        reserve_bytes: u64,
+    ) -> Result<LoadedInfo, EngineError> {
+        self.ask(|reply| Command::Load {
+            spec,
+            reserve_bytes,
+            reply,
+        })
+        .unwrap_or_else(|| Err(engine_stopped()))
     }
 
     /// Unload the model, without waiting. It reads as unloaded at once and
@@ -451,7 +509,7 @@ impl EngineSupervisor {
     /// Transcribe 16 kHz mono PCM with the loaded model. A worker crash or
     /// hang is retried once in a fresh worker (on CPU if it was on the GPU).
     pub fn transcribe(&self, pcm: Vec<f32>, run: RunOptions) -> Result<Transcript, EngineError> {
-        self.submit_transcribe(pcm, run, None)
+        self.submit_transcribe(pcm, run, None, None)
     }
 
     /// [`transcribe`](Self::transcribe) as scoped work: besides
@@ -463,7 +521,23 @@ impl EngineSupervisor {
         run: RunOptions,
         token: &WorkToken,
     ) -> Result<Transcript, EngineError> {
-        self.submit_transcribe(pcm, run, Some(token.clone()))
+        self.submit_transcribe(pcm, run, Some(token.clone()), None)
+    }
+
+    /// [`transcribe_scoped`](Self::transcribe_scoped) that yields to every
+    /// [`interrupt_scoped_work`](Self::interrupt_scoped_work) after its
+    /// caller read `interrupts_seen` from [`interrupts`](Self::interrupts),
+    /// not only to one that finds it running: a call interrupted before it
+    /// started (queued, or while its worker was still being replaced)
+    /// returns `Cancelled` without running.
+    pub fn transcribe_interruptible(
+        &self,
+        pcm: Vec<f32>,
+        run: RunOptions,
+        token: &WorkToken,
+        interrupts_seen: u64,
+    ) -> Result<Transcript, EngineError> {
+        self.submit_transcribe(pcm, run, Some(token.clone()), Some(interrupts_seen))
     }
 
     fn submit_transcribe(
@@ -471,6 +545,7 @@ impl EngineSupervisor {
         pcm: Vec<f32>,
         run: RunOptions,
         token: Option<WorkToken>,
+        interrupts: Option<u64>,
     ) -> Result<Transcript, EngineError> {
         let epoch = self.shared.epoch();
         self.ask(|reply| Command::Transcribe {
@@ -478,6 +553,7 @@ impl EngineSupervisor {
             run,
             epoch,
             token,
+            interrupts,
             reply,
         })
         .unwrap_or_else(|| Err(engine_stopped()))
@@ -563,8 +639,16 @@ impl EngineSupervisor {
     ///
     /// The call is stopped by killing its worker, which is neither a crash
     /// nor a GPU failure: the next use starts a fresh worker for the model.
+    /// An interruptible call that has not started yet never starts (see
+    /// [`transcribe_interruptible`](Self::transcribe_interruptible)).
     pub fn interrupt_scoped_work(&self) -> bool {
-        let call = lock(&self.shared.in_flight).take_if(|call| call.token.is_some());
+        let call = {
+            let mut in_flight = lock(&self.shared.in_flight);
+            // Counted under the lock `call_work` publishes under: either it
+            // sees the count and sends nothing, or this sees its call.
+            self.shared.interrupts.fetch_add(1, Ordering::SeqCst);
+            in_flight.take_if(|call| call.token.is_some())
+        };
         match call {
             Some(call) => {
                 info!(
@@ -576,6 +660,13 @@ impl EngineSupervisor {
             }
             None => false,
         }
+    }
+
+    /// How many times [`interrupt_scoped_work`](Self::interrupt_scoped_work)
+    /// has been called, for
+    /// [`transcribe_interruptible`](Self::transcribe_interruptible).
+    pub fn interrupts(&self) -> u64 {
+        self.shared.interrupts()
     }
 
     /// The compute devices, as listed by the latest worker. If no worker has
@@ -737,8 +828,12 @@ impl Owner {
     fn run(mut self, queue: mpsc::Receiver<Command>) {
         while let Ok(command) = queue.recv() {
             match command {
-                Command::Load(spec, reply) => {
-                    let _ = reply.send(self.load(spec));
+                Command::Load {
+                    spec,
+                    reserve_bytes,
+                    reply,
+                } => {
+                    let _ = reply.send(self.load(spec, reserve_bytes));
                 }
                 Command::Unload(reply) => {
                     self.unload();
@@ -750,9 +845,11 @@ impl Owner {
                     run,
                     epoch,
                     token,
+                    interrupts,
                     reply,
                 } => {
-                    let _ = reply.send(self.transcribe(&pcm, &run, epoch, token.as_ref()));
+                    let _ =
+                        reply.send(self.transcribe(&pcm, &run, epoch, token.as_ref(), interrupts));
                 }
                 Command::StreamBegin {
                     active,
@@ -782,10 +879,12 @@ impl Owner {
         self.unload();
     }
 
-    fn load(&mut self, spec: LoadSpec) -> Result<LoadedInfo, EngineError> {
+    /// `reserve_bytes` counts for this start only; the kept spec never holds
+    /// it (see [`EngineSupervisor::load_reserving`]).
+    fn load(&mut self, spec: LoadSpec, reserve_bytes: u64) -> Result<LoadedInfo, EngineError> {
         self.unload();
         self.spec = Some(spec);
-        let result = self.start();
+        let result = self.start(reserve_bytes);
         if result.is_err() {
             self.spec = None;
         }
@@ -830,45 +929,49 @@ impl Owner {
     /// see the CPU, so it doesn't list.
     ///
     /// A spec with [`LoadSpec::min_gpu_free_bytes`] is checked against the
-    /// devices this hello just listed: when the GPU has too little free
-    /// memory, the model loads in a CPU-only worker instead.
-    fn start_worker(&self, spec: &LoadSpec) -> Result<(Worker, LoadedInfo), Failure> {
+    /// devices this hello just listed, with `reserve_bytes` on top (see
+    /// [`gpu_need`]): when the GPU has too little free memory, the model
+    /// loads in a CPU-only worker instead.
+    fn start_worker(
+        &self,
+        spec: &LoadSpec,
+        reserve_bytes: u64,
+    ) -> Result<(Worker, LoadedInfo), Failure> {
         let cpu_only = self.cpu_only_worker(spec);
         let mut worker = self.shared.hello(cpu_only, !cpu_only)?;
-        if let Some(need) = spec.min_gpu_free_bytes {
-            if !cpu_only && !spec.pinned() {
-                let fits = lock(&self.shared.devices)
-                    .as_deref()
-                    .is_none_or(|devices| gpu_fits(devices, &spec.device, need));
-                if !fits {
-                    info!(
-                        "Not enough free GPU memory for '{}' ({} MiB needed); loading it on the CPU",
-                        spec.path.display(),
-                        need / (1024 * 1024)
-                    );
-                    drop(worker);
-                    let mut worker = self.shared.hello(true, false)?;
-                    let mut info = worker.load(&spec.cpu())?;
-                    info.gpu_memory_fallback = true;
-                    if let Some(loaded) = worker.info.as_mut() {
-                        loaded.gpu_memory_fallback = true;
-                    }
-                    return Ok((worker, info));
+        if let Some(need) = gpu_need(spec, reserve_bytes, cpu_only) {
+            let fits = lock(&self.shared.devices)
+                .as_deref()
+                .is_none_or(|devices| gpu_fits(devices, &spec.device, need));
+            if !fits {
+                info!(
+                    "Not enough free GPU memory for '{}' ({} MiB needed); loading it on the CPU",
+                    spec.path.display(),
+                    need / (1024 * 1024)
+                );
+                drop(worker);
+                let mut worker = self.shared.hello(true, false)?;
+                let mut info = worker.load(&spec.cpu())?;
+                info.gpu_memory_fallback = true;
+                if let Some(loaded) = worker.info.as_mut() {
+                    loaded.gpu_memory_fallback = true;
                 }
+                return Ok((worker, info));
             }
         }
         let info = worker.load(spec)?;
         Ok((worker, info))
     }
 
-    /// Start a worker and load the current spec in it. If a worker with GPU
+    /// Start a worker and load the current spec in it, keeping
+    /// `reserve_bytes` of GPU memory free beside it. If a worker with GPU
     /// backends is lost on the way (backend init, device listing or the
     /// load), mark the GPU unavailable and retry once in a CPU-only worker.
-    fn start(&mut self) -> Result<LoadedInfo, EngineError> {
+    fn start(&mut self, reserve_bytes: u64) -> Result<LoadedInfo, EngineError> {
         let spec = self.spec.clone().ok_or_else(not_loaded)?;
         let started = Instant::now();
         let wanted = self.effective_spec(&spec);
-        let (worker, info) = match self.start_worker(&wanted) {
+        let (worker, info) = match self.start_worker(&wanted, reserve_bytes) {
             Ok(started) => started,
             Err(failure)
                 if failure.worker_lost() && !self.cpu_only_worker(&wanted) && !wanted.pinned() =>
@@ -879,7 +982,7 @@ impl Owner {
                     failure
                 ));
                 warn!("Retrying in a CPU-only worker");
-                self.start_worker(&wanted.cpu())?
+                self.start_worker(&wanted.cpu(), 0)?
             }
             Err(failure) => return Err(failure.into()),
         };
@@ -912,7 +1015,9 @@ impl Owner {
             return Err(not_loaded());
         }
         info!("Starting a fresh transcription worker for the loaded model");
-        if let Err(e) = self.start() {
+        // No reserve: the free memory the new worker's hello reports already
+        // counts whatever the load reserved room for.
+        if let Err(e) = self.start(0) {
             // The model can't be brought back; report it unloaded so the
             // next use loads it from scratch (and reports why it can't).
             self.spec = None;
@@ -956,7 +1061,8 @@ impl Owner {
     /// A call that [`EngineSupervisor::cancel`] (or, for scoped work,
     /// [`EngineSupervisor::cancel_work`] with its `token`) can stop. Returns
     /// `Cancelled` if a cancel came after `epoch`, or the token was
-    /// cancelled, whatever the worker said.
+    /// cancelled, whatever the worker said; with `interrupts`, also without
+    /// sending anything if an interrupt came after its caller read them.
     fn call_work(
         &mut self,
         request: &Request,
@@ -964,16 +1070,18 @@ impl Owner {
         deadline: Duration,
         epoch: u64,
         token: Option<&WorkToken>,
+        interrupts: Option<u64>,
     ) -> Result<Response, Failure> {
         let worker = self.worker.as_mut().expect("caller ensured a worker");
         let frame = encode_request(request, pcm)?;
         let sent = {
             // Check, send and publish under the lock cancel() takes after
-            // bumping the epoch (and cancel_work() after setting the token):
-            // either this sees the cancel and sends nothing, or the cancel
-            // sees the call and kills its worker.
+            // bumping the epoch (cancel_work() after setting the token, and
+            // interrupt_scoped_work() as it counts): either this sees the
+            // cancel and sends nothing, or the cancel sees the call and
+            // kills its worker.
             let mut in_flight = lock(&self.shared.in_flight);
-            if self.shared.cancelled_since(epoch) || token.is_some_and(WorkToken::is_cancelled) {
+            if self.shared.stopped(epoch, token, interrupts) {
                 return Err(Failure::Cancelled);
             }
             let sent = worker.control.send(frame);
@@ -1013,6 +1121,7 @@ impl Owner {
         run: &RunOptions,
         epoch: u64,
         token: Option<&WorkToken>,
+        interrupts: Option<u64>,
     ) -> Result<Transcript, EngineError> {
         // A stream left open would make the worker refuse the run.
         self.end_stream();
@@ -1021,14 +1130,16 @@ impl Owner {
         };
         let mut retried = false;
         loop {
-            if self.shared.cancelled_since(epoch) || token.is_some_and(WorkToken::is_cancelled) {
+            // Also before a respawn: work that yields to an interrupt must
+            // not load its model beside the dictation that interrupted it.
+            if self.shared.stopped(epoch, token, interrupts) {
                 return Err(EngineError::Cancelled);
             }
             // A respawn here runs under the load deadline; the run's own
             // deadline starts only once the model is loaded.
             self.ensure_worker()?;
             let deadline = self.deadlines().run(pcm.len());
-            match self.call_work(&request, Some(pcm), deadline, epoch, token) {
+            match self.call_work(&request, Some(pcm), deadline, epoch, token, interrupts) {
                 Ok(Response::Transcript(transcript)) => return Ok(transcript),
                 Ok(other) => return Err(unexpected(&other).into()),
                 Err(failure) if failure.worker_lost() => {
@@ -1097,7 +1208,7 @@ impl Owner {
             .deadlines()
             .audio(pcm.len() + ms_to_samples(stream.pending_ms));
         let started = Instant::now();
-        match self.call_work(&Request::Feed, Some(pcm), deadline, epoch, None) {
+        match self.call_work(&Request::Feed, Some(pcm), deadline, epoch, None, None) {
             Ok(Response::Fed { update, text }) => {
                 let Some(stream) = self.stream.as_mut() else {
                     return;
@@ -1151,6 +1262,7 @@ impl Owner {
             None,
             deadline,
             epoch,
+            None,
             None,
         ) {
             Ok(Response::Finalized {
@@ -1779,6 +1891,43 @@ mod unit_tests {
         assert_eq!(engine.shared.epoch(), 0);
     }
 
+    /// An interrupt that finds nothing in flight (the chunk's worker is
+    /// still being replaced, say) still stops an interruptible call whose
+    /// caller read the count before it: the call returns `Cancelled`
+    /// without starting a worker, and leaves the token and the cancel epoch
+    /// alone. A call with the count read since, or a plain scoped call, is
+    /// not affected. No worker is started.
+    #[test]
+    fn an_interrupt_stops_an_interruptible_call_that_has_not_started() {
+        let engine = EngineSupervisor::new(false);
+        let token = WorkToken::new();
+        let pcm = || vec![0.0; 16_000];
+        let seen = engine.interrupts();
+        assert!(!engine.shared.stopped(0, Some(&token), Some(seen)));
+
+        assert!(!engine.interrupt_scoped_work(), "nothing in flight");
+        assert_eq!(engine.interrupts(), seen + 1);
+        assert!(engine.shared.stopped(0, Some(&token), Some(seen)));
+        assert!(!engine.shared.stopped(0, Some(&token), None));
+        assert!(matches!(
+            engine.transcribe_interruptible(pcm(), RunOptions::default(), &token, seen),
+            Err(EngineError::Cancelled)
+        ));
+
+        // Not stopped: these get as far as finding no model loaded.
+        let current = engine.interrupts();
+        assert!(matches!(
+            engine.transcribe_interruptible(pcm(), RunOptions::default(), &token, current),
+            Err(EngineError::Failed(_))
+        ));
+        assert!(matches!(
+            engine.transcribe_scoped(pcm(), RunOptions::default(), &token),
+            Err(EngineError::Failed(_))
+        ));
+        assert!(!token.is_cancelled());
+        assert_eq!(engine.shared.epoch(), 0);
+    }
+
     #[test]
     fn a_cpu_spec_never_checks_gpu_memory() {
         let spec = LoadSpec {
@@ -1840,6 +1989,54 @@ mod unit_tests {
         assert!(gpu_fits(&[], &key("big"), u64::MAX));
         // An explicit index is never second-guessed.
         assert!(gpu_fits(&devices, &DeviceSelector::Index(3), u64::MAX));
+    }
+
+    /// The room a load keeps for another model counts on that load only. A
+    /// worker started later for the same spec (after an interrupt) finds
+    /// the other model loaded and counted in the free memory, so it needs
+    /// the spec's own memory: counting the reserve again would push a model
+    /// that fits onto the CPU.
+    #[test]
+    fn a_load_reserve_counts_only_for_the_load_itself() {
+        const GIB: u64 = 1 << 30;
+        let spec = LoadSpec {
+            path: PathBuf::from("model.gguf"),
+            backend: Backend::Auto,
+            device: DeviceSelector::Auto,
+            min_gpu_free_bytes: Some(5 * GIB),
+        };
+        let gpu = |free: u64| {
+            [
+                device("cpu", DeviceType::Cpu, 0),
+                device("gpu", DeviceType::Gpu, free),
+            ]
+        };
+
+        // The load, with the other model still to come: 5 + 1 GiB of 7.
+        let at_load = gpu_need(&spec, GIB, false).unwrap();
+        assert_eq!(at_load, 6 * GIB);
+        assert!(gpu_fits(&gpu(7 * GIB), &spec.device, at_load));
+        // A new worker once the other model took 1.5 GiB of the GPU.
+        let at_respawn = gpu_need(&spec, 0, false).unwrap();
+        assert_eq!(at_respawn, 5 * GIB);
+        let after = gpu(11 * GIB / 2);
+        assert!(gpu_fits(&after, &spec.device, at_respawn));
+        // What keeping the reserve would decide: the CPU.
+        assert!(!gpu_fits(&after, &spec.device, at_load));
+
+        // Nothing to check: a CPU-only worker, a pinned device, no need.
+        assert_eq!(gpu_need(&spec, GIB, true), None);
+        let pinned = LoadSpec {
+            device: DeviceSelector::Index(1),
+            ..spec.clone()
+        };
+        assert_eq!(gpu_need(&pinned, GIB, false), None);
+        let unchecked = LoadSpec {
+            min_gpu_free_bytes: None,
+            ..spec.clone()
+        };
+        assert_eq!(gpu_need(&unchecked, GIB, false), None);
+        assert_eq!(gpu_need(&spec, u64::MAX, false), Some(u64::MAX));
     }
 }
 
@@ -2550,6 +2747,45 @@ mod tests {
         assert!(info.gpu_memory_fallback);
         // Without the requirement it goes to the GPU.
         assert!(engine.load(spec()).unwrap().on_gpu);
+    }
+
+    /// Room a load reserves for another model is checked on that load
+    /// only: a worker started after an interrupt checks the spec's own
+    /// need, so the model goes to the GPU then.
+    #[test]
+    #[ignore]
+    fn a_load_reserve_is_not_kept_for_a_new_worker() {
+        set_fault(None, false);
+        let engine = EngineSupervisor::new(true);
+        let devices = engine.devices().expect("devices not listed");
+        if gpu_fits(&devices, &DeviceSelector::Auto, u64::MAX) {
+            println!("no GPU reports its free memory; nothing to check");
+            return;
+        }
+        let checked = LoadSpec {
+            min_gpu_free_bytes: Some(0),
+            ..spec()
+        };
+        let info = engine.load_reserving(checked, u64::MAX).unwrap();
+        assert!(!info.on_gpu, "loaded on '{}'", info.backend);
+        assert!(info.gpu_memory_fallback);
+        let token = WorkToken::new();
+        let run = {
+            let engine = engine.clone();
+            let token = token.clone();
+            thread::spawn(move || {
+                engine.transcribe_scoped(long_pcm(30), RunOptions::default(), &token)
+            })
+        };
+        wait_in_flight(&engine, "transcription");
+        assert!(engine.interrupt_scoped_work());
+        assert!(matches!(run.join().unwrap(), Err(EngineError::Cancelled)));
+        engine
+            .transcribe_scoped(test_pcm(), RunOptions::default(), &token)
+            .unwrap();
+        let info = engine.loaded().unwrap();
+        assert!(info.on_gpu, "redone on '{}'", info.backend);
+        assert!(!info.gpu_memory_fallback);
     }
 
     /// A worker hung in native code still exits when its parent goes away

@@ -5,8 +5,8 @@
 //! It runs its workers at low priority and is loaded only while files are
 //! transcribed, so the dictation model stays loaded beside it. Its chunks
 //! never take the run gate: they never start while a dictation is active,
-//! and a chunk still on the GPU when a dictation's key is released is
-//! interrupted and redone afterwards (see
+//! and a chunk still on the GPU when a dictation that may use the GPU too
+//! has its key released is interrupted and redone afterwards (see
 //! `TranscriptionManager::hold_for_dictation`). Only transcribe-cpp models
 //! run here: an in-process ONNX engine can't be killed, isolated from
 //! crashes or deprioritized.
@@ -47,12 +47,22 @@ pub fn choose_file_model_slot(recordings_setting: &str, selected_model: &str) ->
 /// Longest an idle recordings model stays loaded.
 pub const RECORDINGS_MAX_LINGER: Duration = Duration::from_secs(120);
 
-/// How long an idle recordings model stays loaded: the unload timeout, at
-/// most [`RECORDINGS_MAX_LINGER`] ("Never" counts as that too). Recordings
-/// come in batches, and holding a second model for longer only costs memory.
+/// How long an idle recordings model stays loaded before the idle watcher
+/// frees it: the unload timeout, at most [`RECORDINGS_MAX_LINGER`] ("Never"
+/// counts as that too). Recordings come in batches, and holding a second
+/// model for longer only costs memory.
+///
+/// "Immediately" counts as the maximum too: the model is freed as soon as
+/// the file queue drains (`TranscriptionManager::recordings_queue_drained`),
+/// not between queued files, where it sits idle while a job waits for its
+/// speaker labels or is saved. The linger is only a safety net then.
 pub fn recordings_linger(timeout: ModelUnloadTimeout) -> Duration {
     let max = RECORDINGS_MAX_LINGER.as_secs();
-    Duration::from_secs(timeout.to_seconds().map_or(max, |secs| secs.min(max)))
+    let secs = match timeout {
+        ModelUnloadTimeout::Immediately => max,
+        other => other.to_seconds().map_or(max, |secs| secs.min(max)),
+    };
+    Duration::from_secs(secs)
 }
 
 /// Whether the recordings model should be unloaded now: it is loaded, no
@@ -70,14 +80,42 @@ pub fn should_unload_recordings(
 /// cache, the driver's own use).
 const VRAM_HEADROOM_BYTES: u64 = 512 * 1024 * 1024;
 
-/// Free GPU memory a recordings model of `recordings_bytes` needs, when the
-/// dictation model (`reserve_bytes`, 0 when it is already on the GPU or
-/// won't go there) must still fit too: 15 % over both files plus a fixed
-/// headroom. Saturates instead of overflowing.
-pub fn vram_need(recordings_bytes: u64, reserve_bytes: u64) -> u64 {
-    let weights = u128::from(recordings_bytes) + u128::from(reserve_bytes);
-    let need = weights * 115 / 100 + u128::from(VRAM_HEADROOM_BYTES);
+/// Free GPU memory a recordings model of `recordings_bytes` needs: 15 % over
+/// its file plus a fixed headroom. Checked each time a worker starts for it.
+/// Saturates instead of overflowing.
+pub fn vram_need(recordings_bytes: u64) -> u64 {
+    let need = u128::from(recordings_bytes) * 115 / 100 + u128::from(VRAM_HEADROOM_BYTES);
     u64::try_from(need).unwrap_or(u64::MAX)
+}
+
+/// Free GPU memory to keep beside the recordings model, on its load only,
+/// for a dictation model of `dictation_bytes` that will go to the GPU but
+/// isn't there yet (0 when it is already on the GPU or won't go there): 15 %
+/// over its file. A worker started later finds it loaded and counted in the
+/// GPU's free memory. Saturates instead of overflowing.
+pub fn vram_reserve(dictation_bytes: u64) -> u64 {
+    u64::try_from(u128::from(dictation_bytes) * 115 / 100).unwrap_or(u64::MAX)
+}
+
+/// Whether a dictation may run on the GPU, so a recordings chunk running
+/// there must make way for it at key release. A loaded transcribe-cpp
+/// dictation model says where it runs (`loaded_on_gpu`); otherwise it goes
+/// by the model the dictation will run on: an ONNX model (`onnx`) uses the
+/// GPU only with a GPU ONNX Runtime accelerator (`onnx_gpu`), a
+/// transcribe-cpp model unless its accelerator is the CPU
+/// (`transcribe_cpp_gpu`). An unknown model counts as transcribe-cpp: when
+/// unsure, the chunk makes way.
+pub fn dictation_may_use_gpu(
+    loaded_on_gpu: Option<bool>,
+    onnx: bool,
+    onnx_gpu: bool,
+    transcribe_cpp_gpu: bool,
+) -> bool {
+    match loaded_on_gpu {
+        Some(on_gpu) => on_gpu,
+        None if onnx => onnx_gpu,
+        None => transcribe_cpp_gpu,
+    }
 }
 
 /// The recordings engine's state, for the Transcribe page. Emitted when it
@@ -222,7 +260,8 @@ mod tests {
     #[test]
     fn the_linger_is_the_unload_timeout_up_to_two_minutes() {
         let cases = [
-            (ModelUnloadTimeout::Immediately, 0),
+            // Freed when the file queue drains; this is only a safety net.
+            (ModelUnloadTimeout::Immediately, 120),
             (ModelUnloadTimeout::Sec15, 15),
             (ModelUnloadTimeout::Min2, 120),
             (ModelUnloadTimeout::Min5, 120),
@@ -253,7 +292,7 @@ mod tests {
         ));
         assert!(should_unload_recordings(true, 0, linger, linger));
         assert!(should_unload_recordings(true, 0, long, linger));
-        // "Immediately": any idle time will do.
+        // A zero linger: any idle time will do.
         assert!(should_unload_recordings(
             true,
             0,
@@ -262,16 +301,54 @@ mod tests {
         ));
     }
 
+    /// With "Immediately", the idle watcher leaves the model loaded between
+    /// queued files: a job waiting a minute for its speaker labels holds no
+    /// lease, but the next file still needs the model.
     #[test]
-    fn vram_need_covers_both_models_with_headroom() {
+    fn immediately_keeps_the_model_between_queued_files() {
+        let linger = recordings_linger(ModelUnloadTimeout::Immediately);
+        assert!(!should_unload_recordings(
+            true,
+            0,
+            Duration::from_secs(60),
+            linger
+        ));
+        assert!(should_unload_recordings(
+            true,
+            0,
+            RECORDINGS_MAX_LINGER,
+            linger
+        ));
+    }
+
+    #[test]
+    fn vram_need_covers_the_model_with_headroom_and_the_reserve_the_other() {
         const MIB: u64 = 1024 * 1024;
-        assert_eq!(vram_need(0, 0), 512 * MIB);
-        assert_eq!(vram_need(1000 * MIB, 0), 1150 * MIB + 512 * MIB);
-        assert_eq!(vram_need(600 * MIB, 400 * MIB), 1150 * MIB + 512 * MIB);
-        assert_eq!(vram_need(100, 100), 230 + 512 * MIB);
-        assert_eq!(vram_need(u64::MAX, 0), u64::MAX);
-        assert_eq!(vram_need(u64::MAX, u64::MAX), u64::MAX);
-        assert_eq!(vram_need(u64::MAX / 2, u64::MAX / 2), u64::MAX);
+        assert_eq!(vram_need(0), 512 * MIB);
+        assert_eq!(vram_need(1000 * MIB), 1150 * MIB + 512 * MIB);
+        assert_eq!(vram_need(100), 115 + 512 * MIB);
+        assert_eq!(vram_need(u64::MAX), u64::MAX);
+        assert_eq!(vram_reserve(0), 0);
+        assert_eq!(vram_reserve(400 * MIB), 460 * MIB);
+        assert_eq!(vram_reserve(u64::MAX), u64::MAX);
+        // Both models: 15 % over both files plus the headroom.
+        assert_eq!(
+            vram_need(600 * MIB) + vram_reserve(400 * MIB),
+            1150 * MIB + 512 * MIB
+        );
+    }
+
+    #[test]
+    fn a_dictation_on_the_cpu_never_needs_the_gpu_cleared() {
+        // Loaded transcribe-cpp model: where it runs, whatever else says.
+        assert!(dictation_may_use_gpu(Some(true), false, false, false));
+        assert!(!dictation_may_use_gpu(Some(false), false, true, true));
+        // ONNX: only with a GPU ONNX Runtime accelerator.
+        assert!(!dictation_may_use_gpu(None, true, false, true));
+        assert!(dictation_may_use_gpu(None, true, true, false));
+        // Not loaded yet (or unknown): by the transcribe-cpp accelerator.
+        assert!(dictation_may_use_gpu(None, false, false, true));
+        assert!(!dictation_may_use_gpu(None, false, true, false));
     }
 
     #[test]

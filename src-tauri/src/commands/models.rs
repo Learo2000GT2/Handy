@@ -89,6 +89,10 @@ pub async fn delete_model(
     // load can start until the file is gone, so none reopens it in between
     // (Windows can't delete a file a worker has open). Recordings then use
     // the dictation model, and a job still on it stops: its model is gone.
+    // The setting is reset before the delete, so a job starting meanwhile
+    // never picks the model, and stays reset if the delete fails: a model
+    // folder may be partly gone by then. The page re-reads the settings
+    // after a delete either way.
     let tm = Arc::clone(&transcription_manager);
     let mm = Arc::clone(&model_manager);
     let app = app_handle.clone();

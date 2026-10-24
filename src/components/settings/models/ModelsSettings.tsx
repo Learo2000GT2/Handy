@@ -168,9 +168,10 @@ export const ModelsSettings: React.FC = () => {
 
     if (confirmed) {
       try {
-        const deleted = await deleteModel(modelId);
-        // Recordings now use the dictation model: the backend reset it.
-        if (deleted && isRecordingsModel) {
+        await deleteModel(modelId);
+        // Recordings now use the dictation model: the backend reset the
+        // setting before deleting, so re-read it even if the delete failed.
+        if (isRecordingsModel) {
           await useSettingsStore.getState().refreshSettings();
         }
       } catch (err) {
