@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "취소",
         "remove": "목록에서 제거",
+        "removeWhileLabelling": "화자를 식별하는 동안에는 제거할 수 없습니다",
         "view": "전사 내용 보기",
         "copy": "전사 내용 복사",
         "showFile": "파일 표시"

@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Cancelar",
         "remove": "Quitar de la lista",
+        "removeWhileLabelling": "No se puede quitar mientras se identifican los hablantes",
         "view": "Ver transcripción",
         "copy": "Copiar transcripción",
         "showFile": "Mostrar archivo"

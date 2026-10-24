@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Cancel·la",
         "remove": "Treu de la llista",
+        "removeWhileLabelling": "No es pot treure mentre s'identifiquen els parlants",
         "view": "Mostra la transcripció",
         "copy": "Copia la transcripció",
         "showFile": "Mostra el fitxer"

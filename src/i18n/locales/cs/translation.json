@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Zrušit",
         "remove": "Odebrat ze seznamu",
+        "removeWhileLabelling": "Nelze odebrat, dokud probíhá rozpoznávání mluvčích",
         "view": "Zobrazit přepis",
         "copy": "Kopírovat přepis",
         "showFile": "Zobrazit soubor"

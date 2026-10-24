@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Annuler",
         "remove": "Retirer de la liste",
+        "removeWhileLabelling": "Impossible de retirer pendant l'identification des intervenants",
         "view": "Voir la transcription",
         "copy": "Copier la transcription",
         "showFile": "Afficher le fichier"

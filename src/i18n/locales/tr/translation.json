@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "İptal",
         "remove": "Listeden Kaldır",
+        "removeWhileLabelling": "Konuşmacılar belirlenirken kaldırılamaz",
         "view": "Transkripti Görüntüle",
         "copy": "Transkripti Kopyala",
         "showFile": "Dosyayı Göster"

@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Annuleren",
         "remove": "Verwijderen uit lijst",
+        "removeWhileLabelling": "Kan niet worden verwijderd terwijl sprekers worden geïdentificeerd",
         "view": "Transcriptie bekijken",
         "copy": "Transcriptie kopiëren",
         "showFile": "Bestand tonen"

@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Hủy",
         "remove": "Xóa khỏi danh sách",
+        "removeWhileLabelling": "Không thể xóa khi đang xác định người nói",
         "view": "Xem bản chép lời",
         "copy": "Sao chép bản chép lời",
         "showFile": "Hiển thị tệp"

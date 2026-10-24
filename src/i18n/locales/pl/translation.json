@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Anuluj",
         "remove": "Usuń z listy",
+        "removeWhileLabelling": "Nie można usunąć podczas rozpoznawania mówców",
         "view": "Pokaż transkrypcję",
         "copy": "Kopiuj transkrypcję",
         "showFile": "Pokaż plik"

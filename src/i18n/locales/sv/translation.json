@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Avbryt",
         "remove": "Ta bort från listan",
+        "removeWhileLabelling": "Kan inte tas bort medan talarna identifieras",
         "view": "Visa transkription",
         "copy": "Kopiera transkription",
         "showFile": "Visa fil"

@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Annuller",
         "remove": "Fjern fra listen",
+        "removeWhileLabelling": "Kan ikke fjernes, mens talerne identificeres",
         "view": "Vis transskription",
         "copy": "Kopiér transskription",
         "showFile": "Vis fil"

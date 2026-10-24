@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "ביטול",
         "remove": "הסר מהרשימה",
+        "removeWhileLabelling": "לא ניתן להסיר בזמן זיהוי הדוברים",
         "view": "הצג תמלול",
         "copy": "העתק תמלול",
         "showFile": "הצג קובץ"

@@ -33,11 +33,13 @@ import {
   formatPercent,
   isFinishedStatus,
   isLabelJob,
+  isLabelTarget,
   isolateLtr,
   isRunningStatus,
   jobElapsedMs,
   jobProgressPercent,
   jobSpeakerView,
+  labelJobHasResult,
   speakerSkipKey,
   statusKey,
   timeLeftText,
@@ -124,6 +126,15 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
   const estimate = useFileTranscriptionStore(
     (state) => state.estimates[job.job_id],
   );
+  // A label row's transcript can be gone: the job it labelled may have been
+  // removed or evicted since.
+  const labelResult = useFileTranscriptionStore((state) =>
+    labelJobHasResult(state.jobs, job),
+  );
+  // The backend keeps a job that an unfinished label job is labelling.
+  const removeLocked = useFileTranscriptionStore((state) =>
+    isLabelTarget(state.jobs, job.job_id),
+  );
   const [showCopied, setShowCopied] = useState(false);
 
   useEffect(() => {
@@ -158,7 +169,7 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
   const running = isRunningStatus(job.status);
   const finished = isFinishedStatus(job.status);
   const hasResult = labelJob
-    ? job.status === "completed" && job.speakers?.state === "done"
+    ? labelResult
     : finished && job.has_transcript && !noSpeech;
   const { icon: StatusIcon, className: statusIconClass } = STATUS_ICONS[status];
 
@@ -337,7 +348,13 @@ export const FileJobRow: React.FC<FileJobRowProps> = ({
           {finished ? (
             <IconButton
               onClick={() => dismiss(job.job_id)}
-              title={t("settings.transcribeFiles.actions.remove")}
+              disabled={removeLocked}
+              title={
+                removeLocked
+                  ? t("settings.transcribeFiles.actions.removeWhileLabelling")
+                  : t("settings.transcribeFiles.actions.remove")
+              }
+              aria-label={t("settings.transcribeFiles.actions.remove")}
             >
               <Trash2 width={16} height={16} />
             </IconButton>

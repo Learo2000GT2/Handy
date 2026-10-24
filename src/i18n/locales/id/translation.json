@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Batal",
         "remove": "Hapus dari Daftar",
+        "removeWhileLabelling": "Tidak dapat dihapus selama pembicara sedang diidentifikasi",
         "view": "Lihat Transkripsi",
         "copy": "Salin Transkripsi",
         "showFile": "Tampilkan File"

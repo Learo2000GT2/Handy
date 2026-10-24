@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "キャンセル",
         "remove": "リストから削除",
+        "removeWhileLabelling": "話者の識別中は削除できません",
         "view": "文字起こしを表示",
         "copy": "文字起こしをコピー",
         "showFile": "ファイルを表示"

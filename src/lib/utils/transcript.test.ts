@@ -31,6 +31,7 @@ import {
   isFinishedStatus,
   isLabelJob,
   isLabelTarget,
+  labelJobHasResult,
   isLoopbackUrl,
   isolateLtr,
   isRunningStatus,
@@ -502,6 +503,60 @@ assert.equal(activeLabelJobForHistory(jobs, 1), null);
 assert.equal(isLabelTarget(jobs, 1), true);
 assert.equal(isLabelTarget(jobs, 8), false);
 assert.equal(isLabelTarget(jobs, 2), false);
+
+// labelJobHasResult: a finished label row offers its transcript only while
+// that transcript can still be opened.
+const labelled = (
+  labels_for: FileJobSnapshot["labels_for"],
+  overrides: Partial<FileJobSnapshot> = {},
+): FileJobSnapshot => ({
+  ...snapshot(30, "completed", labels_for),
+  speakers: { state: "done", speakers: 2 },
+  ...overrides,
+});
+const withTarget: Record<number, FileJobSnapshot> = {
+  1: { ...snapshot(1, "cancelled", null), has_transcript: true },
+  2: snapshot(2, "failed", null),
+};
+assert.equal(
+  labelJobHasResult(withTarget, labelled({ kind: "job", job_id: 1 })),
+  true,
+);
+// The labelled job was removed from the list or evicted.
+assert.equal(
+  labelJobHasResult(withTarget, labelled({ kind: "job", job_id: 9 })),
+  false,
+);
+assert.equal(
+  labelJobHasResult({}, labelled({ kind: "job", job_id: 1 })),
+  false,
+);
+// Listed, but with no transcript to open.
+assert.equal(
+  labelJobHasResult(withTarget, labelled({ kind: "job", job_id: 2 })),
+  false,
+);
+// History entries aren't tracked by the list.
+assert.equal(
+  labelJobHasResult({}, labelled({ kind: "history", history_id: 4 })),
+  true,
+);
+// Only a label job that made its labels.
+assert.equal(
+  labelJobHasResult(
+    withTarget,
+    labelled({ kind: "job", job_id: 1 }, { status: "failed" }),
+  ),
+  false,
+);
+assert.equal(
+  labelJobHasResult(
+    withTarget,
+    labelled({ kind: "job", job_id: 1 }, { speakers: { state: "running" } }),
+  ),
+  false,
+);
+assert.equal(labelJobHasResult(withTarget, withTarget[1]), false);
 
 // awaitingSpeakers: transcribing, all audio processed, labels still coming.
 const progressJob = {

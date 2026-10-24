@@ -496,6 +496,30 @@ export const isLabelTarget = (
   );
 
 /**
+ * A speaker-label job's row can offer the transcript it labelled: the job
+ * made the labels and, for a job's transcript, that job is still listed with
+ * its result. Once no unfinished label job targets it, a job can be removed
+ * or evicted, and the label row must not outlive it. History entries aren't
+ * tracked here; opening one that has since been deleted says so.
+ */
+export const labelJobHasResult = (
+  jobs: Record<number, FileJobSnapshot>,
+  job: Pick<FileJobSnapshot, "status" | "speakers" | "labels_for">,
+): boolean => {
+  const target = job.labels_for;
+  if (
+    target === null ||
+    job.status !== "completed" ||
+    job.speakers?.state !== "done"
+  ) {
+    return false;
+  }
+  return (
+    target.kind === "history" || jobs[target.job_id]?.has_transcript === true
+  );
+};
+
+/**
  * All the audio is transcribed and the job only waits for its speaker labels,
  * so its progress reads "Identifying speakers…" rather than "10:00 of 10:00".
  */

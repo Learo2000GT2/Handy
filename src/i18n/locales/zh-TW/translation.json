@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "取消",
         "remove": "從清單中移除",
+        "removeWhileLabelling": "正在辨識說話者，暫時無法移除",
         "view": "檢視轉錄",
         "copy": "複製轉錄",
         "showFile": "顯示檔案"

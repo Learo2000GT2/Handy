@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Cancel",
         "remove": "Remove from List",
+        "removeWhileLabelling": "Can't remove while speakers are being identified",
         "view": "View Transcript",
         "copy": "Copy Transcript",
         "showFile": "Show File"

@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Annulla",
         "remove": "Rimuovi dall'elenco",
+        "removeWhileLabelling": "Impossibile rimuovere durante l'identificazione dei parlanti",
         "view": "Visualizza trascrizione",
         "copy": "Copia trascrizione",
         "showFile": "Mostra file"

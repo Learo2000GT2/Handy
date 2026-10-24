@@ -768,6 +768,7 @@
       "actions": {
         "cancel": "Abbrechen",
         "remove": "Aus Liste entfernen",
+        "removeWhileLabelling": "Kann nicht entfernt werden, während Sprecher erkannt werden",
         "view": "Transkription anzeigen",
         "copy": "Transkription kopieren",
         "showFile": "Datei anzeigen"
