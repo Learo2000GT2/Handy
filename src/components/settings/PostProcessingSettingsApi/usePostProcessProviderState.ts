@@ -44,6 +44,19 @@ type PostProcessProviderState = {
 const APPLE_PROVIDER_ID = "apple_intelligence";
 export const LEMONADE_PROVIDER_ID = "lemonade";
 
+/** The provider's models can be asked for without errors that only mean it
+ * isn't set up yet: a server the user runs needs an address and may need no
+ * API key; other providers need a key. */
+const canFetchModels = (
+  provider: PostProcessProvider | undefined,
+  apiKey: string,
+): boolean => {
+  if (provider?.id === APPLE_PROVIDER_ID) return false;
+  return provider?.allow_base_url_edit
+    ? provider.base_url.trim() !== ""
+    : apiKey.trim() !== "";
+};
+
 export const usePostProcessProviderState = (): PostProcessProviderState => {
   const {
     settings,
@@ -118,16 +131,10 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
       // a previous provider/base_url can persist and silently 404 at runtime.
       // Skip when the provider isn't configured yet (no API key / empty base URL)
       // to avoid unnecessary backend errors.
-      if (providerId !== APPLE_PROVIDER_ID) {
-        const provider = providers.find((p) => p.id === providerId);
-        const apiKey = settings?.post_process_api_keys?.[providerId] ?? "";
-        const hasBaseUrl = (provider?.base_url ?? "").trim() !== "";
-        const hasApiKey = apiKey.trim() !== "";
-
-        // A server the user runs may need no API key.
-        if (provider?.allow_base_url_edit ? hasBaseUrl : hasApiKey) {
-          void fetchPostProcessModels(providerId);
-        }
+      const provider = providers.find((p) => p.id === providerId);
+      const apiKey = settings?.post_process_api_keys?.[providerId] ?? "";
+      if (canFetchModels(provider, apiKey)) {
+        void fetchPostProcessModels(providerId);
       }
     },
     [
@@ -175,11 +182,26 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
   const handleApiKeyChange = useCallback(
     (value: string) => {
       const trimmed = value.trim();
-      if (trimmed !== apiKey) {
-        void updatePostProcessApiKey(selectedProviderId, trimmed);
-      }
+      if (trimmed === apiKey) return;
+      const provider = selectedProvider;
+      const providerId = selectedProviderId;
+      void updatePostProcessApiKey(providerId, trimmed).then(() => {
+        // Saving the key empties the model list (and clears a "needs an API
+        // key" problem), so load it again with the new key, as selecting
+        // the provider does; otherwise the list stays empty as if the server
+        // had no models.
+        if (canFetchModels(provider, trimmed)) {
+          void fetchPostProcessModels(providerId);
+        }
+      });
     },
-    [apiKey, selectedProviderId, updatePostProcessApiKey],
+    [
+      apiKey,
+      selectedProvider,
+      selectedProviderId,
+      updatePostProcessApiKey,
+      fetchPostProcessModels,
+    ],
   );
 
   const handleModelChange = useCallback(

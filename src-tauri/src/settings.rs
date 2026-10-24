@@ -1469,6 +1469,14 @@ fn salvage_settings(stored: &serde_json::Value) -> AppSettings {
     let mut merged = serde_json::to_value(get_default_settings())
         .expect("default settings serialize to a JSON object");
 
+    // A store without this list has not been given the built-in prompts added
+    // after release, as when it parses whole (its serde default is empty).
+    // The fresh-install list would mark them given, and
+    // `ensure_post_process_defaults` would never add or select them.
+    if !stored_map.contains_key("post_process_prompts_offered") {
+        merged["post_process_prompts_offered"] = serde_json::json!([]);
+    }
+
     for (key, value) in stored_map {
         let previous = merged
             .as_object_mut()
@@ -2525,6 +2533,13 @@ mod tests {
         selected: Option<&str>,
         prompts: &[(&str, &str)],
     ) -> AppSettings {
+        serde_json::from_value(store_json_before_clean_up_prompt(selected, prompts)).unwrap()
+    }
+
+    fn store_json_before_clean_up_prompt(
+        selected: Option<&str>,
+        prompts: &[(&str, &str)],
+    ) -> serde_json::Value {
         let mut stored = default_settings_json();
         let map = stored.as_object_mut().unwrap();
         map.remove("post_process_prompts_offered");
@@ -2539,7 +2554,48 @@ mod tests {
             "post_process_selected_prompt_id".into(),
             serde_json::json!(selected),
         );
-        serde_json::from_value(stored).unwrap()
+        stored
+    }
+
+    #[test]
+    fn salvaged_stores_get_clean_up_dictation_too() {
+        let old_default = (IMPROVE_TRANSCRIPTIONS_PROMPT_ID, "Improve Transcriptions");
+        for selected in [None, Some(IMPROVE_TRANSCRIPTIONS_PROMPT_ID)] {
+            let mut stored = store_json_before_clean_up_prompt(selected, &[old_default]);
+            // A value this build doesn't know, e.g. written by another build,
+            // so the store only loads through `salvage_settings`.
+            stored["paste_method"] = serde_json::json!("bogus_future_method");
+            assert!(serde_json::from_value::<AppSettings>(stored.clone()).is_err());
+
+            let mut settings = salvage_settings(&stored);
+            assert!(
+                settings.post_process_prompts_offered.is_empty(),
+                "{selected:?}"
+            );
+            assert!(ensure_post_process_defaults(&mut settings), "{selected:?}");
+            let ids: Vec<&str> = settings
+                .post_process_prompts
+                .iter()
+                .map(|prompt| prompt.id.as_str())
+                .collect();
+            assert_eq!(ids, [old_default.0, CLEAN_UP_DICTATION_PROMPT_ID]);
+            assert_eq!(
+                settings.post_process_selected_prompt_id.as_deref(),
+                Some(CLEAN_UP_DICTATION_PROMPT_ID),
+                "{selected:?}"
+            );
+            assert_eq!(settings.paste_method, PasteMethod::default());
+        }
+
+        // A store that was already given the prompt keeps its own list, so a
+        // deleted prompt is not added again.
+        let mut stored = store_json_before_clean_up_prompt(None, &[old_default]);
+        stored["post_process_prompts_offered"] = serde_json::json!([CLEAN_UP_DICTATION_PROMPT_ID]);
+        stored["paste_method"] = serde_json::json!("bogus_future_method");
+        let mut settings = salvage_settings(&stored);
+        assert!(!ensure_post_process_defaults(&mut settings));
+        assert_eq!(settings.post_process_prompts.len(), 1);
+        assert_eq!(settings.post_process_selected_prompt_id, None);
     }
 
     #[test]

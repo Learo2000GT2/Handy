@@ -628,7 +628,8 @@ export const useSettingsStore = create<SettingsStore>()(
     },
 
     updatePostProcessApiKey: async (providerId, apiKey) => {
-      // Clear cached models when API key changes - user should click refresh after
+      // Clear cached models when API key changes; the settings page loads
+      // them again with the new key once it is saved.
       set((state) => ({
         postProcessModelOptions: {
           ...state.postProcessModelOptions,
