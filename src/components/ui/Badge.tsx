@@ -4,12 +4,15 @@ interface BadgeProps {
   children: React.ReactNode;
   variant?: "primary" | "success" | "secondary";
   className?: string;
+  /** Tooltip shown on hover. */
+  title?: string;
 }
 
 const Badge: React.FC<BadgeProps> = ({
   children,
   variant = "primary",
   className = "",
+  title,
 }) => {
   const variantClasses = {
     primary: "bg-logo-primary",
@@ -19,6 +22,7 @@ const Badge: React.FC<BadgeProps> = ({
 
   return (
     <span
+      title={title}
       className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${variantClasses[variant]} ${className}`}
     >
       {children}

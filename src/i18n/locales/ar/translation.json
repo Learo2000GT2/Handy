@@ -7,16 +7,23 @@
     "model": "النموذج",
     "quit": "إنهاء",
     "cancel": "إلغاء",
-    "secureInputWarning": "⚠ الاختصارات محجوبة بواسطة Secure Input"
+    "secureInputWarning": "⚠ الاختصارات محجوبة بواسطة Secure Input",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "عام",
+    "transcribe": "التفريغ الصوتي",
+    "transcribeProgress": "جارٍ النسخ: اكتمل {{percent}}",
+    "transcribeRunning": "جارٍ النسخ…",
+    "speakersProgress": "جارٍ تحديد المتحدثين: اكتمل {{percent}}",
+    "speakersRunning": "جارٍ تحديد المتحدثين…",
     "advanced": "متقدم",
     "postProcessing": "معالجة لاحقة",
     "history": "السجل",
     "debug": "تصحيح الأخطاء",
     "about": "حول",
-    "models": "النماذج"
+    "models": "النماذج",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "للبدء، اختر نموذج التفريغ الصوتي",
@@ -123,6 +130,9 @@
   "modelSelector": {
     "custom": "مخصص",
     "streaming": "البث",
+    "bestForRecordings": "الأفضل للتسجيلات",
+    "timestamps": "طوابع زمنية",
+    "noTimestamps": "بدون طوابع زمنية",
     "active": "نشط",
     "noModelsAvailable": "لا توجد نماذج متاحة",
     "verifying": "جارٍ التحقق من {{modelName}}...",
@@ -150,7 +160,10 @@
       "languageOnly": "{{language}} فقط",
       "translation": "يدعم الترجمة",
       "translate": "ترجمة",
-      "streaming": "يعرض النسخ المباشر أثناء التحدث"
+      "streaming": "يعرض النسخ المباشر أثناء التحدث",
+      "bestForRecordings": "دقيق، ويعطي وقتًا لكل جملة. خيار جيد للتسجيلات والاجتماعات.",
+      "timestamps": "يعطي وقتًا لكل جملة، فيتطابق التفريغ وتمييز المتحدثين مع التسجيل.",
+      "noTimestamps": "الأوقات تقريبية فقط، كل 30 ثانية تقريبًا."
     },
     "legacy": "قديم"
   },
@@ -176,6 +189,10 @@
           "transcribe_with_post_process": {
             "name": "مفتاح المعالجة اللاحقة",
             "description": "اختياري: مفتاح اختصار مخصص يطبق دائماً المعالجة اللاحقة بالذكاء الاصطناعي على التفريغ الصوتي."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -355,10 +372,47 @@
       "customWords": {
         "title": "كلمات مخصصة",
         "description": "ساعد النماذج المدعومة على التعرّف على الأسماء والمصطلحات المتخصصة. يقتصر التصحيح التقريبي حاليًا على الكلمات التي تستخدم الأحرف A–Z والأرقام.",
-        "placeholder": "أضف كلمة",
         "add": "إضافة",
         "remove": "إزالة {{word}}",
-        "duplicate": "\"{{word}}\" موجود بالفعل"
+        "duplicate": "\"{{word}}\" موجود بالفعل",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "كشف النشاط الصوتي",
@@ -387,6 +441,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "طريقة العمل",
+        "intro": "ترسل المعالجة اللاحقة ما تمليه إلى نموذج ذكاء اصطناعي ينظّفه قبل أن يلصقه Handy.",
+        "shortcut": "تعمل عندما تُملي باختصار المعالجة اللاحقة ({{shortcut}})، لا باختصارك العادي ({{normal}}) الذي يلصق كلامك كما نطقته.",
+        "shortcutEvery": "تعمل مع كل إملاء: باختصار المعالجة اللاحقة ({{shortcut}}) وباختصارك العادي ({{normal}}).",
+        "notSet": "غير معيّن",
+        "stepProvider": "اختر مزودًا. لاستخدام Lemonade على هذا الكمبيوتر، اختر Lemonade Server.",
+        "stepModel": "اختر نموذجًا. يحمّل زر التحديث نماذج الخادم.",
+        "stepPrompt": "اختر مطالبة، أو أنشئ مطالبتك الخاصة.",
+        "stepTest": "اضغط «اختبار» أسفل هذه الصفحة لتجربتها.",
+        "fallback": "إذا فشل التنظيف، يلصق Handy كلامك كما نطقته.",
+        "everyDictation": {
+          "label": "تنظيف كل إملاء",
+          "description": "نظّف أيضًا الإملاءات التي تتم باختصارك العادي، وليس فقط تلك التي تتم باختصار المعالجة اللاحقة."
+        }
+      },
       "hotkey": {
         "title": "مفتاح الاختصار"
       },
@@ -401,21 +471,29 @@
         },
         "baseUrl": {
           "title": "URL الأساسي",
-          "description": "URL الأساسي لـ API للمزود المختار. يمكن تعديل المزود المخصص فقط.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "عنوان واجهة API المتوافقة مع OpenAI على خادمك، مثل http://localhost:11434/v1.",
+          "descriptionLemonade": "عنوان Lemonade Server لديك، وهو عادةً http://localhost:13305/api/v1. كانت إصدارات Lemonade الأقدم تستخدم المنفذ 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "أدخل عنوانًا مثل http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "مفتاح API",
           "description": "مفتاح API للمزود المختار.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "مطلوب فقط إذا طلبه خادمك.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "اختياري"
         },
         "model": {
           "title": "النموذج",
           "descriptionCustom": "قدم معرف النموذج المتوقع من قبل نقطة النهاية المخصصة الخاصة بك.",
           "descriptionDefault": "اختر نموذجاً يعرضه المزود المختار.",
+          "descriptionLemonade": "نموذج محادثة على Lemonade Server لديك. لا تظهر في القائمة نماذج الكلام والتضمين والصور.",
           "placeholderWithOptions": "ابحث عن نموذج أو اختره",
           "placeholderNoOptions": "اكتب اسم النموذج",
-          "refreshModels": "تحديث النماذج"
+          "refreshModels": "تحديث النماذج",
+          "use": "استخدام «{{model}}»",
+          "loadError": "تعذر تحميل النماذج. {{problem}}"
         }
       },
       "prompts": {
@@ -432,12 +510,305 @@
         "promptInstructions": "تعليمات المطالبة",
         "promptInstructionsPlaceholder": ".اكتب التعليمات المراد تشغيلها بعد التفريغ الصوتي. مثال: قم بتحسين القواعد والوضوح للنص التالي: ${output}",
         "promptTip": "تلميح: استخدم <code>${output}</code> لإدراج النص المفرغ في مطالبتك.",
+        "promptTipNoMarker": "بدون ${output}، يرسل Handy النص المفرغ بعد مطالبتك، بين وسمَي {{tag}}.",
         "updatePrompt": "تحديث المطالبة",
         "deletePrompt": "حذف المطالبة",
         "createPrompt": "إنشاء مطالبة",
         "cancel": "إلغاء",
         "selectToEdit": ".اختر مطالبة أعلاه لعرض وتعديل تفاصيلها",
         "createFirst": ".انقر على 'إنشاء مطالبة جديدة' أعلاه لإنشاء أول مطالبة معالجة لاحقة لك"
+      },
+      "test": {
+        "title": "جرّبها",
+        "label": "إملاء تجريبي",
+        "description": "ينظّف هذا النص بالمزود والنموذج والمطالبة المحفوظة المختارة أعلاه، بالطريقة نفسها التي يُنظَّف بها الإملاء.",
+        "sample": "اممم طيب ممكن آه ترسل لي التقرير يوم الجمعة",
+        "button": "اختبار",
+        "testing": "جارٍ الاختبار…",
+        "result": "النتيجة ({{seconds}} ث):",
+        "emptyResult": "أجاب النموذج دون أي نص. مع مطالبة تنظيف، يعني ذلك أنه لم يجد شيئًا يستحق الإبقاء عليه.",
+        "failed": "تعذر تشغيل الاختبار: {{error}}"
+      },
+      "problems": {
+        "emptyText": "اكتب نصًا لتختبر به.",
+        "noProvider": "اختر مزودًا أعلاه.",
+        "noModel": "اختر نموذجًا لـ {{provider}} أعلاه. يحمّل زر التحديث بجوار «النموذج» نماذج الخادم.",
+        "noPrompt": "اختر مطالبة أدناه.",
+        "emptyPrompt": "المطالبة المختارة فارغة. اكتب تعليماتها، ثم اضغط «تحديث المطالبة».",
+        "missingApiKey": "يحتاج {{provider}} إلى مفتاح API. أدخله في حقل «مفتاح API» أعلاه.",
+        "invalidApiKey": "يحتوي مفتاح API على أحرف لا يمكن إرسالها. أدخله مرة أخرى.",
+        "invalidAddress": "{{address}} ليس عنوان خادم يمكن لـ Handy استخدامه. يجب أن يكون مثل http://localhost:13305/api/v1.",
+        "unreachable": "تعذر الوصول إلى الخادم على {{address}}. تأكد من أنه قيد التشغيل وأن العنوان صحيح.",
+        "timeout": "لم يُجب الخادم على {{address}} في الوقت المحدد. إذا كان لا يزال يحمّل النموذج، فحاول مرة أخرى بعد دقيقة.",
+        "unauthorized": "لم يقبل الخادم على {{address}} مفتاح API (الخطأ {{status}}). تحقق من حقل «مفتاح API».",
+        "modelNotFound": "لا يحتوي الخادم على {{address}} على النموذج «{{model}}». اختر نموذجًا آخر أعلاه.",
+        "notFound": "لم يُجب شيء على {{address}} (الخطأ 404). تحقق من العنوان.",
+        "serverError": "أجاب الخادم على {{address}} بخطأ (الخطأ {{status}}).",
+        "serverErrorNoStatus": "أجاب {{provider}} بخطأ.",
+        "noAnswer": "أجاب {{provider}} دون أي نص. جرّب نموذجًا آخر.",
+        "badAnswer": "أرسل {{provider}} إجابة تعذر على Handy قراءتها.",
+        "noChatModels": "لا توجد نماذج محادثة على {{provider}} في {{address}}. نزّل نموذجًا في Lemonade، ثم اضغط زر التحديث.",
+        "otherModels": "نماذج على الخادم لا يمكنها تنظيف النص: {{models}}",
+        "internal": "حدث خطأ داخل Handy.",
+        "detail": "التفاصيل: {{detail}}"
+      }
+    },
+    "transcribeFiles": {
+      "title": "تفريغ الملفات",
+      "description": "حوّل التسجيلات الموجودة إلى نص على هذا الكمبيوتر. لا تغادر ملفاتك جهازك أبدًا.",
+      "settingsNote": "يستخدم النموذج المحدد وإعداداتك للغة والترجمة والكلمات المخصصة وكلمات الحشو.",
+      "settingsNoteLemonade": "يستخدم إعداداتك للغة والكلمات المخصصة وكلمات الحشو.",
+      "settingsNoteOwnModel": "يستخدم نموذج التسجيلات وإعداداتك للغة والترجمة والكلمات المخصصة وكلمات الحشو.",
+      "model": "النموذج: {{model}}",
+      "modelLemonade": "النموذج: {{model}} على Lemonade Server",
+      "noModel": "اختر نموذجًا محمّلًا من صفحة النماذج لتفريغ الملفات.",
+      "noLemonadeModel": "اختر نموذج Lemonade لتفريغ الملفات.",
+      "noRecordingsModel": "نموذج التسجيلات غير محمّل. اختر نموذجًا آخر من الأعلى أو حمّله من صفحة النماذج.",
+      "dropzone": {
+        "title": "أفلت ملفات الصوت أو الفيديو هنا",
+        "hint": "مقابلات واجتماعات ومحاضرات ومذكرات صوتية بأي طول",
+        "active": "أفلت للإضافة",
+        "choose": "اختيار الملفات…",
+        "skipped": "تم تخطي ملفات ليست صوتًا أو فيديو: {{number}}"
+      },
+      "picker": {
+        "title": "اختيار التسجيلات",
+        "filterName": "ملفات الصوت والفيديو"
+      },
+      "formats": {
+        "native": "يفتح {{formats}}",
+        "ffmpegAvailable": "تُفتح الصيغ الأخرى مثل Opus وWebM وWMA وDSS باستخدام ffmpeg.",
+        "ffmpegMissing": "ثبّت ffmpeg لفتح Opus وWebM وWMA وDSS وصيغ أخرى أيضًا."
+      },
+      "saveToHistory": {
+        "label": "الحفظ في السجل",
+        "description": "تُحفظ التفريغات المكتملة وتُميَّز بنجمة حتى لا يحذفها التنظيف التلقائي."
+      },
+      "autosave": {
+        "title": "حفظ التفريغات",
+        "enabled": {
+          "label": "حفظ التفريغات تلقائيًا",
+          "description": "عند الانتهاء من تفريغ ملف أو اجتماع، يُحفظ التفريغ كملف يمكنك فتحه في Word أو أي محرر نصوص."
+        },
+        "location": {
+          "label": "الحفظ في",
+          "description": "خيار «بجانب التسجيل» يضع التفريغ في مجلد التسجيل (وفي مجلد الاجتماع نفسه بالنسبة إلى الاجتماعات). إذا تعذّرت الكتابة في مجلد، يستخدم Handy المجلد Handy Transcripts داخل مجلد المستندات.",
+          "nextToRecording": "بجانب التسجيل",
+          "folder": "مجلد أختاره…"
+        },
+        "chooseFolder": "اختيار مجلد…",
+        "folderPicker": "اختر مجلدًا للتفريغات",
+        "format": {
+          "label": "تنسيق الملف",
+          "description": "تتضمن مستندات Word وMarkdown أسماء المتحدثين والأوقات. ويتضمن النص العادي أسماء المتحدثين."
+        },
+        "note": "لا تُستبدل الملفات الموجودة أبدًا: يُستخدم بدلًا من ذلك اسم جديد مثل “interview (2).docx”. وينتهي اسم التفريغ الذي فيه فجوات بـ “(incomplete)”.",
+        "saveError": "تعذّر حفظ الإعداد: {{error}}"
+      },
+      "engine": {
+        "title": "محرك التفريغ",
+        "label": "التفريغ باستخدام",
+        "description": "يستخدم الإملاء دائمًا النموذج الخاص بـ Handy. هذا الخيار للملفات فقط.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "نموذج التسجيلات",
+        "description": "يمكن أن تستخدم التسجيلات نموذجًا أبطأ وأكثر دقة من نموذج الإملاء. يعمل بشكل مستقل ولا يُحمَّل إلا أثناء تفريغ الملفات، لذا يبقى نموذج الإملاء جاهزًا. يجب أن تتسع الذاكرة للنموذجين معًا.",
+        "same": "نفس نموذج الإملاء ({{model}})",
+        "sameNoModel": "نفس نموذج الإملاء",
+        "timestamps": "(طوابع زمنية)",
+        "noTimestamps": "(بدون طوابع زمنية)",
+        "switchWarning": "يستخدم هذا الملف نموذج الإملاء، لذا فإن تغيير نموذج الإملاء الآن سيوقفه. لفصلهما، اختر نموذجًا مختلفًا للتسجيلات.",
+        "onCpu": "تعمل التسجيلات على المعالج لأن ذاكرة بطاقة الرسومات لا تتسع للنموذجين معًا. اختر نموذجًا أصغر للتسجيلات لاستخدام بطاقة الرسومات."
+      },
+      "lemonade": {
+        "url": {
+          "label": "عنوان الخادم",
+          "description": "عادةً http://localhost:13305. كانت إصدارات Lemonade الأقدم تستخدم المنفذ 8000."
+        },
+        "apiKey": {
+          "label": "مفتاح API",
+          "description": "مطلوب فقط إذا طلبه Lemonade Server.",
+          "placeholder": "اختياري"
+        },
+        "model": {
+          "label": "النموذج",
+          "description": "نموذج Lemonade الذي يفرّغ ملفاتك، مثل Whisper-Base.",
+          "placeholder": "اختر نموذج Whisper",
+          "notDownloaded": "{{model}} (يُنزَّل عند أول استخدام)",
+          "none": "لم يُعثر على نماذج تفريغ على هذا الخادم.",
+          "use": "استخدام «{{model}}»"
+        },
+        "test": "اختبار الاتصال",
+        "testing": "جارٍ الاتصال…",
+        "connected": "متصل. نماذج التفريغ المتاحة: {{number}}",
+        "checkFailed": "تعذر التحقق من Lemonade Server: {{error}}",
+        "saveError": "تعذر حفظ إعدادات Lemonade: {{error}}",
+        "firstChunkSlow": "قد يكون Lemonade بصدد تنزيل النموذج أو تحميله. قد يستغرق ذلك بضع دقائق في المرة الأولى.",
+        "errors": {
+          "invalidUrl": "أدخل عنوانًا مثل http://localhost:13305.",
+          "unreachable": "تعذر الوصول إلى Lemonade Server على {{url}}. تأكد من أنه قيد التشغيل.",
+          "timeout": "لم يستجب Lemonade Server في الوقت المحدد.",
+          "unauthorized": "لم يقبل Lemonade Server مفتاح API.",
+          "modelNotFound": "هذا النموذج غير متوفر على Lemonade Server.",
+          "http": "أرجع Lemonade Server خطأً.",
+          "badResponse": "أرسل Lemonade Server ردًا تعذر على Handy قراءته.",
+          "cancelled": "تم إلغاء اختبار الاتصال."
+        },
+        "notes": {
+          "noTranslate": "خيار «الترجمة إلى الإنجليزية» غير متاح مع Lemonade Server. تُفرَّغ الملفات باللغة المنطوقة.",
+          "remote": "هذا العنوان ليس على هذا الكمبيوتر. سيتم إرسال تسجيلاتك إليه."
+        }
+      },
+      "speakers": {
+        "label": "تمييز المتحدثين",
+        "description": "حدّد من قال ماذا، لما يصل إلى 4 متحدثين. يعمل على هذا الكمبيوتر ويتطلب تنزيلًا لمرة واحدة بحجم {{size}} ميجابايت.",
+        "download": "تنزيل نموذج المتحدثين ({{size}} ميجابايت)",
+        "downloading": "جارٍ تنزيل نموذج المتحدثين… {{percent}}%",
+        "verifying": "جارٍ التحقق من التنزيل…",
+        "cancelDownload": "إلغاء التنزيل",
+        "downloadFailed": "تعذر تنزيل نموذج المتحدثين: {{error}}",
+        "installed": "نموذج المتحدثين مثبّت ({{size}} ميجابايت)",
+        "remove": "إزالة نموذج المتحدثين",
+        "removeError": "تعذرت إزالة نموذج المتحدثين: {{error}}",
+        "removeConfirm": "هل تريد إزالة نموذج المتحدثين؟ ستحتاج إلى تنزيله مرة أخرى ({{size}} ميجابايت) لتمييز المتحدثين.",
+        "license": "نموذج المتحدثين من NVIDIA، بموجب ترخيص NVIDIA Open Model License (<page>صفحة النموذج</page>).",
+        "title": "المتحدثون",
+        "defaultName": "المتحدث {{number}}",
+        "rename": "إعادة تسمية {{name}}",
+        "nameLabel": "الاسم الجديد لـ {{name}}",
+        "save": "حفظ",
+        "cancel": "إلغاء",
+        "renameError": "تعذرت إعادة تسمية المتحدث: {{error}}",
+        "approximate": "مواضع تغيّر المتحدث تقريبية لأن هذا النموذج لا يوفر طوابع زمنية.",
+        "unassigned": "تعذر ربط بعض المقاطع بمتحدث.",
+        "none": "لا يحتوي هذا التفريغ على تمييز للمتحدثين.",
+        "labelAction": "تمييز المتحدثين",
+        "labelHint": "يُجرى تمييز المتحدثين على هذا الكمبيوتر من التسجيل الأصلي، {{file}}. تستغرق التسجيلات الطويلة بضع دقائق.",
+        "needsModel": "يتطلب تمييز المتحدثين نموذج المتحدثين، وهو تنزيل لمرة واحدة بحجم {{size}} ميجابايت.",
+        "labelError": "تعذر تمييز المتحدثين: {{error}}",
+        "findRecording": "البحث عن التسجيل…",
+        "findRecordingHint": "اختر التسجيل الذي نُقل. يجب أن يكون هو نفس الملف الذي فُرّغ.",
+        "relabel": "تمييز مرة أخرى…",
+        "relabelTitle": "تمييز المتحدثين مرة أخرى",
+        "relabelConfirm": "هل تريد تمييز المتحدثين مرة أخرى من التسجيل؟ ستُفقد الأسماء وعمليات الدمج وتغييرات المقاطع.",
+        "mergeInto": "دمج {{name}} مع متحدث آخر",
+        "mergePrompt": "دمج {{name}} مع:",
+        "mergeTitle": "دمج المتحدثين",
+        "mergeConfirm": "هل تريد دمج {{from}} مع {{into}}؟ ستُنسب كل مقاطع {{from}} إلى {{into}}. يمكنك التراجع عن ذلك حتى تغلق التفريغ.",
+        "mergeError": "تعذر دمج المتحدثين: {{error}}",
+        "changeSpeaker": "تغيير متحدث هذا المقطع ({{name}})",
+        "changeSpeakerPrompt": "من قال هذا؟",
+        "newSpeaker": "متحدث جديد",
+        "unknownSpeaker": "متحدث غير معروف",
+        "changeSpeakerError": "تعذر تغيير المتحدث: {{error}}",
+        "undo": "تراجع",
+        "undoError": "تعذر التراجع: {{error}}",
+        "jobKind": "تمييز المتحدثين",
+        "state": {
+          "running": "جارٍ تحديد المتحدثين…",
+          "done": "المتحدثون: {{number}}",
+          "failed": "تعذر تمييز المتحدثين",
+          "skipped": {
+            "modelMissing": "تم تخطي تمييز المتحدثين: نموذج المتحدثين غير منزَّل.",
+            "noSpeech": "تم تخطي تمييز المتحدثين: لم يُعثر على كلام."
+          }
+        }
+      },
+      "queue": {
+        "title": "الملفات",
+        "cancelAll": "إلغاء الكل",
+        "clearFinished": "مسح المكتملة"
+      },
+      "status": {
+        "queued": "في انتظار البدء",
+        "preparing": "جارٍ التحضير…",
+        "waiting": "متوقف مؤقتًا أثناء الإملاء",
+        "transcribing": "جارٍ النسخ…",
+        "completed": "مكتمل",
+        "partial": "مكتمل مع وجود فجوات",
+        "cancelled": "ملغى",
+        "failed": "فشل"
+      },
+      "progress": "{{processed}} من {{total}}",
+      "progressNoTotal": "تم تفريغ {{processed}}",
+      "elapsed": "الوقت المنقضي: {{time}}",
+      "took": "استغرق {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "الوقت المتبقي: أقل من دقيقة",
+        "minutes": "الوقت المتبقي: نحو {{minutes}} دقيقة",
+        "hours": "الوقت المتبقي: نحو {{hours}} ساعة و{{minutes}} دقيقة",
+        "hoursOnly": "الوقت المتبقي: نحو {{hours}} ساعة"
+      },
+      "noSpeech": "لم يُعثر على كلام في هذا الملف.",
+      "actions": {
+        "cancel": "إلغاء",
+        "remove": "إزالة من القائمة",
+        "removeWhileLabelling": "لا يمكن الإزالة أثناء تحديد المتحدثين",
+        "view": "عرض التفريغ",
+        "copy": "نسخ التفريغ",
+        "showFile": "إظهار الملف"
+      },
+      "copied": "تم نسخ التفريغ إلى الحافظة.",
+      "copyError": "تعذر نسخ التفريغ.",
+      "savedToHistory": "تم الحفظ في السجل",
+      "ready": {
+        "title": "التفريغ جاهز: {{file}}",
+        "open": "فتح في Handy",
+        "showFile": "إظهار الملف"
+      },
+      "saved": {
+        "savedTo": "تم الحفظ في {{path}}",
+        "open": "فتح",
+        "showInFolder": "إظهار في المجلد",
+        "fallback": "تعذّر الحفظ في {{folder}}، لذا حُفظ التفريغ في Handy Transcripts داخل مجلد المستندات.",
+        "failed": "تعذّر حفظ التفريغ كملف. استخدم التصدير لحفظه.",
+        "openError": "تعذّر فتح التفريغ: {{error}}",
+        "notFound": "تعذّر العثور على التفريغ المحفوظ. ربما نُقل أو حُذف.",
+        "exportAgain": "لا يتغير هذا الملف عند تعديل المتحدثين هنا. صدّره مرة أخرى لتضمين التغييرات اللاحقة."
+      },
+      "errors": {
+        "notFound": "تعذر العثور على الملف أو فتحه.",
+        "unsupportedFormat": "نوع الملف هذا غير مدعوم.",
+        "needsFfmpeg": "تتطلب هذه الصيغة ffmpeg. ثبّت ffmpeg ثم حاول مرة أخرى.",
+        "noModel": "لم يتم تحديد نموذج للتفريغ الصوتي.",
+        "modelChanged": "تغيّر النموذج أثناء تفريغ هذا الملف.",
+        "decodeFailed": "تعذرت قراءة الصوت في هذا الملف.",
+        "engineFailed": "فشل التفريغ.",
+        "serverUnreachable": "تعذر الوصول إلى Lemonade Server. تأكد من أنه قيد التشغيل.",
+        "serverUnauthorized": "لم يقبل Lemonade Server مفتاح API.",
+        "serverModelMissing": "النموذج المحدد غير متوفر على Lemonade Server.",
+        "internal": "حدث خطأ ما.",
+        "sourceChanged": "تغيّر التسجيل في هذا الموقع منذ تفريغه، لذا لا يمكن مطابقة متحدثيه مع هذا التفريغ. إذا كان التسجيل نفسه، فاختره عبر «البحث عن التسجيل…».",
+        "speakerLabelsFailed": "فشل تمييز المتحدثين.",
+        "enqueue": "تعذرت إضافة الملفات: {{error}}",
+        "cancel": "تعذر الإلغاء: {{error}}",
+        "remove": "تعذرت الإزالة من القائمة: {{error}}",
+        "loadTranscript": "تعذر تحميل التفريغ: {{error}}"
+      },
+      "transcript": {
+        "title": "التفريغ: {{file}}",
+        "live": "يتم التحديث أثناء التفريغ",
+        "partial": "هذا التفريغ غير مكتمل: {{reason}}",
+        "partialNoReason": "هذا التفريغ غير مكتمل.",
+        "approximateTimes": "الأوقات تقريبية لأن هذا النموذج لا يوفر طوابع زمنية.",
+        "empty": "لم يُعثر على كلام.",
+        "segmentsLabel": "التفريغ مع الطوابع الزمنية"
+      },
+      "export": {
+        "button": "تصدير…",
+        "dialogTitle": "تصدير التفريغ",
+        "formats": {
+          "docx": "مستند Word (.docx)",
+          "txt": "نص عادي (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "ترجمات SubRip (.srt)",
+          "vtt": "ترجمات WebVTT (.vtt)"
+        },
+        "success": "تم تصدير التفريغ.",
+        "showInFolder": "إظهار في المجلد",
+        "error": "فشل التصدير: {{error}}"
       }
     },
     "history": {
@@ -454,7 +825,14 @@
       "retranscribe": "إعادة النسخ",
       "retranscribeError": "فشلت إعادة النسخ. يرجى المحاولة مرة أخرى.",
       "transcribing": "جارٍ النسخ...",
-      "transcriptionFailed": "فشل النسخ. يمكنك إعادة النسخ باستخدام أيقونة إعادة المحاولة."
+      "transcriptionFailed": "فشل النسخ. يمكنك إعادة النسخ باستخدام أيقونة إعادة المحاولة.",
+      "openTranscript": "فتح التفريغ",
+      "showOriginal": "إظهار الملف الأصلي",
+      "originalMissing": "تم نقل الملف الأصلي أو حذفه.",
+      "fileDuration": "المدة {{duration}}",
+      "incomplete": "غير مكتمل",
+      "speakerCount": "المتحدثون: {{number}}",
+      "retranscribeFileUnavailable": "لإعادة تفريغ هذا الملف، استخدم صفحة التفريغ الصوتي."
     },
     "debug": {
       "title": "تصحيح الأخطاء",
@@ -629,10 +1007,12 @@
     "models": {
       "title": "نماذج النسخ",
       "description": "اختر نموذج نسخ أو قم بتنزيل نماذج إضافية. تقدم النماذج المختلفة مستويات متفاوتة من الدقة والسرعة.",
+      "recordingsTip": "للتسجيلات والاجتماعات، اختر نموذجًا يحمل علامة «{{badge}}». يُعد Parakeet TDT 0.6B v3 أفضل خيار شامل، أما Whisper Large v3 Turbo فيدعم لغات أكثر.",
       "yourModels": "النماذج المحمّلة",
       "availableModels": "متاح للتنزيل",
       "deleteConfirm": "هل أنت متأكد أنك تريد حذف {{modelName}}؟ ستحتاج إلى تنزيله مرة أخرى لاستخدامه.",
       "deleteActiveConfirm": "{{modelName}} هو النموذج النشط حاليًا. حذفه سيوقف النسخ حتى تختار نموذجًا جديدًا. هل أنت متأكد؟",
+      "deleteRecordingsConfirm": "{{modelName}} هو نموذج التسجيلات. إذا حذفته، فستستخدم التسجيلات نموذج الإملاء. هل أنت متأكد؟",
       "deleteTitle": "حذف النموذج",
       "filters": {
         "allLanguages": "جميع اللغات",
@@ -644,6 +1024,142 @@
       "rescan": {
         "label": "إعادة الفحص",
         "tooltip": "إعادة الفحص بحثًا عن النماذج المضافة إلى مجلد النماذج أو ذاكرة Hugging Face التخزينية المؤقتة خارج Handy"
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

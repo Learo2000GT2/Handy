@@ -7,16 +7,23 @@
     "model": "モデル",
     "quit": "終了",
     "cancel": "キャンセル",
-    "secureInputWarning": "⚠ Secure Input でショートカットがブロック中"
+    "secureInputWarning": "⚠ Secure Input でショートカットがブロック中",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "一般",
+    "transcribe": "文字起こし",
+    "transcribeProgress": "文字起こし中: {{percent}} 完了",
+    "transcribeRunning": "文字起こし中…",
+    "speakersProgress": "話者を識別中: {{percent}} 完了",
+    "speakersRunning": "話者を識別中…",
     "models": "モデル",
     "advanced": "詳細設定",
     "postProcessing": "後処理",
     "history": "履歴",
     "debug": "デバッグ",
-    "about": "概要"
+    "about": "概要",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "開始するには、文字起こしのモデルを選択してください",
@@ -123,6 +130,9 @@
   "modelSelector": {
     "custom": "カスタム",
     "streaming": "ストリーミング",
+    "bestForRecordings": "録音に最適",
+    "timestamps": "タイムスタンプ",
+    "noTimestamps": "タイムスタンプなし",
     "active": "アクティブ",
     "switching": "切替中…",
     "noModelsAvailable": "利用可能なモデルがありません",
@@ -148,7 +158,10 @@
       "translate": "英語に翻訳",
       "singleLanguage": "この言語のみ対応",
       "languageOnly": "{{language}}のみ",
-      "streaming": "話しながらリアルタイムで文字起こしを表示"
+      "streaming": "話しながらリアルタイムで文字起こしを表示",
+      "bestForRecordings": "高精度で、文ごとに時間が付きます。録音や会議に適しています。",
+      "timestamps": "文ごとに時間が付くため、文字起こしと話者ラベルが録音と一致します。",
+      "noTimestamps": "時間はおおよそで、約30秒ごとです。"
     },
     "cancel": "キャンセル",
     "cancelDownload": "ダウンロードをキャンセル",
@@ -161,8 +174,10 @@
     "models": {
       "title": "文字起こしのモデル",
       "description": "文字起こしのモデルを選択するか、追加のモデルをダウンロードします。異なるモデルは精度と速度のレベルが異なります。",
+      "recordingsTip": "録音や会議には「{{badge}}」の付いたモデルを選んでください。Parakeet TDT 0.6B v3 が総合的に最適で、Whisper Large v3 Turbo はより多くの言語に対応しています。",
       "deleteConfirm": "{{modelName}}を削除してもよろしいですか? 再度使用するにはダウンロードが必要です。",
       "deleteActiveConfirm": "{{modelName}}は現在使用中のモデルです。削除すると、新しいモデルを選択するまで文字起こしが停止します。本当に削除しますか?",
+      "deleteRecordingsConfirm": "{{modelName}}は録音用モデルです。削除すると、録音には音声入力用のモデルが使用されます。本当に削除しますか?",
       "deleteTitle": "モデルを削除",
       "filters": {
         "allLanguages": "すべての言語",
@@ -199,6 +214,10 @@
           "transcribe_with_post_process": {
             "name": "後処理のショートカット",
             "description": "文字起こしに常に AI 後処理を適用するキーボードショートカット。 (任意)"
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -378,10 +397,47 @@
       "customWords": {
         "title": "カスタム単語",
         "description": "対応モデルが名前や専門用語を認識しやすくします。あいまい補正は現在、A～Zの英字と数字を使用する単語に限定されています。",
-        "placeholder": "単語を追加",
         "add": "追加",
         "remove": "{{word}}を削除",
-        "duplicate": "「{{word}}」は既に存在します"
+        "duplicate": "「{{word}}」は既に存在します",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "音声区間検出 (VAD)",
@@ -410,6 +466,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "しくみ",
+        "intro": "後処理では、ディクテーションした内容を AI モデルに送り、Handy が貼り付ける前に整えます。",
+        "shortcut": "後処理は、後処理用のショートカット（{{shortcut}}）でディクテーションしたときに実行されます。通常のショートカット（{{normal}}）では実行されず、話したとおりの言葉が貼り付けられます。",
+        "shortcutEvery": "後処理はすべてのディクテーションで実行されます。後処理用のショートカット（{{shortcut}}）でも、通常のショートカット（{{normal}}）でも実行されます。",
+        "notSet": "未設定",
+        "stepProvider": "プロバイダーを選びます。このコンピューターの Lemonade を使う場合は Lemonade Server を選びます。",
+        "stepModel": "モデルを選びます。更新ボタンでサーバーのモデルを読み込めます。",
+        "stepPrompt": "プロンプトを選ぶか、独自のプロンプトを作成します。",
+        "stepTest": "このページの下部にある「テスト」を押して試します。",
+        "fallback": "整形に失敗した場合、Handy は話したとおりの言葉を貼り付けます。",
+        "everyDictation": {
+          "label": "すべてのディクテーションを整える",
+          "description": "後処理用のショートカットだけでなく、通常のショートカットでのディクテーションも整えます。"
+        }
+      },
       "hotkey": {
         "title": "ショートカット"
       },
@@ -424,21 +496,29 @@
         },
         "baseUrl": {
           "title": "ベース URL",
-          "description": "選択したプロバイダーの API ベース URL。カスタムプロバイダーのみ編集可能。",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "サーバーの OpenAI 互換 API のアドレス。例: http://localhost:11434/v1",
+          "descriptionLemonade": "Lemonade Server のアドレス。通常は http://localhost:13305/api/v1 です。古いバージョンの Lemonade ではポート 8000 が使われていました。",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "http://localhost:13305/api/v1 のようなアドレスを入力してください。"
         },
         "apiKey": {
           "title": "API キー",
           "description": "選択したプロバイダーの API キー。",
-          "placeholder": "sk-…"
+          "descriptionOptional": "サーバーが求める場合にのみ必要です。",
+          "placeholder": "sk-…",
+          "placeholderOptional": "任意"
         },
         "model": {
           "title": "モデル",
           "descriptionCustom": "カスタムエンドポイントが期待するモデル識別子を指定。",
           "descriptionDefault": "選択したプロバイダーが提供するモデルを選択。",
+          "descriptionLemonade": "Lemonade Server 上のチャットモデル。音声、埋め込み、画像のモデルは一覧に表示されません。",
           "placeholderWithOptions": "モデルを検索または選択",
           "placeholderNoOptions": "モデル名を入力",
-          "refreshModels": "モデルを更新"
+          "refreshModels": "モデルを更新",
+          "use": "「{{model}}」を使用",
+          "loadError": "モデルを読み込めませんでした。{{problem}}"
         }
       },
       "prompts": {
@@ -455,12 +535,305 @@
         "promptInstructions": "プロンプトの指示",
         "promptInstructionsPlaceholder": "文字起こし後に実行する指示を記述します。例: 以下のテキストの文法と明瞭さを改善してください: ${output}",
         "promptTip": "ヒント: <code>${output}</code> を使用して、文字起こしテキストをプロンプトに挿入します。",
+        "promptTipNoMarker": "${output} がない場合、Handy はプロンプトの後に文字起こしを {{tag}} タグで囲んで送ります。",
         "updatePrompt": "プロンプトを更新",
         "deletePrompt": "プロンプトを削除",
         "createPrompt": "プロンプトを作成",
         "cancel": "キャンセル",
         "selectToEdit": "上からプロンプトを選択して、詳細を表示・編集します。",
         "createFirst": "上の「新しいプロンプトを作成」をクリックして、最初の後処理プロンプトを作成してください。"
+      },
+      "test": {
+        "title": "試してみる",
+        "label": "サンプルのディクテーション",
+        "description": "上で選んだプロバイダー、モデル、保存済みのプロンプトで、このテキストをディクテーションと同じ方法で整えます。",
+        "sample": "えーと金曜日までにあのーレポートを送ってもらえますか",
+        "button": "テスト",
+        "testing": "テスト中…",
+        "result": "結果（{{seconds}} 秒）:",
+        "emptyResult": "モデルはテキストなしで応答しました。整形用のプロンプトでは、残す価値のあるものが見つからなかったという意味です。",
+        "failed": "テストを実行できませんでした: {{error}}"
+      },
+      "problems": {
+        "emptyText": "テストするテキストを入力してください。",
+        "noProvider": "上でプロバイダーを選んでください。",
+        "noModel": "上で {{provider}} のモデルを選んでください。「モデル」の横にある更新ボタンでサーバーのモデルを読み込めます。",
+        "noPrompt": "下でプロンプトを選んでください。",
+        "emptyPrompt": "選択したプロンプトが空です。指示を書いてから「プロンプトを更新」を押してください。",
+        "missingApiKey": "{{provider}} には API キーが必要です。上の「API キー」欄に入力してください。",
+        "invalidApiKey": "API キーに送信できない文字が含まれています。もう一度入力してください。",
+        "invalidAddress": "{{address}} は Handy が使えるサーバーのアドレスではありません。http://localhost:13305/api/v1 のような形式にしてください。",
+        "unreachable": "{{address}} のサーバーに接続できません。起動していること、アドレスが正しいことを確認してください。",
+        "timeout": "{{address}} のサーバーが時間内に応答しませんでした。まだモデルを読み込んでいる場合は、1 分後にもう一度お試しください。",
+        "unauthorized": "{{address}} のサーバーが API キーを受け付けませんでした（エラー {{status}}）。「API キー」欄を確認してください。",
+        "modelNotFound": "{{address}} のサーバーにはモデル「{{model}}」がありません。上で別のモデルを選んでください。",
+        "notFound": "{{address}} では何も応答しませんでした（エラー 404）。アドレスを確認してください。",
+        "serverError": "{{address}} のサーバーがエラーを返しました（エラー {{status}}）。",
+        "serverErrorNoStatus": "{{provider}} がエラーを返しました。",
+        "noAnswer": "{{provider}} はテキストなしで応答しました。別のモデルをお試しください。",
+        "badAnswer": "{{provider}} から Handy が読み取れない応答が届きました。",
+        "noChatModels": "{{address}} の {{provider}} にはチャットモデルがありません。Lemonade でダウンロードしてから、更新ボタンを押してください。",
+        "otherModels": "テキストを整えられないサーバー上のモデル: {{models}}",
+        "internal": "Handy の内部で問題が発生しました。",
+        "detail": "詳細: {{detail}}"
+      }
+    },
+    "transcribeFiles": {
+      "title": "ファイルの文字起こし",
+      "description": "既存の録音をこのコンピューター上でテキストに変換します。ファイルがデバイスの外に送信されることはありません。",
+      "settingsNote": "選択中のモデルと、言語・翻訳・カスタム単語・フィラー語の設定が使用されます。",
+      "settingsNoteLemonade": "言語・カスタム単語・フィラー語の設定が使用されます。",
+      "settingsNoteOwnModel": "録音用モデルと、言語・翻訳・カスタム単語・フィラー語の設定が使用されます。",
+      "model": "モデル: {{model}}",
+      "modelLemonade": "モデル: Lemonade Server の {{model}}",
+      "noModel": "ファイルを文字起こしするには、モデルページでダウンロード済みのモデルを選択してください。",
+      "noLemonadeModel": "ファイルを文字起こしするには、Lemonade のモデルを選択してください。",
+      "noRecordingsModel": "録音用モデルがダウンロードされていません。上で別のモデルを選択するか、モデルページでダウンロードしてください。",
+      "dropzone": {
+        "title": "音声または動画ファイルをここにドロップ",
+        "hint": "インタビュー、会議、講義、ボイスメモなど、長さを問わず対応",
+        "active": "ドロップして追加",
+        "choose": "ファイルを選択…",
+        "skipped": "音声・動画以外のファイルをスキップしました: {{number}}"
+      },
+      "picker": {
+        "title": "録音を選択",
+        "filterName": "音声・動画ファイル"
+      },
+      "formats": {
+        "native": "対応形式: {{formats}}",
+        "ffmpegAvailable": "Opus、WebM、WMA、DSS などのその他の形式は ffmpeg で開きます。",
+        "ffmpegMissing": "ffmpeg をインストールすると、Opus、WebM、WMA、DSS などの形式も開けます。"
+      },
+      "saveToHistory": {
+        "label": "履歴に保存",
+        "description": "完了した文字起こしは保存されてスターが付き、自動削除の対象外になります。"
+      },
+      "autosave": {
+        "title": "文字起こしの保存",
+        "enabled": {
+          "label": "文字起こしを自動で保存",
+          "description": "ファイルや会議の文字起こしが終わると、Word やテキスト エディターで開けるファイルとして保存します。"
+        },
+        "location": {
+          "label": "保存先",
+          "description": "「録音と同じ場所」を選ぶと、録音のフォルダーに保存します (会議の場合は会議ごとのフォルダー)。フォルダーに書き込めない場合は、ドキュメント フォルダー内の Handy Transcripts を使用します。",
+          "nextToRecording": "録音と同じ場所",
+          "folder": "選択したフォルダー…"
+        },
+        "chooseFolder": "フォルダーを選択…",
+        "folderPicker": "文字起こしの保存先フォルダーを選択",
+        "format": {
+          "label": "ファイル形式",
+          "description": "Word 文書と Markdown には話者名と時刻が含まれます。プレーンテキストには話者名が含まれます。"
+        },
+        "note": "既存のファイルが置き換えられることはありません。代わりに「interview (2).docx」のような新しい名前が使われます。欠けている部分がある文字起こしの名前は「(incomplete)」で終わります。",
+        "saveError": "設定を保存できませんでした: {{error}}"
+      },
+      "engine": {
+        "title": "文字起こしエンジン",
+        "label": "使用するエンジン",
+        "description": "音声入力には常に Handy 独自のモデルが使用されます。この選択はファイルにのみ適用されます。",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "録音用モデル",
+        "description": "録音には、音声入力より低速でも高精度なモデルを使えます。このモデルは独立して動作し、ファイルの文字起こし中にだけ読み込まれるため、音声入力用のモデルはすぐに使える状態のままです。両方のモデルがメモリに収まる必要があります。",
+        "same": "音声入力と同じ（{{model}}）",
+        "sameNoModel": "音声入力と同じ",
+        "timestamps": "（タイムスタンプあり）",
+        "noTimestamps": "（タイムスタンプなし）",
+        "switchWarning": "このファイルは音声入力用のモデルを使用しているため、今音声入力用のモデルを変更すると処理が停止します。分けて使うには、録音用に別のモデルを選択してください。",
+        "onCpu": "グラフィックメモリが両方のモデルには足りないため、録音はプロセッサーで処理されています。グラフィックカードを使うには、録音用に小さいモデルを選択してください。"
+      },
+      "lemonade": {
+        "url": {
+          "label": "サーバーアドレス",
+          "description": "通常は http://localhost:13305 です。古いバージョンの Lemonade ではポート 8000 が使われていました。"
+        },
+        "apiKey": {
+          "label": "API キー",
+          "description": "Lemonade Server で API キーが求められる場合にのみ必要です。",
+          "placeholder": "任意"
+        },
+        "model": {
+          "label": "モデル",
+          "description": "ファイルの文字起こしに使用する Lemonade のモデル（例: Whisper-Base）。",
+          "placeholder": "Whisper モデルを選択",
+          "notDownloaded": "{{model}}（初回使用時にダウンロード）",
+          "none": "このサーバーに文字起こしモデルが見つかりません。",
+          "use": "「{{model}}」を使用"
+        },
+        "test": "接続をテスト",
+        "testing": "接続中…",
+        "connected": "接続しました。利用可能な文字起こしモデル: {{number}}",
+        "checkFailed": "Lemonade Server を確認できませんでした: {{error}}",
+        "saveError": "Lemonade の設定を保存できませんでした: {{error}}",
+        "firstChunkSlow": "Lemonade がモデルをダウンロードまたは読み込んでいる可能性があります。初回は数分かかることがあります。",
+        "errors": {
+          "invalidUrl": "http://localhost:13305 のようなアドレスを入力してください。",
+          "unreachable": "{{url}} の Lemonade Server に接続できません。起動していることを確認してください。",
+          "timeout": "Lemonade Server から時間内に応答がありませんでした。",
+          "unauthorized": "Lemonade Server で API キーが受け付けられませんでした。",
+          "modelNotFound": "Lemonade Server にこのモデルがありません。",
+          "http": "Lemonade Server がエラーを返しました。",
+          "badResponse": "Lemonade Server から Handy が読み取れない応答が返されました。",
+          "cancelled": "接続テストがキャンセルされました。"
+        },
+        "notes": {
+          "noTranslate": "Lemonade Server では「英語に翻訳」を使用できません。ファイルは話されている言語のまま文字起こしされます。",
+          "remote": "このアドレスはこのコンピューター上にありません。録音はこのアドレスに送信されます。"
+        }
+      },
+      "speakers": {
+        "label": "話者ラベルを付ける",
+        "description": "最大 4 人まで、誰が何を話したかを区別します。このコンピューター上で動作し、初回のみ {{size}} MB のダウンロードが必要です。",
+        "download": "話者モデルをダウンロード（{{size}} MB）",
+        "downloading": "話者モデルをダウンロード中… {{percent}}%",
+        "verifying": "ダウンロードを確認中…",
+        "cancelDownload": "ダウンロードをキャンセル",
+        "downloadFailed": "話者モデルをダウンロードできませんでした: {{error}}",
+        "installed": "話者モデルをインストール済み（{{size}} MB）",
+        "remove": "話者モデルを削除",
+        "removeError": "話者モデルを削除できませんでした: {{error}}",
+        "removeConfirm": "話者モデルを削除しますか？話者ラベルを付けるには、再度ダウンロード（{{size}} MB）が必要です。",
+        "license": "話者モデルは NVIDIA が NVIDIA Open Model License の下で提供しています（<page>モデルページ</page>）。",
+        "title": "話者",
+        "defaultName": "話者 {{number}}",
+        "rename": "{{name}} の名前を変更",
+        "nameLabel": "{{name}} の新しい名前",
+        "save": "保存",
+        "cancel": "キャンセル",
+        "renameError": "話者の名前を変更できませんでした: {{error}}",
+        "approximate": "このモデルはタイムスタンプを出力しないため、話者の切り替わり位置はおおよそのものです。",
+        "unassigned": "一部の箇所は話者を特定できませんでした。",
+        "none": "この文字起こしには話者ラベルがありません。",
+        "labelAction": "話者ラベルを付ける",
+        "labelHint": "話者ラベルは、元の録音 {{file}} からこのコンピューター上で作成されます。長い録音には数分かかります。",
+        "needsModel": "話者ラベルを付けるには話者モデルが必要です（初回のみ {{size}} MB のダウンロード）。",
+        "labelError": "話者ラベルを追加できませんでした: {{error}}",
+        "findRecording": "録音を探す…",
+        "findRecordingHint": "移動した録音を選択してください。文字起こししたファイルと同じものである必要があります。",
+        "relabel": "ラベルを付け直す…",
+        "relabelTitle": "話者ラベルを付け直す",
+        "relabelConfirm": "録音から話者ラベルを付け直しますか？名前、統合、箇所ごとの変更は失われます。",
+        "mergeInto": "{{name}} を別の話者に統合",
+        "mergePrompt": "{{name}} の統合先:",
+        "mergeTitle": "話者を統合",
+        "mergeConfirm": "{{from}} を {{into}} に統合しますか？{{from}} のすべての箇所が {{into}} として扱われます。文字起こしを閉じるまでは元に戻せます。",
+        "mergeError": "話者を統合できませんでした: {{error}}",
+        "changeSpeaker": "この箇所の話者を変更（{{name}}）",
+        "changeSpeakerPrompt": "誰が話しましたか？",
+        "newSpeaker": "新しい話者",
+        "unknownSpeaker": "不明な話者",
+        "changeSpeakerError": "話者を変更できませんでした: {{error}}",
+        "undo": "元に戻す",
+        "undoError": "元に戻せませんでした: {{error}}",
+        "jobKind": "話者ラベル",
+        "state": {
+          "running": "話者を識別中…",
+          "done": "話者数: {{number}}",
+          "failed": "話者ラベルを付けられませんでした",
+          "skipped": {
+            "modelMissing": "話者ラベルをスキップしました: 話者モデルがダウンロードされていません。",
+            "noSpeech": "話者ラベルをスキップしました: 音声が見つかりませんでした。"
+          }
+        }
+      },
+      "queue": {
+        "title": "ファイル",
+        "cancelAll": "すべてキャンセル",
+        "clearFinished": "完了したものをクリア"
+      },
+      "status": {
+        "queued": "開始待ち",
+        "preparing": "準備中…",
+        "waiting": "音声入力中のため一時停止",
+        "transcribing": "文字起こし中…",
+        "completed": "完了",
+        "partial": "完了（一部欠落あり）",
+        "cancelled": "キャンセル済み",
+        "failed": "失敗"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "文字起こし済み: {{processed}}",
+      "elapsed": "経過時間 {{time}}",
+      "took": "所要時間 {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "残り 1 分未満",
+        "minutes": "残り約 {{minutes}} 分",
+        "hours": "残り約 {{hours}} 時間 {{minutes}} 分",
+        "hoursOnly": "残り約 {{hours}} 時間"
+      },
+      "noSpeech": "このファイルに音声が見つかりませんでした。",
+      "actions": {
+        "cancel": "キャンセル",
+        "remove": "リストから削除",
+        "removeWhileLabelling": "話者の識別中は削除できません",
+        "view": "文字起こしを表示",
+        "copy": "文字起こしをコピー",
+        "showFile": "ファイルを表示"
+      },
+      "copied": "文字起こしをクリップボードにコピーしました。",
+      "copyError": "文字起こしをコピーできませんでした。",
+      "savedToHistory": "履歴に保存済み",
+      "ready": {
+        "title": "文字起こしが完了しました: {{file}}",
+        "open": "Handy で開く",
+        "showFile": "ファイルを表示"
+      },
+      "saved": {
+        "savedTo": "保存先: {{path}}",
+        "open": "開く",
+        "showInFolder": "フォルダーで表示",
+        "fallback": "{{folder}} に保存できなかったため、文字起こしはドキュメント フォルダー内の Handy Transcripts に保存されました。",
+        "failed": "文字起こしをファイルとして保存できませんでした。エクスポートで保存してください。",
+        "openError": "文字起こしを開けませんでした: {{error}}",
+        "notFound": "保存した文字起こしが見つかりません。移動または削除された可能性があります。",
+        "exportAgain": "ここで話者を編集しても、このファイルは変わりません。後からの変更を含めるには、もう一度エクスポートしてください。"
+      },
+      "errors": {
+        "notFound": "ファイルが見つからないか、開けません。",
+        "unsupportedFormat": "このファイル形式には対応していません。",
+        "needsFfmpeg": "この形式には ffmpeg が必要です。ffmpeg をインストールしてから、もう一度お試しください。",
+        "noModel": "文字起こしのモデルが選択されていません。",
+        "modelChanged": "このファイルの文字起こし中にモデルが変更されました。",
+        "decodeFailed": "このファイルの音声を読み取れませんでした。",
+        "engineFailed": "文字起こしに失敗しました。",
+        "serverUnreachable": "Lemonade Server に接続できません。起動していることを確認してください。",
+        "serverUnauthorized": "Lemonade Server で API キーが受け付けられませんでした。",
+        "serverModelMissing": "Lemonade Server に選択したモデルがありません。",
+        "internal": "問題が発生しました。",
+        "sourceChanged": "この場所にある録音は文字起こし後に変更されているため、話者をこの文字起こしに対応付けられません。同じ録音であれば、「録音を探す…」で選択してください。",
+        "speakerLabelsFailed": "話者ラベルの作成に失敗しました。",
+        "enqueue": "ファイルを追加できませんでした: {{error}}",
+        "cancel": "キャンセルできませんでした: {{error}}",
+        "remove": "リストから削除できませんでした: {{error}}",
+        "loadTranscript": "文字起こしを読み込めませんでした: {{error}}"
+      },
+      "transcript": {
+        "title": "文字起こし: {{file}}",
+        "live": "文字起こしの進行に合わせて更新中",
+        "partial": "この文字起こしは不完全です: {{reason}}",
+        "partialNoReason": "この文字起こしは不完全です。",
+        "approximateTimes": "このモデルはタイムスタンプを出力しないため、時間はおおよその値です。",
+        "empty": "音声が見つかりませんでした。",
+        "segmentsLabel": "タイムスタンプ付きの文字起こし"
+      },
+      "export": {
+        "button": "エクスポート…",
+        "dialogTitle": "文字起こしをエクスポート",
+        "formats": {
+          "docx": "Word 文書 (.docx)",
+          "txt": "プレーンテキスト (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip 字幕 (.srt)",
+          "vtt": "WebVTT 字幕 (.vtt)"
+        },
+        "success": "文字起こしをエクスポートしました。",
+        "showInFolder": "フォルダーで表示",
+        "error": "エクスポートに失敗しました: {{error}}"
       }
     },
     "history": {
@@ -477,7 +850,14 @@
       "retranscribe": "再文字起こし",
       "retranscribeError": "再文字起こしに失敗しました。もう一度お試しください。",
       "transcribing": "文字起こし中…",
-      "transcriptionFailed": "文字起こしに失敗しました。リトライアイコンを使用して再文字起こしできます。"
+      "transcriptionFailed": "文字起こしに失敗しました。リトライアイコンを使用して再文字起こしできます。",
+      "openTranscript": "文字起こしを開く",
+      "showOriginal": "元のファイルを表示",
+      "originalMissing": "元のファイルは移動または削除されています。",
+      "fileDuration": "長さ {{duration}}",
+      "incomplete": "不完全",
+      "speakerCount": "話者数: {{number}}",
+      "retranscribeFileUnavailable": "このファイルをもう一度文字起こしするには、「文字起こし」ページを使用してください。"
     },
     "debug": {
       "title": "デバッグ",
@@ -644,6 +1024,142 @@
       "whatsNewUpdates": {
         "label": "新機能を表示",
         "description": "Handy のアップデート後にリリースノートを表示"
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

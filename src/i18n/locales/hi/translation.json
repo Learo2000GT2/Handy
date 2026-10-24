@@ -7,16 +7,23 @@
     "model": "मॉडल",
     "quit": "बाहर निकलें",
     "cancel": "रद्द करें",
-    "secureInputWarning": "⚠ Secure Input ने शॉर्टकट ब्लॉक किए हैं"
+    "secureInputWarning": "⚠ Secure Input ने शॉर्टकट ब्लॉक किए हैं",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "सामान्य",
+    "transcribe": "ट्रांसक्राइब",
+    "transcribeProgress": "ट्रांसक्राइब हो रहा है: {{percent}} पूरा",
+    "transcribeRunning": "ट्रांसक्राइब हो रहा है…",
+    "speakersProgress": "स्पीकर की पहचान हो रही है: {{percent}} पूरा",
+    "speakersRunning": "स्पीकर की पहचान हो रही है…",
     "models": "मॉडल",
     "advanced": "ऐडवांस",
     "postProcessing": "पोस्ट प्रोसेस",
     "history": "इतिहास",
     "debug": "डिबग",
-    "about": "के बारे में"
+    "about": "के बारे में",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "शुरू करने के लिए, एक ट्रांसक्रिप्शन मॉडल चुनें",
@@ -124,6 +131,9 @@
     "custom": "कस्टम",
     "legacy": "लीगेसी",
     "streaming": "स्ट्रीमिंग",
+    "bestForRecordings": "रिकॉर्डिंग के लिए सबसे अच्छा",
+    "timestamps": "टाइमस्टैम्प",
+    "noTimestamps": "टाइमस्टैम्प नहीं",
     "active": "इस्तेमाल में",
     "switching": "बदला जा रहा है...",
     "noModelsAvailable": "कोई मॉडल उपलब्ध नहीं है",
@@ -151,7 +161,10 @@
       "languageOnly": "केवल {{language}}",
       "translation": "अंग्रेज़ी में अनुवाद कर सकता है",
       "translate": "अनुवाद करें",
-      "streaming": "बोलते समय लाइव ट्रांसक्रिप्शन दिखाता है"
+      "streaming": "बोलते समय लाइव ट्रांसक्रिप्शन दिखाता है",
+      "bestForRecordings": "सटीक, हर वाक्य का समय देता है. रिकॉर्डिंग और मीटिंग के लिए अच्छा विकल्प.",
+      "timestamps": "हर वाक्य का समय देता है, ताकि ट्रांसक्रिप्ट और स्पीकर लेबल रिकॉर्डिंग से मेल खाएं.",
+      "noTimestamps": "समय केवल अनुमानित है, लगभग हर 30 सेकंड पर."
     }
   },
   "settings": {
@@ -179,6 +192,10 @@
           "transcribe_with_post_process": {
             "name": "पोस्ट-प्रोसेसिंग हॉटकी",
             "description": "वैकल्पिक: एक अलग हॉटकी जो आपके ट्रांसक्रिप्शन पर हमेशा AI पोस्ट-प्रोसेसिंग लागू करती है."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -212,11 +229,13 @@
     "models": {
       "title": "ट्रांसक्रिप्शन मॉडल",
       "description": "कोई ट्रांसक्रिप्शन मॉडल चुनें या दूसरे मॉडल डाउनलोड करें. अलग-अलग मॉडल की सटीकता और स्पीड अलग-अलग होती है.",
+      "recordingsTip": "रिकॉर्डिंग और मीटिंग के लिए, \"{{badge}}\" वाला मॉडल चुनें. Parakeet TDT 0.6B v3 हर तरह से सबसे अच्छा विकल्प है; Whisper Large v3 Turbo ज़्यादा भाषाएं समझता है.",
       "searchPlaceholder": "नाम से मॉडल खोजें…",
       "yourModels": "डाउनलोड किए गए मॉडल",
       "availableModels": "डाउनलोड के लिए उपलब्ध",
       "deleteConfirm": "क्या आप वाकई {{modelName}} को हटाना चाहते हैं? इसे फिर से इस्तेमाल करने के लिए आपको इसे दोबारा डाउनलोड करना होगा.",
       "deleteActiveConfirm": "{{modelName}} अभी इस्तेमाल में है. इसे हटाने पर ट्रांसक्रिप्शन तब तक रुका रहेगा, जब तक आप कोई नया मॉडल नहीं चुन लेते. क्या आप वाकई हटाना चाहते हैं?",
+      "deleteRecordingsConfirm": "{{modelName}} रिकॉर्डिंग के लिए आपका मॉडल है. इसे हटाने पर रिकॉर्डिंग में आपका डिक्टेशन मॉडल इस्तेमाल होगा. क्या आप वाकई हटाना चाहते हैं?",
       "deleteTitle": "मॉडल हटाएं",
       "filters": {
         "allLanguages": "सभी भाषाएं",
@@ -378,10 +397,47 @@
       "customWords": {
         "title": "कस्टम शब्द",
         "description": "समर्थित मॉडल को नाम और विशेष शब्द पहचानने में मदद करें। फ़ज़ी सुधार फिलहाल A–Z अक्षरों और संख्याओं वाले शब्दों तक सीमित है।",
-        "placeholder": "शब्द जोड़ें",
         "add": "जोड़ें",
         "remove": "{{word}} हटाएं",
-        "duplicate": "\"{{word}}\" पहले से मौजूद है"
+        "duplicate": "\"{{word}}\" पहले से मौजूद है",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "वॉइस एक्टिविटी डिटेक्शन",
@@ -410,6 +466,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "यह कैसे काम करता है",
+        "intro": "पोस्ट प्रोसेसिंग आपकी बोली गई बात को एक AI मॉडल को भेजती है, जो Handy के पेस्ट करने से पहले उसे साफ़ करता है.",
+        "shortcut": "यह तब चलती है जब आप पोस्ट प्रोसेसिंग शॉर्टकट ({{shortcut}}) से डिक्टेट करते हैं, न कि अपने सामान्य शॉर्टकट ({{normal}}) से, जो आपके शब्द वैसे ही पेस्ट करता है जैसे बोले गए थे.",
+        "shortcutEvery": "यह हर डिक्टेशन पर चलती है: पोस्ट प्रोसेसिंग शॉर्टकट ({{shortcut}}) से भी और आपके सामान्य शॉर्टकट ({{normal}}) से भी.",
+        "notSet": "सेट नहीं है",
+        "stepProvider": "एक प्रोवाइडर चुनें. इस कंप्यूटर पर Lemonade के लिए Lemonade Server चुनें.",
+        "stepModel": "एक मॉडल चुनें. रीफ़्रेश बटन सर्वर के मॉडल लोड करता है.",
+        "stepPrompt": "एक प्रॉम्प्ट चुनें या अपना खुद का बनाएं.",
+        "stepTest": "आज़माने के लिए इस पेज के नीचे \"जांचें\" दबाएं.",
+        "fallback": "अगर सफ़ाई नहीं हो पाती, तो Handy आपके शब्द वैसे ही पेस्ट करता है जैसे बोले गए थे.",
+        "everyDictation": {
+          "label": "हर डिक्टेशन साफ़ करें",
+          "description": "सिर्फ़ पोस्ट प्रोसेसिंग शॉर्टकट वाले ही नहीं, बल्कि सामान्य शॉर्टकट से किए गए डिक्टेशन भी साफ़ करें."
+        }
+      },
       "hotkey": {
         "title": "हॉटकी"
       },
@@ -424,21 +496,29 @@
         },
         "baseUrl": {
           "title": "बेस URL",
-          "description": "चुने गए प्रोवाइडर के लिए API बेस URL. केवल कस्टम प्रोवाइडर में बदलाव किया जा सकता है.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "आपके सर्वर के OpenAI-संगत API का पता, जैसे http://localhost:11434/v1.",
+          "descriptionLemonade": "आपके Lemonade Server का पता, आम तौर पर http://localhost:13305/api/v1. Lemonade के पुराने वर्शन पोर्ट 8000 का इस्तेमाल करते थे.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "http://localhost:13305/api/v1 जैसा पता डालें."
         },
         "apiKey": {
           "title": "API कुंजी",
           "description": "चुने गए प्रोवाइडर के लिए API कुंजी.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "सिर्फ़ तभी ज़रूरी है जब आपका सर्वर इसे मांगे.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "वैकल्पिक"
         },
         "model": {
           "title": "मॉडल",
           "descriptionCustom": "वह मॉडल आईडी डालें जो आपके कस्टम एंडपॉइंट को चाहिए.",
           "descriptionDefault": "चुने गए प्रोवाइडर का कोई मॉडल चुनें.",
+          "descriptionLemonade": "आपके Lemonade Server पर एक चैट मॉडल. बोली, एम्बेडिंग और इमेज वाले मॉडल सूची में नहीं दिखते.",
           "placeholderWithOptions": "मॉडल खोजें या चुनें",
           "placeholderNoOptions": "मॉडल का नाम लिखें",
-          "refreshModels": "मॉडल रीफ़्रेश करें"
+          "refreshModels": "मॉडल रीफ़्रेश करें",
+          "use": "\"{{model}}\" इस्तेमाल करें",
+          "loadError": "मॉडल लोड नहीं हो सके. {{problem}}"
         }
       },
       "prompts": {
@@ -455,12 +535,305 @@
         "promptInstructions": "प्रॉम्प्ट के निर्देश",
         "promptInstructionsPlaceholder": "ट्रांसक्रिप्शन के बाद चलाने के लिए निर्देश लिखें. उदाहरण: इस टेक्स्ट का व्याकरण और स्पष्टता सुधारें: ${output}",
         "promptTip": "सुझाव: अपने प्रॉम्प्ट में ट्रांसक्राइब किया गया टेक्स्ट डालने के लिए <code>${output}</code> का इस्तेमाल करें.",
+        "promptTipNoMarker": "${output} के बिना, Handy ट्रांसक्रिप्ट को आपके प्रॉम्प्ट के बाद {{tag}} टैग के बीच भेजता है.",
         "updatePrompt": "प्रॉम्प्ट अपडेट करें",
         "deletePrompt": "प्रॉम्प्ट हटाएं",
         "createPrompt": "प्रॉम्प्ट बनाएं",
         "cancel": "रद्द करें",
         "selectToEdit": "जानकारी देखने और बदलाव करने के लिए, ऊपर कोई प्रॉम्प्ट चुनें.",
         "createFirst": "अपना पहला पोस्ट-प्रोसेसिंग प्रॉम्प्ट बनाने के लिए, ऊपर 'नया प्रॉम्प्ट बनाएं' पर क्लिक करें."
+      },
+      "test": {
+        "title": "आज़माएं",
+        "label": "नमूना डिक्टेशन",
+        "description": "ऊपर चुने गए प्रोवाइडर, मॉडल और सेव किए गए प्रॉम्प्ट से इस टेक्स्ट को उसी तरह साफ़ करता है जैसे डिक्टेशन को किया जाता है.",
+        "sample": "अम तो क्या तुम अह मुझे शुक्रवार तक रिपोर्ट भेज सकते हो",
+        "button": "जांचें",
+        "testing": "जांच हो रही है…",
+        "result": "नतीजा ({{seconds}} सेकंड):",
+        "emptyResult": "मॉडल ने कोई टेक्स्ट नहीं लौटाया. सफ़ाई वाले प्रॉम्प्ट के साथ इसका मतलब है कि उसे रखने लायक कुछ नहीं मिला.",
+        "failed": "जांच नहीं चल सकी: {{error}}"
+      },
+      "problems": {
+        "emptyText": "जांच के लिए कुछ टेक्स्ट लिखें.",
+        "noProvider": "ऊपर एक प्रोवाइडर चुनें.",
+        "noModel": "ऊपर {{provider}} के लिए एक मॉडल चुनें. \"मॉडल\" के बगल वाला रीफ़्रेश बटन सर्वर के मॉडल लोड करता है.",
+        "noPrompt": "नीचे एक प्रॉम्प्ट चुनें.",
+        "emptyPrompt": "चुना गया प्रॉम्प्ट खाली है. उसके निर्देश लिखें, फिर \"प्रॉम्प्ट अपडेट करें\" दबाएं.",
+        "missingApiKey": "{{provider}} को API कुंजी चाहिए. इसे ऊपर \"API कुंजी\" फ़ील्ड में डालें.",
+        "invalidApiKey": "API कुंजी में ऐसे वर्ण हैं जिन्हें भेजा नहीं जा सकता. इसे फिर से डालें.",
+        "invalidAddress": "{{address}} ऐसा सर्वर पता नहीं है जिसे Handy इस्तेमाल कर सके. यह http://localhost:13305/api/v1 जैसा दिखना चाहिए.",
+        "unreachable": "{{address}} पर सर्वर से कनेक्ट नहीं हो पा रहा है. पक्का करें कि यह चल रहा है और पता सही है.",
+        "timeout": "{{address}} पर सर्वर ने समय पर जवाब नहीं दिया. अगर वह अभी भी मॉडल लोड कर रहा है, तो एक मिनट बाद फिर कोशिश करें.",
+        "unauthorized": "{{address}} पर सर्वर ने API कुंजी स्वीकार नहीं की (त्रुटि {{status}}). \"API कुंजी\" फ़ील्ड जांचें.",
+        "modelNotFound": "{{address}} पर सर्वर में \"{{model}}\" मॉडल नहीं है. ऊपर कोई दूसरा मॉडल चुनें.",
+        "notFound": "{{address}} पर किसी ने जवाब नहीं दिया (त्रुटि 404). पता जांचें.",
+        "serverError": "{{address}} पर सर्वर ने त्रुटि के साथ जवाब दिया (त्रुटि {{status}}).",
+        "serverErrorNoStatus": "{{provider}} ने त्रुटि के साथ जवाब दिया.",
+        "noAnswer": "{{provider}} ने बिना किसी टेक्स्ट के जवाब दिया. कोई दूसरा मॉडल आज़माएं.",
+        "badAnswer": "{{provider}} ने ऐसा जवाब भेजा जिसे Handy पढ़ नहीं सका.",
+        "noChatModels": "{{address}} पर {{provider}} में कोई चैट मॉडल नहीं है. Lemonade में एक डाउनलोड करें, फिर रीफ़्रेश बटन दबाएं.",
+        "otherModels": "सर्वर पर ऐसे मॉडल जो टेक्स्ट साफ़ नहीं कर सकते: {{models}}",
+        "internal": "Handy के अंदर कुछ गड़बड़ हो गई.",
+        "detail": "विवरण: {{detail}}"
+      }
+    },
+    "transcribeFiles": {
+      "title": "फ़ाइलें ट्रांसक्राइब करें",
+      "description": "मौजूदा रिकॉर्डिंग को इसी कंप्यूटर पर टेक्स्ट में बदलें. आपकी फ़ाइलें कभी आपके डिवाइस से बाहर नहीं जातीं.",
+      "settingsNote": "आपके चुने गए मॉडल और आपकी भाषा, अनुवाद, कस्टम शब्द और फिलर शब्द सेटिंग का इस्तेमाल करता है.",
+      "settingsNoteLemonade": "आपकी भाषा, कस्टम शब्द और फिलर शब्द सेटिंग का इस्तेमाल करता है.",
+      "settingsNoteOwnModel": "रिकॉर्डिंग के लिए चुने गए मॉडल और आपकी भाषा, अनुवाद, कस्टम शब्द और फिलर शब्द सेटिंग का इस्तेमाल करता है.",
+      "model": "मॉडल: {{model}}",
+      "modelLemonade": "मॉडल: Lemonade Server पर {{model}}",
+      "noModel": "फ़ाइलें ट्रांसक्राइब करने के लिए, 'मॉडल' पेज पर कोई डाउनलोड किया गया मॉडल चुनें.",
+      "noLemonadeModel": "फ़ाइलें ट्रांसक्राइब करने के लिए कोई Lemonade मॉडल चुनें.",
+      "noRecordingsModel": "रिकॉर्डिंग के लिए चुना गया मॉडल डाउनलोड नहीं हुआ है. ऊपर कोई दूसरा मॉडल चुनें या उसे 'मॉडल' पेज पर डाउनलोड करें.",
+      "dropzone": {
+        "title": "ऑडियो या वीडियो फ़ाइलें यहां छोड़ें",
+        "hint": "किसी भी लंबाई के इंटरव्यू, मीटिंग, लेक्चर और वॉइस मेमो",
+        "active": "जोड़ने के लिए छोड़ें",
+        "choose": "फ़ाइलें चुनें…",
+        "skipped": "ऑडियो या वीडियो न होने की वजह से छोड़ी गई फ़ाइलें: {{number}}"
+      },
+      "picker": {
+        "title": "रिकॉर्डिंग चुनें",
+        "filterName": "ऑडियो और वीडियो फ़ाइलें"
+      },
+      "formats": {
+        "native": "{{formats}} फ़ाइलें खोलता है",
+        "ffmpegAvailable": "Opus, WebM, WMA और DSS जैसे दूसरे फ़ॉर्मैट ffmpeg से खुलते हैं.",
+        "ffmpegMissing": "Opus, WebM, WMA, DSS और दूसरे फ़ॉर्मैट भी खोलने के लिए ffmpeg इंस्टॉल करें."
+      },
+      "saveToHistory": {
+        "label": "इतिहास में सेव करें",
+        "description": "पूरे हुए ट्रांसक्रिप्ट सेव होते हैं और उन पर स्टार लगता है, ताकि अपने आप होने वाली सफ़ाई में वे न हटें."
+      },
+      "autosave": {
+        "title": "ट्रांसक्रिप्ट सेव करना",
+        "enabled": {
+          "label": "ट्रांसक्रिप्ट अपने-आप सेव करें",
+          "description": "किसी फ़ाइल या मीटिंग के ट्रांसक्राइब होने पर, ट्रांसक्रिप्ट को ऐसी फ़ाइल के रूप में सेव करें जिसे आप Word या किसी भी टेक्स्ट एडिटर में खोल सकें।"
+        },
+        "location": {
+          "label": "यहां सेव करें",
+          "description": "“रिकॉर्डिंग के पास” ट्रांसक्रिप्ट को रिकॉर्डिंग के फ़ोल्डर में रखता है (मीटिंग के लिए, मीटिंग के अपने फ़ोल्डर में)। अगर किसी फ़ोल्डर में लिखा नहीं जा सकता, तो Handy आपके Documents फ़ोल्डर में Handy Transcripts का इस्तेमाल करता है।",
+          "nextToRecording": "रिकॉर्डिंग के पास",
+          "folder": "मेरा चुना हुआ फ़ोल्डर…"
+        },
+        "chooseFolder": "फ़ोल्डर चुनें…",
+        "folderPicker": "ट्रांसक्रिप्ट के लिए फ़ोल्डर चुनें",
+        "format": {
+          "label": "फ़ाइल फ़ॉर्मेट",
+          "description": "Word दस्तावेज़ और Markdown में स्पीकर के नाम और समय होते हैं। सादे टेक्स्ट में स्पीकर के नाम होते हैं।"
+        },
+        "note": "मौजूदा फ़ाइलें कभी नहीं बदली जातीं: इसके बजाय “interview (2).docx” जैसा नया नाम इस्तेमाल होता है। अधूरे ट्रांसक्रिप्ट के नाम के अंत में “(incomplete)” होता है।",
+        "saveError": "सेटिंग सेव नहीं हो सकी: {{error}}"
+      },
+      "engine": {
+        "title": "ट्रांसक्रिप्शन इंजन",
+        "label": "इससे ट्रांसक्राइब करें",
+        "description": "डिक्टेशन में हमेशा Handy का अपना मॉडल इस्तेमाल होता है. यह विकल्प केवल फ़ाइलों के लिए है.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "रिकॉर्डिंग के लिए मॉडल",
+        "description": "रिकॉर्डिंग के लिए डिक्टेशन से धीमा लेकिन ज़्यादा सटीक मॉडल इस्तेमाल किया जा सकता है. यह अलग से चलता है और सिर्फ़ फ़ाइलें ट्रांसक्राइब करते समय लोड होता है, इसलिए आपका डिक्टेशन मॉडल तैयार रहता है. दोनों मॉडल का मेमोरी में समाना ज़रूरी है.",
+        "same": "डिक्टेशन जैसा ही ({{model}})",
+        "sameNoModel": "डिक्टेशन जैसा ही",
+        "timestamps": "(टाइमस्टैम्प)",
+        "noTimestamps": "(टाइमस्टैम्प नहीं)",
+        "switchWarning": "यह फ़ाइल आपके डिक्टेशन मॉडल का इस्तेमाल कर रही है, इसलिए अभी डिक्टेशन मॉडल बदलने पर यह रुक जाएगी. दोनों को अलग रखने के लिए, रिकॉर्डिंग के लिए कोई दूसरा मॉडल चुनें.",
+        "onCpu": "रिकॉर्डिंग प्रोसेसर पर चल रही हैं, क्योंकि दोनों मॉडल के लिए ग्राफ़िक्स मेमोरी काफ़ी नहीं है. ग्राफ़िक्स कार्ड इस्तेमाल करने के लिए, रिकॉर्डिंग के लिए कोई छोटा मॉडल चुनें."
+      },
+      "lemonade": {
+        "url": {
+          "label": "सर्वर का पता",
+          "description": "आम तौर पर http://localhost:13305. Lemonade के पुराने वर्शन पोर्ट 8000 का इस्तेमाल करते थे."
+        },
+        "apiKey": {
+          "label": "API कुंजी",
+          "description": "केवल तभी ज़रूरी है, जब आपका Lemonade Server इसे मांगे.",
+          "placeholder": "वैकल्पिक"
+        },
+        "model": {
+          "label": "मॉडल",
+          "description": "वह Lemonade मॉडल जो आपकी फ़ाइलें ट्रांसक्राइब करता है, जैसे Whisper-Base.",
+          "placeholder": "कोई Whisper मॉडल चुनें",
+          "notDownloaded": "{{model}} (पहली बार इस्तेमाल पर डाउनलोड होगा)",
+          "none": "इस सर्वर पर कोई ट्रांसक्रिप्शन मॉडल नहीं मिला.",
+          "use": "“{{model}}” इस्तेमाल करें"
+        },
+        "test": "कनेक्शन जांचें",
+        "testing": "कनेक्ट हो रहा है…",
+        "connected": "कनेक्ट हो गया. उपलब्ध ट्रांसक्रिप्शन मॉडल: {{number}}",
+        "checkFailed": "Lemonade Server की जांच नहीं हो सकी: {{error}}",
+        "saveError": "Lemonade सेटिंग सेव नहीं हो सकीं: {{error}}",
+        "firstChunkSlow": "हो सकता है Lemonade मॉडल डाउनलोड या लोड कर रहा हो. पहली बार इसमें कुछ मिनट लग सकते हैं.",
+        "errors": {
+          "invalidUrl": "http://localhost:13305 जैसा पता डालें.",
+          "unreachable": "{{url}} पर Lemonade Server से कनेक्ट नहीं हो पा रहा है. पक्का करें कि यह चल रहा है.",
+          "timeout": "Lemonade Server ने समय पर जवाब नहीं दिया.",
+          "unauthorized": "Lemonade Server ने API कुंजी स्वीकार नहीं की.",
+          "modelNotFound": "Lemonade Server पर यह मॉडल नहीं है.",
+          "http": "Lemonade Server से गड़बड़ी का जवाब मिला.",
+          "badResponse": "Lemonade Server ने ऐसा जवाब भेजा जिसे Handy पढ़ नहीं सका.",
+          "cancelled": "कनेक्शन की जांच रद्द कर दी गई."
+        },
+        "notes": {
+          "noTranslate": "Lemonade Server के साथ 'अंग्रेज़ी में अनुवाद करें' उपलब्ध नहीं है. फ़ाइलें बोली गई भाषा में ही ट्रांसक्राइब होती हैं.",
+          "remote": "यह पता इस कंप्यूटर पर नहीं है. आपकी रिकॉर्डिंग इसी पते पर भेजी जाएंगी."
+        }
+      },
+      "speakers": {
+        "label": "स्पीकर लेबल करें",
+        "description": "किसने क्या कहा, यह चिह्नित करता है (4 स्पीकर तक). यह इसी कंप्यूटर पर चलता है और इसके लिए एक बार {{size}} MB डाउनलोड करना होगा.",
+        "download": "स्पीकर मॉडल डाउनलोड करें ({{size}} MB)",
+        "downloading": "स्पीकर मॉडल डाउनलोड हो रहा है… {{percent}}%",
+        "verifying": "डाउनलोड की जांच हो रही है…",
+        "cancelDownload": "डाउनलोड रद्द करें",
+        "downloadFailed": "स्पीकर मॉडल डाउनलोड नहीं हो सका: {{error}}",
+        "installed": "स्पीकर मॉडल इंस्टॉल किया गया ({{size}} MB)",
+        "remove": "स्पीकर मॉडल हटाएं",
+        "removeError": "स्पीकर मॉडल हटाया नहीं जा सका: {{error}}",
+        "removeConfirm": "स्पीकर मॉडल हटाएं? स्पीकर लेबल करने के लिए आपको इसे दोबारा डाउनलोड करना होगा ({{size}} MB).",
+        "license": "NVIDIA का स्पीकर मॉडल, NVIDIA Open Model License के तहत (<page>मॉडल पेज</page>).",
+        "title": "स्पीकर",
+        "defaultName": "स्पीकर {{number}}",
+        "rename": "{{name}} का नाम बदलें",
+        "nameLabel": "{{name}} के लिए नया नाम",
+        "save": "सेव करें",
+        "cancel": "रद्द करें",
+        "renameError": "स्पीकर का नाम नहीं बदला जा सका: {{error}}",
+        "approximate": "स्पीकर में बदलाव अनुमानित हैं, क्योंकि यह मॉडल टाइमस्टैम्प नहीं देता.",
+        "unassigned": "कुछ हिस्सों का किसी स्पीकर से मिलान नहीं हो सका.",
+        "none": "इस ट्रांसक्रिप्ट में स्पीकर लेबल नहीं हैं.",
+        "labelAction": "स्पीकर लेबल करें",
+        "labelHint": "स्पीकर लेबल इसी कंप्यूटर पर मूल रिकॉर्डिंग, {{file}}, से बनाए जाते हैं. लंबी रिकॉर्डिंग में कुछ मिनट लगते हैं.",
+        "needsModel": "स्पीकर लेबल करने के लिए स्पीकर मॉडल चाहिए, जो {{size}} MB का एक बार का डाउनलोड है.",
+        "labelError": "स्पीकर लेबल नहीं जोड़े जा सके: {{error}}",
+        "findRecording": "रिकॉर्डिंग ढूंढें…",
+        "findRecordingHint": "दूसरी जगह ले जाई गई रिकॉर्डिंग चुनें. यह वही फ़ाइल होनी चाहिए जिसे ट्रांसक्राइब किया गया था.",
+        "relabel": "फिर से लेबल करें…",
+        "relabelTitle": "स्पीकर फिर से लेबल करें",
+        "relabelConfirm": "रिकॉर्डिंग से स्पीकर फिर से लेबल करें? नाम, मर्ज और हिस्सों में किए गए बदलाव खो जाएंगे.",
+        "mergeInto": "{{name}} को किसी दूसरे स्पीकर में मर्ज करें",
+        "mergePrompt": "{{name}} को इसमें मर्ज करें:",
+        "mergeTitle": "स्पीकर मर्ज करें",
+        "mergeConfirm": "{{from}} को {{into}} में मर्ज करें? {{from}} के सभी हिस्से {{into}} के रूप में चिह्नित हो जाएंगे. ट्रांसक्रिप्ट बंद करने तक आप इसे पहले जैसा कर सकते हैं.",
+        "mergeError": "स्पीकर मर्ज नहीं किए जा सके: {{error}}",
+        "changeSpeaker": "इस हिस्से का स्पीकर बदलें ({{name}})",
+        "changeSpeakerPrompt": "यह किसने कहा?",
+        "newSpeaker": "नया स्पीकर",
+        "unknownSpeaker": "अज्ञात स्पीकर",
+        "changeSpeakerError": "स्पीकर नहीं बदला जा सका: {{error}}",
+        "undo": "पहले जैसा करें",
+        "undoError": "पहले जैसा नहीं किया जा सका: {{error}}",
+        "jobKind": "स्पीकर लेबल",
+        "state": {
+          "running": "स्पीकर की पहचान हो रही है…",
+          "done": "स्पीकर: {{number}}",
+          "failed": "स्पीकर लेबल नहीं किए जा सके",
+          "skipped": {
+            "modelMissing": "स्पीकर लेबल छोड़े गए: स्पीकर मॉडल डाउनलोड नहीं किया गया है.",
+            "noSpeech": "स्पीकर लेबल छोड़े गए: कोई बोली नहीं मिली."
+          }
+        }
+      },
+      "queue": {
+        "title": "फ़ाइलें",
+        "cancelAll": "सभी रद्द करें",
+        "clearFinished": "पूरी हुई फ़ाइलें हटाएं"
+      },
+      "status": {
+        "queued": "शुरू होने का इंतज़ार",
+        "preparing": "तैयारी हो रही है…",
+        "waiting": "डिक्टेशन के दौरान रुका हुआ",
+        "transcribing": "ट्रांसक्राइब हो रहा है…",
+        "completed": "पूरा हुआ",
+        "partial": "पूरा हुआ, कुछ हिस्से छूट गए",
+        "cancelled": "रद्द किया गया",
+        "failed": "नहीं हो सका"
+      },
+      "progress": "{{total}} में से {{processed}}",
+      "progressNoTotal": "{{processed}} ट्रांसक्राइब हुआ",
+      "elapsed": "बीता समय: {{time}}",
+      "took": "{{time}} लगा",
+      "timeLeft": {
+        "lessThanMinute": "एक मिनट से कम बाकी",
+        "minutes": "लगभग {{minutes}} मिनट बाकी",
+        "hours": "लगभग {{hours}} घंटे {{minutes}} मिनट बाकी",
+        "hoursOnly": "लगभग {{hours}} घंटे बाकी"
+      },
+      "noSpeech": "इस फ़ाइल में कोई बोली नहीं मिली.",
+      "actions": {
+        "cancel": "रद्द करें",
+        "remove": "सूची से हटाएं",
+        "removeWhileLabelling": "स्पीकर की पहचान पूरी होने तक हटाया नहीं जा सकता",
+        "view": "ट्रांसक्रिप्ट देखें",
+        "copy": "ट्रांसक्रिप्ट कॉपी करें",
+        "showFile": "फ़ाइल दिखाएं"
+      },
+      "copied": "ट्रांसक्रिप्ट क्लिपबोर्ड पर कॉपी किया गया.",
+      "copyError": "ट्रांसक्रिप्ट कॉपी नहीं किया जा सका.",
+      "savedToHistory": "इतिहास में सेव किया गया",
+      "ready": {
+        "title": "ट्रांसक्रिप्ट तैयार है: {{file}}",
+        "open": "Handy में खोलें",
+        "showFile": "फ़ाइल दिखाएं"
+      },
+      "saved": {
+        "savedTo": "{{path}} में सेव किया गया",
+        "open": "खोलें",
+        "showInFolder": "फ़ोल्डर में दिखाएं",
+        "fallback": "{{folder}} में सेव नहीं हो सका, इसलिए ट्रांसक्रिप्ट आपके Documents फ़ोल्डर के Handy Transcripts में सेव किया गया।",
+        "failed": "ट्रांसक्रिप्ट फ़ाइल के रूप में सेव नहीं हो सका। इसे सेव करने के लिए एक्सपोर्ट का इस्तेमाल करें।",
+        "openError": "ट्रांसक्रिप्ट नहीं खुल सका: {{error}}",
+        "notFound": "सेव किया गया ट्रांसक्रिप्ट नहीं मिला। शायद इसे हटा दिया गया है या कहीं और ले जाया गया है।",
+        "exportAgain": "यहां स्पीकर बदलने पर यह फ़ाइल नहीं बदलती। बाद के बदलाव शामिल करने के लिए फिर से एक्सपोर्ट करें।"
+      },
+      "errors": {
+        "notFound": "फ़ाइल नहीं मिली या खोली नहीं जा सकी.",
+        "unsupportedFormat": "इस तरह की फ़ाइल सपोर्ट नहीं की जाती.",
+        "needsFfmpeg": "इस फ़ॉर्मैट के लिए ffmpeg ज़रूरी है. ffmpeg इंस्टॉल करके फिर से कोशिश करें.",
+        "noModel": "कोई ट्रांसक्रिप्शन मॉडल नहीं चुना गया है.",
+        "modelChanged": "इस फ़ाइल के ट्रांसक्राइब होते समय मॉडल बदल गया.",
+        "decodeFailed": "इस फ़ाइल का ऑडियो पढ़ा नहीं जा सका.",
+        "engineFailed": "ट्रांसक्रिप्शन नहीं हो सका.",
+        "serverUnreachable": "Lemonade Server से कनेक्ट नहीं हो पा रहा है. पक्का करें कि यह चल रहा है.",
+        "serverUnauthorized": "Lemonade Server ने API कुंजी स्वीकार नहीं की.",
+        "serverModelMissing": "Lemonade Server पर चुना गया मॉडल नहीं है.",
+        "internal": "कुछ गड़बड़ हो गई.",
+        "sourceChanged": "इस जगह की रिकॉर्डिंग ट्रांसक्राइब होने के बाद बदल गई है, इसलिए उसके स्पीकर इस ट्रांसक्रिप्ट से नहीं मिलाए जा सकते. अगर यह वही रिकॉर्डिंग है, तो उसे 'रिकॉर्डिंग ढूंढें…' से चुनें.",
+        "speakerLabelsFailed": "स्पीकर लेबल नहीं हो सके.",
+        "enqueue": "फ़ाइलें नहीं जोड़ी जा सकीं: {{error}}",
+        "cancel": "रद्द नहीं किया जा सका: {{error}}",
+        "remove": "सूची से नहीं हटाया जा सका: {{error}}",
+        "loadTranscript": "ट्रांसक्रिप्ट लोड नहीं हो सका: {{error}}"
+      },
+      "transcript": {
+        "title": "ट्रांसक्रिप्ट: {{file}}",
+        "live": "ट्रांसक्रिप्शन के साथ-साथ अपडेट हो रहा है",
+        "partial": "यह ट्रांसक्रिप्ट अधूरा है: {{reason}}",
+        "partialNoReason": "यह ट्रांसक्रिप्ट अधूरा है.",
+        "approximateTimes": "समय अनुमानित है, क्योंकि यह मॉडल टाइमस्टैम्प नहीं देता.",
+        "empty": "कोई बोली नहीं मिली.",
+        "segmentsLabel": "टाइमस्टैम्प सहित ट्रांसक्रिप्ट"
+      },
+      "export": {
+        "button": "एक्सपोर्ट करें…",
+        "dialogTitle": "ट्रांसक्रिप्ट एक्सपोर्ट करें",
+        "formats": {
+          "docx": "Word दस्तावेज़ (.docx)",
+          "txt": "सादा टेक्स्ट (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip सबटाइटल (.srt)",
+          "vtt": "WebVTT सबटाइटल (.vtt)"
+        },
+        "success": "ट्रांसक्रिप्ट एक्सपोर्ट किया गया.",
+        "showInFolder": "फ़ोल्डर में दिखाएं",
+        "error": "एक्सपोर्ट नहीं हो सका: {{error}}"
       }
     },
     "history": {
@@ -477,7 +850,14 @@
       "retranscribe": "फिर से ट्रांसक्राइब करें",
       "retranscribeError": "फिर से ट्रांसक्राइब नहीं किया जा सका. कृपया फिर से कोशिश करें.",
       "transcribing": "ट्रांसक्राइब हो रहा है...",
-      "transcriptionFailed": "ट्रांसक्रिप्शन नहीं हो सका. आप रीट्राई आइकन से फिर से ट्रांसक्राइब कर सकते हैं."
+      "transcriptionFailed": "ट्रांसक्रिप्शन नहीं हो सका. आप रीट्राई आइकन से फिर से ट्रांसक्राइब कर सकते हैं.",
+      "openTranscript": "ट्रांसक्रिप्ट खोलें",
+      "showOriginal": "मूल फ़ाइल दिखाएं",
+      "originalMissing": "मूल फ़ाइल हटा दी गई है या कहीं और ले जाई गई है.",
+      "fileDuration": "अवधि {{duration}}",
+      "incomplete": "अधूरा",
+      "speakerCount": "स्पीकर: {{number}}",
+      "retranscribeFileUnavailable": "इस फ़ाइल को फिर से ट्रांसक्राइब करने के लिए, 'ट्रांसक्राइब' पेज का इस्तेमाल करें."
     },
     "debug": {
       "title": "डिबग",
@@ -644,6 +1024,142 @@
           "description": "डिवाइस पर ही मशीन लर्निंग इन्फ़रेंस के लिए हाई-परफ़ॉर्मेंस टेंसर लाइब्रेरी",
           "details": "Handy का लोकल स्पीच-टू-टेक्स्ट transcribe.cpp और ggml पर आधारित है. Georgi Gerganov और योगदान देने वालों के शानदार काम के लिए धन्यवाद."
         }
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

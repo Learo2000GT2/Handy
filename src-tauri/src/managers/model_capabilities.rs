@@ -4,7 +4,8 @@
 //! Capabilities are canonical *in the GGUF itself*: transcribe-cpp reads them
 //! from the model's metadata at load time, and the runtime reconciles the
 //! registry against that ground truth once a model is loaded — streaming,
-//! translation, language detection, and the supported-language set (see
+//! translation, language detection, the supported-language set, and whether
+//! it gives timestamps (see
 //! [`crate::managers::model::ModelManager::set_runtime_capabilities`]). This
 //! module covers the other half — reading the same values from the GGUF header
 //! *before* download, so search/listing can show them honestly ahead of a load.
@@ -58,6 +59,7 @@ const KEY_LANGUAGES: &str = "general.languages";
 const KEY_CAP_STREAMING: &str = "stt.capability.streaming";
 const KEY_CAP_TRANSLATE: &str = "stt.capability.translate";
 const KEY_CAP_LANG_DETECT: &str = "stt.capability.lang_detect";
+const KEY_CAP_WORD_TIMESTAMPS: &str = "stt.capability.word_timestamps";
 const PROBE_KEYS: &[&str] = &[
     KEY_ARCH,
     KEY_NAME,
@@ -66,6 +68,7 @@ const PROBE_KEYS: &[&str] = &[
     KEY_CAP_STREAMING,
     KEY_CAP_TRANSLATE,
     KEY_CAP_LANG_DETECT,
+    KEY_CAP_WORD_TIMESTAMPS,
 ];
 
 /// How confident we are that Handy can run a given model, judged from its GGUF
@@ -106,6 +109,10 @@ pub struct CapabilityProbe {
     pub supports_translation: Option<bool>,
     /// `stt.capability.lang_detect` — automatic language detection.
     pub supports_language_detect: Option<bool>,
+    /// `stt.capability.word_timestamps` — word-level timestamps. Only the
+    /// granite family reads it (its -plus variant writes it); every other
+    /// family's timestamps follow from its architecture alone.
+    pub supports_word_timestamps: Option<bool>,
 }
 
 impl CapabilityProbe {
@@ -138,6 +145,7 @@ impl CapabilityProbe {
             supports_streaming: meta.get_bool(KEY_CAP_STREAMING),
             supports_translation: meta.get_bool(KEY_CAP_TRANSLATE),
             supports_language_detect: meta.get_bool(KEY_CAP_LANG_DETECT),
+            supports_word_timestamps: meta.get_bool(KEY_CAP_WORD_TIMESTAMPS),
         }
     }
 }
@@ -254,6 +262,21 @@ mod tests {
         assert_eq!(probe.languages, Some(vec!["en".to_string()]));
         // Absent key stays unknown rather than defaulting to false.
         assert_eq!(probe.supports_translation, None);
+        assert_eq!(probe.supports_word_timestamps, None);
+    }
+
+    #[test]
+    fn reads_granite_word_timestamps_flag() {
+        let meta = meta_with(vec![
+            (
+                "general.architecture",
+                GgufValue::String("granite_speech".into()),
+            ),
+            ("stt.capability.word_timestamps", GgufValue::Bool(true)),
+        ]);
+        let probe = CapabilityProbe::from_metadata(&meta);
+        assert_eq!(probe.verdict, Compatibility::Compatible);
+        assert_eq!(probe.supports_word_timestamps, Some(true));
     }
 
     #[test]

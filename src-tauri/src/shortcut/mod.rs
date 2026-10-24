@@ -19,6 +19,7 @@ use specta::Type;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::commands::post_processing::{self, PostProcessProblem, PostProcessProblemKind};
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 use crate::settings::APPLE_INTELLIGENCE_DEFAULT_MODEL_ID;
 use crate::settings::{
@@ -882,6 +883,21 @@ pub fn change_whats_new_last_seen_version_setting(
 pub fn update_custom_words(app: AppHandle, words: Vec<String>) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.custom_words = words;
+    // Removing a word also retires the alternate spellings listed for it.
+    settings::prune_custom_word_variants(&mut settings);
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_custom_word_variants(
+    app: AppHandle,
+    variants: std::collections::HashMap<String, Vec<String>>,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.custom_word_variants = variants;
+    settings::prune_custom_word_variants(&mut settings);
     settings::write_settings(&app, settings);
     Ok(())
 }
@@ -1072,6 +1088,20 @@ pub fn change_post_process_enabled_setting(app: AppHandle, enabled: bool) -> Res
     Ok(())
 }
 
+/// "Clean up every dictation": post-process dictations made with the normal
+/// shortcut too.
+#[tauri::command]
+#[specta::specta]
+pub fn change_post_process_every_dictation_setting(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.post_process_every_dictation = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn change_experimental_enabled_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
@@ -1098,14 +1128,23 @@ pub fn change_post_process_base_url_setting(
         .post_process_provider_mut(&provider_id)
         .expect("Provider looked up above must exist");
 
-    if provider.id != "custom" {
+    if !provider.allow_base_url_edit {
         return Err(format!(
             "Provider '{}' does not allow editing the base URL",
             label
         ));
     }
 
-    provider.base_url = base_url;
+    // A Lemonade address must be one requests can be built from; it is
+    // stored as typed (trimmed) and normalized at use.
+    if provider.id == settings::LEMONADE_PROVIDER_ID {
+        let address = base_url.trim();
+        crate::file_transcription::lemonade::normalize_base_url(address)
+            .map_err(|_| "Invalid Lemonade Server address".to_string())?;
+        provider.base_url = address.to_string();
+    } else {
+        provider.base_url = base_url;
+    }
     settings::write_settings(&app, settings);
     Ok(())
 }
@@ -1239,12 +1278,14 @@ pub fn delete_post_process_prompt(app: AppHandle, id: String) -> Result<(), Stri
     Ok(())
 }
 
+/// The provider's models to choose from. For a Lemonade Server these are
+/// its chat models, plus the model chosen before when the server lists it.
 #[tauri::command]
 #[specta::specta]
 pub async fn fetch_post_process_models(
     app: AppHandle,
     provider_id: String,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, PostProcessProblem> {
     let settings = settings::get_settings(&app);
 
     // Find the provider
@@ -1252,7 +1293,7 @@ pub async fn fetch_post_process_models(
         .post_process_providers
         .iter()
         .find(|p| p.id == provider_id)
-        .ok_or_else(|| format!("Provider '{}' not found", provider_id))?;
+        .ok_or_else(|| post_processing::unknown_provider_problem(&provider_id))?;
 
     if provider.id == APPLE_INTELLIGENCE_PROVIDER_ID {
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -1262,7 +1303,13 @@ pub async fn fetch_post_process_models(
 
         #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
         {
-            return Err("Apple Intelligence is only available on Apple silicon Macs running macOS 15 or later.".to_string());
+            return Err(PostProcessProblem {
+                detail: Some("Apple Intelligence is only available on Apple silicon Macs running macOS 15 or later.".to_string()),
+                ..post_processing::provider_problem(
+                    PostProcessProblemKind::AppleIntelligenceUnavailable,
+                    provider,
+                )
+            });
         }
     }
 
@@ -1273,15 +1320,24 @@ pub async fn fetch_post_process_models(
         .cloned()
         .unwrap_or_default();
 
-    // Skip fetching if no API key for providers that typically need one
-    if api_key.trim().is_empty() && provider.id != "custom" {
-        return Err(format!(
-            "API key is required for {}. Please add an API key to list available models.",
-            provider.label
+    // Skip fetching if no API key for providers that typically need one; a
+    // server the user runs (an editable address) may need none.
+    if api_key.trim().is_empty() && !provider.allow_base_url_edit {
+        return Err(post_processing::provider_problem(
+            PostProcessProblemKind::MissingApiKey,
+            provider,
         ));
     }
 
-    crate::llm_client::fetch_models(provider, api_key).await
+    let list = crate::llm_client::fetch_models(provider, api_key.clone())
+        .await
+        .map_err(|e| post_processing::request_problem(provider, "", &api_key, &e))?;
+    let current = settings
+        .post_process_models
+        .get(&provider_id)
+        .map(String::as_str)
+        .unwrap_or_default();
+    post_processing::models_to_offer(provider, list, current)
 }
 
 #[tauri::command]

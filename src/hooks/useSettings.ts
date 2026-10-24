@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import { useSettingsStore } from "../stores/settingsStore";
-import type { AppSettings as Settings, AudioDevice } from "@/bindings";
+import type {
+  AppSettings as Settings,
+  AudioDevice,
+  PostProcessProblem,
+} from "@/bindings";
 
 interface UseSettingsReturn {
   // State
@@ -11,13 +15,15 @@ interface UseSettingsReturn {
   outputDevices: AudioDevice[];
   audioFeedbackEnabled: boolean;
   postProcessModelOptions: Record<string, string[]>;
+  postProcessModelProblems: Record<string, PostProcessProblem | null>;
   updateChecksLocked: boolean | null;
 
   // Actions
+  /** Resolves false when the change was refused and rolled back. */
   updateSetting: <K extends keyof Settings>(
     key: K,
     value: Settings[K],
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   resetSetting: (key: keyof Settings) => Promise<void>;
   refreshSettings: () => Promise<void>;
   refreshAudioDevices: () => Promise<void>;
@@ -32,10 +38,11 @@ interface UseSettingsReturn {
 
   // Post-processing helpers
   setPostProcessProvider: (providerId: string) => Promise<void>;
+  /** Resolves false when the address was refused. */
   updatePostProcessBaseUrl: (
     providerId: string,
     baseUrl: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   updatePostProcessApiKey: (
     providerId: string,
     apiKey: string,
@@ -62,6 +69,7 @@ export const useSettings = (): UseSettingsReturn => {
     outputDevices: store.outputDevices,
     audioFeedbackEnabled: store.settings?.audio_feedback || false,
     postProcessModelOptions: store.postProcessModelOptions,
+    postProcessModelProblems: store.postProcessModelProblems,
     updateChecksLocked: store.updateChecksLocked,
     updateSetting: store.updateSetting,
     resetSetting: store.resetSetting,

@@ -11,6 +11,8 @@ type ModelSelectProps = {
   onSelect: (value: string) => void;
   onCreate: (value: string) => void;
   onBlur: () => void;
+  /** The "use what was typed" option's label. */
+  formatCreateLabel?: (input: string) => string;
   className?: string;
 };
 
@@ -24,6 +26,7 @@ export const ModelSelect: React.FC<ModelSelectProps> = React.memo(
     onSelect,
     onCreate,
     onBlur,
+    formatCreateLabel = (input: string) => input,
     className = "flex-1 min-w-[360px]",
   }) => {
     const handleCreate = (inputValue: string) => {
@@ -46,7 +49,7 @@ export const ModelSelect: React.FC<ModelSelectProps> = React.memo(
         disabled={disabled}
         isLoading={isLoading}
         isCreatable
-        formatCreateLabel={(input) => `Use "${input}"`}
+        formatCreateLabel={formatCreateLabel}
       />
     );
   },

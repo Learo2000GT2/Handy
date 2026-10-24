@@ -1,11 +1,29 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
+import {
+  Cog,
+  FileAudio,
+  FlaskConical,
+  History,
+  Info,
+  Loader2,
+  Sparkles,
+  Cpu,
+  Users,
+} from "lucide-react";
 import HandyTextLogo from "./icons/HandyTextLogo";
 import HandyHand from "./icons/HandyHand";
 import { useSettings } from "../hooks/useSettings";
+import { useFileTranscriptionStore } from "../stores/fileTranscriptionStore";
+import {
+  formatPercent,
+  transcribeBadge,
+  transcribeBadgeSpeakers,
+} from "../lib/utils/transcript";
 import {
   GeneralSettings,
+  TranscribeFilesSettings,
+  MeetingsSettings,
   AdvancedSettings,
   HistorySettings,
   DebugSettings,
@@ -36,6 +54,18 @@ export const SECTIONS_CONFIG = {
     labelKey: "sidebar.general",
     icon: HandyHand,
     component: GeneralSettings,
+    enabled: () => true,
+  },
+  transcribe: {
+    labelKey: "sidebar.transcribe",
+    icon: FileAudio,
+    component: TranscribeFilesSettings,
+    enabled: () => true,
+  },
+  meetings: {
+    labelKey: "sidebar.meetings",
+    icon: Users,
+    component: MeetingsSettings,
     enabled: () => true,
   },
   history: {
@@ -81,6 +111,49 @@ interface SidebarProps {
   onSectionChange: (section: SidebarSection) => void;
 }
 
+/**
+ * The running transcription's percent under "Transcribe", or a spinner
+ * while it prepares, so its progress shows from every page. Its label says
+ * when the percent is the speaker step's.
+ */
+const TranscribeBadge: React.FC = () => {
+  const { t, i18n } = useTranslation();
+  const badge = useFileTranscriptionStore((state) =>
+    transcribeBadge(state.jobs),
+  );
+  const speakers = useFileTranscriptionStore((state) =>
+    transcribeBadgeSpeakers(state.jobs),
+  );
+  if (badge === null) return null;
+  const percent = badge === "busy" ? null : formatPercent(badge, i18n.language);
+  let label: string;
+  if (speakers) {
+    label =
+      percent === null
+        ? t("sidebar.speakersRunning")
+        : t("sidebar.speakersProgress", { percent });
+  } else {
+    label =
+      percent === null
+        ? t("sidebar.transcribeRunning")
+        : t("sidebar.transcribeProgress", { percent });
+  }
+  return (
+    <span
+      className="self-start inline-flex items-center gap-1 rounded-full border border-mid-gray/30 bg-background px-1.5 py-0.5 text-[11px] font-semibold leading-none tabular-nums text-text"
+      title={label}
+      role="status"
+      aria-label={label}
+    >
+      {percent === null ? (
+        <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+      ) : (
+        percent
+      )}
+    </span>
+  );
+};
+
 export const Sidebar: React.FC<SidebarProps> = ({
   activeSection,
   onSectionChange,
@@ -111,12 +184,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => onSectionChange(section.id)}
             >
               <Icon width={24} height={24} className="shrink-0" />
-              <p
-                className="text-sm font-medium truncate"
-                title={t(section.labelKey)}
-              >
-                {t(section.labelKey)}
-              </p>
+              <div className="min-w-0 flex flex-col gap-0.5">
+                <p
+                  className="text-sm font-medium truncate"
+                  title={t(section.labelKey)}
+                >
+                  {t(section.labelKey)}
+                </p>
+                {section.id === "transcribe" && <TranscribeBadge />}
+              </div>
             </div>
           );
         })}

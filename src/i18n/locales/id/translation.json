@@ -7,16 +7,23 @@
     "model": "Model",
     "quit": "Keluar",
     "cancel": "Batal",
-    "secureInputWarning": "⚠ Pintasan diblokir oleh Secure Input"
+    "secureInputWarning": "⚠ Pintasan diblokir oleh Secure Input",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "Umum",
+    "transcribe": "Transkripsi",
+    "transcribeProgress": "Mentranskripsikan: {{percent}} selesai",
+    "transcribeRunning": "Mentranskripsikan…",
+    "speakersProgress": "Mengidentifikasi pembicara: {{percent}} selesai",
+    "speakersRunning": "Mengidentifikasi pembicara…",
     "models": "Model",
     "advanced": "Lanjutan",
     "postProcessing": "Pascaproses",
     "history": "Riwayat",
     "debug": "Debug",
-    "about": "Tentang"
+    "about": "Tentang",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "Untuk memulai, pilih model transkripsi",
@@ -124,6 +131,9 @@
     "custom": "Kustom",
     "legacy": "Legacy",
     "streaming": "Streaming",
+    "bestForRecordings": "Terbaik untuk rekaman",
+    "timestamps": "Stempel waktu",
+    "noTimestamps": "Tanpa stempel waktu",
     "active": "Aktif",
     "switching": "Beralih...",
     "noModelsAvailable": "Tidak ada model yang tersedia",
@@ -151,7 +161,10 @@
       "languageOnly": "Hanya {{language}}",
       "translation": "Dapat menerjemahkan ke bahasa Inggris",
       "translate": "Terjemahkan",
-      "streaming": "Menampilkan transkripsi langsung saat Anda berbicara"
+      "streaming": "Menampilkan transkripsi langsung saat Anda berbicara",
+      "bestForRecordings": "Akurat, dengan waktu untuk setiap kalimat. Pilihan yang baik untuk rekaman dan rapat.",
+      "timestamps": "Memberikan waktu untuk setiap kalimat, sehingga transkripsi dan label pembicara sesuai dengan rekaman.",
+      "noTimestamps": "Waktunya hanya perkiraan, kira-kira setiap 30 detik."
     }
   },
   "settings": {
@@ -179,6 +192,10 @@
           "transcribe_with_post_process": {
             "name": "Pintasan Pascaproses",
             "description": "Opsional: pintasan khusus yang selalu menerapkan pascaproses AI pada transkripsi Anda."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -212,11 +229,13 @@
     "models": {
       "title": "Model Transkripsi",
       "description": "Pilih model transkripsi atau unduh model tambahan. Setiap model menawarkan tingkat akurasi dan kecepatan yang berbeda.",
+      "recordingsTip": "Untuk rekaman dan rapat, pilih model bertanda \"{{badge}}\". Parakeet TDT 0.6B v3 adalah pilihan terbaik untuk berbagai keperluan; Whisper Large v3 Turbo mendukung lebih banyak bahasa.",
       "searchPlaceholder": "Cari model berdasarkan nama…",
       "yourModels": "Model yang Diunduh",
       "availableModels": "Tersedia untuk Diunduh",
       "deleteConfirm": "Yakin ingin menghapus {{modelName}}? Anda harus mengunduhnya lagi untuk menggunakannya.",
       "deleteActiveConfirm": "{{modelName}} adalah model aktif Anda. Menghapusnya akan menghentikan transkripsi sampai Anda memilih model baru. Yakin ingin melanjutkan?",
+      "deleteRecordingsConfirm": "{{modelName}} adalah model untuk rekaman Anda. Jika dihapus, rekaman akan menggunakan model dikte Anda. Yakin ingin melanjutkan?",
       "deleteTitle": "Hapus Model",
       "filters": {
         "allLanguages": "Semua Bahasa",
@@ -378,10 +397,47 @@
       "customWords": {
         "title": "Kata Khusus",
         "description": "Bantu model yang didukung mengenali nama dan istilah khusus. Koreksi fuzzy saat ini terbatas pada kata yang menggunakan huruf A–Z dan angka.",
-        "placeholder": "Tambahkan kata",
         "add": "Tambah",
         "remove": "Hapus {{word}}",
-        "duplicate": "\"{{word}}\" sudah ada"
+        "duplicate": "\"{{word}}\" sudah ada",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "Deteksi Aktivitas Suara",
@@ -410,6 +466,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Cara kerjanya",
+        "intro": "Pascaproses mengirim apa yang Anda diktekan ke model AI, yang merapikannya sebelum Handy menempelkannya.",
+        "shortcut": "Pascaproses berjalan saat Anda mendikte dengan pintasan pascaproses ({{shortcut}}), bukan dengan pintasan biasa ({{normal}}), yang menempelkan kata-kata Anda apa adanya.",
+        "shortcutEvery": "Pascaproses berjalan di setiap dikte: dengan pintasan pascaproses ({{shortcut}}) dan dengan pintasan biasa ({{normal}}).",
+        "notSet": "belum diatur",
+        "stepProvider": "Pilih penyedia. Untuk Lemonade di komputer ini, pilih Lemonade Server.",
+        "stepModel": "Pilih model. Tombol segarkan memuat model dari server.",
+        "stepPrompt": "Pilih prompt, atau buat sendiri.",
+        "stepTest": "Tekan Uji di bagian bawah halaman ini untuk mencobanya.",
+        "fallback": "Jika perapian gagal, Handy menempelkan kata-kata Anda apa adanya.",
+        "everyDictation": {
+          "label": "Rapikan setiap dikte",
+          "description": "Rapikan juga dikte yang dibuat dengan pintasan biasa, tidak hanya yang dibuat dengan pintasan pascaproses."
+        }
+      },
       "hotkey": {
         "title": "Pintasan"
       },
@@ -424,21 +496,29 @@
         },
         "baseUrl": {
           "title": "URL Dasar",
-          "description": "URL dasar API untuk penyedia yang dipilih. Hanya penyedia kustom yang dapat diedit.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Alamat API server Anda yang kompatibel dengan OpenAI, misalnya http://localhost:11434/v1.",
+          "descriptionLemonade": "Alamat Lemonade Server Anda, biasanya http://localhost:13305/api/v1. Versi Lemonade yang lebih lama menggunakan port 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Masukkan alamat seperti http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "Kunci API",
           "description": "Kunci API untuk penyedia yang dipilih.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Hanya diperlukan jika server Anda memintanya.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Opsional"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Masukkan pengenal model yang diharapkan oleh endpoint kustom Anda.",
           "descriptionDefault": "Pilih model yang disediakan oleh penyedia yang dipilih.",
+          "descriptionLemonade": "Model obrolan di Lemonade Server Anda. Model suara, embedding, dan gambar tidak ditampilkan.",
           "placeholderWithOptions": "Cari atau pilih model",
           "placeholderNoOptions": "Ketik nama model",
-          "refreshModels": "Segarkan model"
+          "refreshModels": "Segarkan model",
+          "use": "Gunakan “{{model}}”",
+          "loadError": "Model tidak dapat dimuat. {{problem}}"
         }
       },
       "prompts": {
@@ -455,12 +535,305 @@
         "promptInstructions": "Instruksi Prompt",
         "promptInstructionsPlaceholder": "Tulis instruksi yang dijalankan setelah transkripsi. Contoh: Perbaiki tata bahasa dan kejelasan teks berikut: ${output}",
         "promptTip": "Tips: Gunakan <code>${output}</code> untuk menyisipkan teks hasil transkripsi ke prompt Anda.",
+        "promptTipNoMarker": "Tanpa ${output}, Handy mengirim transkrip setelah prompt Anda, di antara tag {{tag}}.",
         "updatePrompt": "Perbarui Prompt",
         "deletePrompt": "Hapus Prompt",
         "createPrompt": "Buat Prompt",
         "cancel": "Batal",
         "selectToEdit": "Pilih prompt di atas untuk melihat dan mengedit detailnya.",
         "createFirst": "Klik 'Buat Prompt Baru' di atas untuk membuat prompt pascaproses pertama Anda."
+      },
+      "test": {
+        "title": "Coba",
+        "label": "Contoh dikte",
+        "description": "Merapikan teks ini dengan penyedia, model, dan prompt tersimpan yang dipilih di atas, dengan cara yang sama seperti dikte dirapikan.",
+        "sample": "eh jadi bisa nggak kamu em kirim laporannya hari jumat",
+        "button": "Uji",
+        "testing": "Menguji…",
+        "result": "Hasil ({{seconds}} dtk):",
+        "emptyResult": "Model menjawab tanpa teks. Dengan prompt perapian, artinya model tidak menemukan apa pun yang layak disimpan.",
+        "failed": "Uji tidak dapat dijalankan: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Ketik teks untuk diuji.",
+        "noProvider": "Pilih penyedia di atas.",
+        "noModel": "Pilih model untuk {{provider}} di atas. Tombol segarkan di samping Model memuat model dari server.",
+        "noPrompt": "Pilih prompt di bawah.",
+        "emptyPrompt": "Prompt yang dipilih kosong. Tulis instruksinya, lalu tekan Perbarui Prompt.",
+        "missingApiKey": "{{provider}} memerlukan kunci API. Masukkan di kolom Kunci API di atas.",
+        "invalidApiKey": "Kunci API berisi karakter yang tidak dapat dikirim. Masukkan lagi.",
+        "invalidAddress": "{{address}} bukan alamat server yang dapat digunakan Handy. Alamatnya seharusnya seperti http://localhost:13305/api/v1.",
+        "unreachable": "Tidak dapat menjangkau server di {{address}}. Pastikan server sedang berjalan dan alamatnya benar.",
+        "timeout": "Server di {{address}} tidak menjawab tepat waktu. Jika server masih memuat model, coba lagi dalam satu menit.",
+        "unauthorized": "Server di {{address}} tidak menerima kunci API (galat {{status}}). Periksa kolom Kunci API.",
+        "modelNotFound": "Server di {{address}} tidak memiliki model “{{model}}”. Pilih model lain di atas.",
+        "notFound": "Tidak ada yang menjawab di {{address}} (galat 404). Periksa alamatnya.",
+        "serverError": "Server di {{address}} menjawab dengan galat (galat {{status}}).",
+        "serverErrorNoStatus": "{{provider}} menjawab dengan galat.",
+        "noAnswer": "{{provider}} menjawab tanpa teks. Coba model lain.",
+        "badAnswer": "{{provider}} mengirim jawaban yang tidak dapat dibaca Handy.",
+        "noChatModels": "{{provider}} di {{address}} tidak memiliki model obrolan. Unduh satu di Lemonade, lalu tekan tombol segarkan.",
+        "otherModels": "Model di server yang tidak dapat merapikan teks: {{models}}",
+        "internal": "Terjadi masalah di dalam Handy.",
+        "detail": "Detail: {{detail}}"
+      }
+    },
+    "transcribeFiles": {
+      "title": "Transkripsikan File",
+      "description": "Ubah rekaman yang sudah ada menjadi teks di komputer ini. File Anda tidak pernah keluar dari perangkat Anda.",
+      "settingsNote": "Menggunakan model yang Anda pilih serta pengaturan bahasa, terjemahan, kata khusus, dan kata pengisi Anda.",
+      "settingsNoteLemonade": "Menggunakan pengaturan bahasa, kata khusus, dan kata pengisi Anda.",
+      "settingsNoteOwnModel": "Menggunakan model untuk rekaman serta pengaturan bahasa, terjemahan, kata khusus, dan kata pengisi Anda.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} di Lemonade Server",
+      "noModel": "Pilih model yang sudah diunduh di halaman Model untuk mentranskripsikan file.",
+      "noLemonadeModel": "Pilih model Lemonade untuk mentranskripsikan file.",
+      "noRecordingsModel": "Model untuk rekaman Anda belum diunduh. Pilih model lain di atas atau unduh di halaman Model.",
+      "dropzone": {
+        "title": "Letakkan file audio atau video di sini",
+        "hint": "Wawancara, rapat, kuliah, dan memo suara dengan durasi berapa pun",
+        "active": "Lepaskan untuk menambahkan",
+        "choose": "Pilih File…",
+        "skipped": "File yang bukan audio atau video dilewati: {{number}}"
+      },
+      "picker": {
+        "title": "Pilih Rekaman",
+        "filterName": "File audio dan video"
+      },
+      "formats": {
+        "native": "Dapat membuka {{formats}}",
+        "ffmpegAvailable": "Format lain seperti Opus, WebM, WMA, dan DSS dibuka dengan ffmpeg.",
+        "ffmpegMissing": "Instal ffmpeg agar juga dapat membuka Opus, WebM, WMA, DSS, dan format lainnya."
+      },
+      "saveToHistory": {
+        "label": "Simpan ke Riwayat",
+        "description": "Transkripsi yang selesai akan disimpan dan diberi bintang agar tidak dihapus oleh pembersihan otomatis."
+      },
+      "autosave": {
+        "title": "Menyimpan Transkripsi",
+        "enabled": {
+          "label": "Simpan Transkripsi Secara Otomatis",
+          "description": "Setelah file atau rapat selesai ditranskripsi, transkripsi disimpan sebagai file yang dapat Anda buka di Word atau editor teks apa pun."
+        },
+        "location": {
+          "label": "Simpan di",
+          "description": "Di samping rekaman menyimpan transkripsi di folder rekaman (untuk rapat, di folder rapat itu sendiri). Jika folder tidak dapat ditulisi, Handy menggunakan Handy Transcripts di folder Dokumen Anda.",
+          "nextToRecording": "Di samping rekaman",
+          "folder": "Folder pilihan saya…"
+        },
+        "chooseFolder": "Pilih Folder…",
+        "folderPicker": "Pilih Folder untuk Transkripsi",
+        "format": {
+          "label": "Format File",
+          "description": "Dokumen Word dan Markdown menyertakan nama pembicara dan waktu. Teks biasa menyertakan nama pembicara."
+        },
+        "note": "File yang sudah ada tidak pernah diganti: nama baru seperti “interview (2).docx” digunakan sebagai gantinya. Transkripsi yang tidak lengkap diakhiri dengan “(incomplete)”.",
+        "saveError": "Tidak dapat menyimpan pengaturan: {{error}}"
+      },
+      "engine": {
+        "title": "Mesin Transkripsi",
+        "label": "Transkripsikan dengan",
+        "description": "Dikte selalu menggunakan model milik Handy sendiri. Pilihan ini hanya berlaku untuk file.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model untuk rekaman",
+        "description": "Rekaman dapat menggunakan model yang lebih lambat tetapi lebih akurat daripada model dikte. Model ini berjalan terpisah dan hanya dimuat saat file ditranskripsikan, sehingga model dikte Anda tetap siap. Kedua model harus muat di memori.",
+        "same": "Sama seperti dikte ({{model}})",
+        "sameNoModel": "Sama seperti dikte",
+        "timestamps": "(stempel waktu)",
+        "noTimestamps": "(tanpa stempel waktu)",
+        "switchWarning": "File ini menggunakan model dikte Anda, jadi mengganti model dikte sekarang akan menghentikannya. Agar keduanya terpisah, pilih model lain untuk rekaman.",
+        "onCpu": "Rekaman berjalan di prosesor karena memori grafis tidak cukup untuk kedua model. Pilih model yang lebih kecil untuk rekaman agar kartu grafis dapat digunakan."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Alamat Server",
+          "description": "Biasanya http://localhost:13305. Versi Lemonade yang lebih lama menggunakan port 8000."
+        },
+        "apiKey": {
+          "label": "Kunci API",
+          "description": "Hanya diperlukan jika Lemonade Server Anda memintanya.",
+          "placeholder": "Opsional"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Model Lemonade yang mentranskripsikan file Anda, misalnya Whisper-Base.",
+          "placeholder": "Pilih model Whisper",
+          "notDownloaded": "{{model}} (diunduh saat pertama kali digunakan)",
+          "none": "Tidak ada model transkripsi yang ditemukan di server ini.",
+          "use": "Gunakan “{{model}}”"
+        },
+        "test": "Uji Koneksi",
+        "testing": "Menghubungkan…",
+        "connected": "Terhubung. Model transkripsi tersedia: {{number}}",
+        "checkFailed": "Tidak dapat memeriksa Lemonade Server: {{error}}",
+        "saveError": "Tidak dapat menyimpan pengaturan Lemonade: {{error}}",
+        "firstChunkSlow": "Lemonade mungkin sedang mengunduh atau memuat model. Pada penggunaan pertama, ini bisa memakan waktu beberapa menit.",
+        "errors": {
+          "invalidUrl": "Masukkan alamat seperti http://localhost:13305.",
+          "unreachable": "Tidak dapat menjangkau Lemonade Server di {{url}}. Pastikan server sedang berjalan.",
+          "timeout": "Lemonade Server tidak merespons tepat waktu.",
+          "unauthorized": "Lemonade Server tidak menerima kunci API.",
+          "modelNotFound": "Lemonade Server tidak memiliki model ini.",
+          "http": "Lemonade Server mengembalikan kesalahan.",
+          "badResponse": "Lemonade Server mengirim respons yang tidak dapat dibaca oleh Handy.",
+          "cancelled": "Uji koneksi dibatalkan."
+        },
+        "notes": {
+          "noTranslate": "Terjemahkan ke Bahasa Inggris tidak tersedia dengan Lemonade Server. File ditranskripsikan dalam bahasa yang diucapkan.",
+          "remote": "Alamat ini tidak berada di komputer ini. Rekaman Anda akan dikirim ke alamat tersebut."
+        }
+      },
+      "speakers": {
+        "label": "Beri Label Pembicara",
+        "description": "Tandai siapa mengatakan apa, hingga 4 pembicara. Berjalan di komputer ini dan memerlukan unduhan satu kali sebesar {{size}} MB.",
+        "download": "Unduh Model Pembicara ({{size}} MB)",
+        "downloading": "Mengunduh model pembicara… {{percent}}%",
+        "verifying": "Memeriksa unduhan…",
+        "cancelDownload": "Batalkan Unduhan",
+        "downloadFailed": "Tidak dapat mengunduh model pembicara: {{error}}",
+        "installed": "Model pembicara terinstal ({{size}} MB)",
+        "remove": "Hapus Model Pembicara",
+        "removeError": "Tidak dapat menghapus model pembicara: {{error}}",
+        "removeConfirm": "Hapus model pembicara? Anda harus mengunduhnya lagi ({{size}} MB) untuk memberi label pembicara.",
+        "license": "Model pembicara oleh NVIDIA, di bawah NVIDIA Open Model License (<page>halaman model</page>).",
+        "title": "Pembicara",
+        "defaultName": "Pembicara {{number}}",
+        "rename": "Ganti Nama {{name}}",
+        "nameLabel": "Nama baru untuk {{name}}",
+        "save": "Simpan",
+        "cancel": "Batal",
+        "renameError": "Tidak dapat mengganti nama pembicara: {{error}}",
+        "approximate": "Pergantian pembicara bersifat perkiraan karena model ini tidak menyediakan stempel waktu.",
+        "unassigned": "Beberapa bagian tidak dapat dicocokkan dengan pembicara.",
+        "none": "Transkripsi ini tidak memiliki label pembicara.",
+        "labelAction": "Beri Label Pembicara",
+        "labelHint": "Label pembicara dibuat di komputer ini dari rekaman asli, {{file}}. Rekaman panjang memerlukan beberapa menit.",
+        "needsModel": "Pemberian label pembicara memerlukan model pembicara, unduhan satu kali sebesar {{size}} MB.",
+        "labelError": "Tidak dapat menambahkan label pembicara: {{error}}",
+        "findRecording": "Cari Rekaman…",
+        "findRecordingHint": "Pilih rekaman yang dipindahkan. Rekaman harus berupa file yang sama dengan yang ditranskripsikan.",
+        "relabel": "Beri Label Lagi…",
+        "relabelTitle": "Beri Label Pembicara Lagi",
+        "relabelConfirm": "Beri label pembicara lagi dari rekaman? Nama, penggabungan, dan perubahan bagian akan hilang.",
+        "mergeInto": "Gabungkan {{name}} ke pembicara lain",
+        "mergePrompt": "Gabungkan {{name}} ke:",
+        "mergeTitle": "Gabungkan Pembicara",
+        "mergeConfirm": "Gabungkan {{from}} ke {{into}}? Semua bagian {{from}} akan ditandai sebagai {{into}}. Anda dapat mengurungkannya hingga transkripsi ditutup.",
+        "mergeError": "Tidak dapat menggabungkan pembicara: {{error}}",
+        "changeSpeaker": "Ubah pembicara bagian ini ({{name}})",
+        "changeSpeakerPrompt": "Siapa yang mengatakan ini?",
+        "newSpeaker": "Pembicara Baru",
+        "unknownSpeaker": "Pembicara tidak dikenal",
+        "changeSpeakerError": "Tidak dapat mengubah pembicara: {{error}}",
+        "undo": "Urungkan",
+        "undoError": "Tidak dapat mengurungkan: {{error}}",
+        "jobKind": "Label pembicara",
+        "state": {
+          "running": "Mengidentifikasi pembicara…",
+          "done": "Pembicara: {{number}}",
+          "failed": "Tidak dapat memberi label pembicara",
+          "skipped": {
+            "modelMissing": "Label pembicara dilewati: model pembicara belum diunduh.",
+            "noSpeech": "Label pembicara dilewati: tidak ada ucapan yang ditemukan."
+          }
+        }
+      },
+      "queue": {
+        "title": "File",
+        "cancelAll": "Batalkan Semua",
+        "clearFinished": "Bersihkan yang Selesai"
+      },
+      "status": {
+        "queued": "Menunggu dimulai",
+        "preparing": "Menyiapkan…",
+        "waiting": "Dijeda saat Anda mendikte",
+        "transcribing": "Mentranskripsikan…",
+        "completed": "Selesai",
+        "partial": "Selesai, dengan bagian yang terlewat",
+        "cancelled": "Dibatalkan",
+        "failed": "Gagal"
+      },
+      "progress": "{{processed}} dari {{total}}",
+      "progressNoTotal": "{{processed}} ditranskripsikan",
+      "elapsed": "Waktu berjalan: {{time}}",
+      "took": "Selesai dalam {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Kurang dari satu menit lagi",
+        "minutes": "Sekitar {{minutes}} menit lagi",
+        "hours": "Sekitar {{hours}} jam {{minutes}} menit lagi",
+        "hoursOnly": "Sekitar {{hours}} jam lagi"
+      },
+      "noSpeech": "Tidak ada ucapan yang ditemukan dalam file ini.",
+      "actions": {
+        "cancel": "Batal",
+        "remove": "Hapus dari Daftar",
+        "removeWhileLabelling": "Tidak dapat dihapus selama pembicara sedang diidentifikasi",
+        "view": "Lihat Transkripsi",
+        "copy": "Salin Transkripsi",
+        "showFile": "Tampilkan File"
+      },
+      "copied": "Transkripsi disalin ke papan klip.",
+      "copyError": "Gagal menyalin transkripsi.",
+      "savedToHistory": "Disimpan ke Riwayat",
+      "ready": {
+        "title": "Transkripsi siap: {{file}}",
+        "open": "Buka di Handy",
+        "showFile": "Tampilkan File"
+      },
+      "saved": {
+        "savedTo": "Disimpan di {{path}}",
+        "open": "Buka",
+        "showInFolder": "Tampilkan di Folder",
+        "fallback": "Tidak dapat menyimpan di {{folder}}, jadi transkripsi disimpan di Handy Transcripts dalam folder Dokumen Anda.",
+        "failed": "Transkripsi tidak dapat disimpan sebagai file. Gunakan Ekspor untuk menyimpannya.",
+        "openError": "Tidak dapat membuka transkripsi: {{error}}",
+        "notFound": "Transkripsi yang disimpan tidak ditemukan. Mungkin sudah dipindahkan atau dihapus.",
+        "exportAgain": "File ini tidak berubah saat Anda mengedit pembicara di sini. Ekspor lagi untuk menyertakan perubahan berikutnya."
+      },
+      "errors": {
+        "notFound": "File tidak dapat ditemukan atau dibuka.",
+        "unsupportedFormat": "Jenis file ini tidak didukung.",
+        "needsFfmpeg": "Format ini memerlukan ffmpeg. Instal ffmpeg, lalu coba lagi.",
+        "noModel": "Belum ada model transkripsi yang dipilih.",
+        "modelChanged": "Model berubah saat file ini sedang ditranskripsikan.",
+        "decodeFailed": "Audio dalam file ini tidak dapat dibaca.",
+        "engineFailed": "Transkripsi gagal.",
+        "serverUnreachable": "Lemonade Server tidak dapat dijangkau. Pastikan server sedang berjalan.",
+        "serverUnauthorized": "Lemonade Server tidak menerima kunci API.",
+        "serverModelMissing": "Lemonade Server tidak memiliki model yang dipilih.",
+        "internal": "Terjadi kesalahan.",
+        "sourceChanged": "Rekaman di lokasi ini telah berubah sejak ditranskripsikan, sehingga pembicaranya tidak dapat dicocokkan dengan transkripsi ini. Jika ini rekaman yang sama, pilih rekaman tersebut dengan \"Cari Rekaman…\".",
+        "speakerLabelsFailed": "Pemberian label pembicara gagal.",
+        "enqueue": "Tidak dapat menambahkan file: {{error}}",
+        "cancel": "Tidak dapat membatalkan: {{error}}",
+        "remove": "Tidak dapat menghapus dari daftar: {{error}}",
+        "loadTranscript": "Tidak dapat memuat transkripsi: {{error}}"
+      },
+      "transcript": {
+        "title": "Transkripsi: {{file}}",
+        "live": "Diperbarui selama transkripsi berjalan",
+        "partial": "Transkripsi ini tidak lengkap: {{reason}}",
+        "partialNoReason": "Transkripsi ini tidak lengkap.",
+        "approximateTimes": "Waktu bersifat perkiraan karena model ini tidak menyediakan stempel waktu.",
+        "empty": "Tidak ada ucapan yang ditemukan.",
+        "segmentsLabel": "Transkripsi dengan stempel waktu"
+      },
+      "export": {
+        "button": "Ekspor…",
+        "dialogTitle": "Ekspor Transkripsi",
+        "formats": {
+          "docx": "Dokumen Word (.docx)",
+          "txt": "Teks biasa (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Subtitle SubRip (.srt)",
+          "vtt": "Subtitle WebVTT (.vtt)"
+        },
+        "success": "Transkripsi berhasil diekspor.",
+        "showInFolder": "Tampilkan di Folder",
+        "error": "Ekspor gagal: {{error}}"
       }
     },
     "history": {
@@ -477,7 +850,14 @@
       "retranscribe": "Transkripsikan ulang",
       "retranscribeError": "Gagal mentranskripsikan ulang. Silakan coba lagi.",
       "transcribing": "Mentranskripsikan...",
-      "transcriptionFailed": "Transkripsi gagal. Anda dapat mentranskripsikan ulang menggunakan ikon coba lagi."
+      "transcriptionFailed": "Transkripsi gagal. Anda dapat mentranskripsikan ulang menggunakan ikon coba lagi.",
+      "openTranscript": "Buka Transkripsi",
+      "showOriginal": "Tampilkan File Asli",
+      "originalMissing": "File asli telah dipindahkan atau dihapus.",
+      "fileDuration": "Durasi {{duration}}",
+      "incomplete": "Tidak Lengkap",
+      "speakerCount": "Pembicara: {{number}}",
+      "retranscribeFileUnavailable": "Untuk mentranskripsikan file ini lagi, gunakan halaman Transkripsi."
     },
     "debug": {
       "title": "Debug",
@@ -644,6 +1024,142 @@
           "description": "Pustaka tensor berkinerja tinggi untuk inferensi pembelajaran mesin di perangkat",
           "details": "Fitur ucapan-ke-teks lokal Handy dibangun menggunakan transcribe.cpp dan ggml. Terima kasih kepada Georgi Gerganov dan para kontributor atas karya luar biasa mereka."
         }
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

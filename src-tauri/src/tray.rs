@@ -56,6 +56,8 @@ impl TrayIconState {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct MenuInputs {
     busy: bool,
+    /// A meeting is recording: its own menu, no Cancel or model changes.
+    meeting: bool,
     warning: bool,
     model_loaded: bool,
     selected_model: String,
@@ -75,6 +77,9 @@ struct TrayDesired {
 struct TrayInner {
     /// Intent set by [`set_tray_state`].
     icon_state: TrayIconState,
+    /// Set by [`set_meeting_active`]; kept apart from `icon_state`, which
+    /// dictation and cancel paths reset to Idle.
+    meeting: bool,
     /// Latest computed snapshot, waiting to be (or just) applied.
     desired: Option<TrayDesired>,
     /// Icon the native tray currently shows. Only updated when `set_icon`
@@ -102,6 +107,7 @@ impl TrayState {
     pub fn new() -> Self {
         Self(Mutex::new(TrayInner {
             icon_state: TrayIconState::Idle,
+            meeting: false,
             desired: None,
             applied_icon: None,
             applied_menu: None,
@@ -219,6 +225,12 @@ pub fn set_tray_state(app: &AppHandle, state: TrayIconState) {
     sync_tray_with(app, |inner| inner.icon_state = state);
 }
 
+/// Shows (or ends) the meeting state: the recording icon and a menu that
+/// opens the meeting.
+pub fn set_meeting_active(app: &AppHandle, active: bool) {
+    sync_tray_with(app, |inner| inner.meeting = active);
+}
+
 /// Re-syncs the tray after something other than the recording state changed
 /// (theme, Secure Input warning). The recording state itself is preserved.
 pub fn refresh_tray_icon(app: &AppHandle) {
@@ -249,11 +261,11 @@ fn sync_tray_with(app: &AppHandle, update: impl FnOnce(&mut TrayInner)) {
 
     // Record intent and claim a sequence number in one critical section, so
     // sequence order == the order in which state changes were requested.
-    let (seq, icon_state) = {
+    let (seq, icon_state, meeting) = {
         let mut inner = state.lock();
         update(&mut inner);
         inner.next_seq += 1;
-        (inner.next_seq, inner.icon_state)
+        (inner.next_seq, inner.icon_state, inner.meeting)
     };
 
     // Tray not built yet (early secure-input monitor callbacks). The intent
@@ -262,7 +274,7 @@ fn sync_tray_with(app: &AppHandle, update: impl FnOnce(&mut TrayInner)) {
         return;
     }
 
-    let desired = compute_desired(app, icon_state);
+    let desired = compute_desired(app, icon_state, meeting);
 
     // Decode the icon off the main thread, once per path, outside the lock.
     let needs_icon = !state.lock().icons.contains_key(desired.icon_path);
@@ -309,7 +321,7 @@ fn sync_tray_with(app: &AppHandle, update: impl FnOnce(&mut TrayInner)) {
     }
 }
 
-fn compute_desired(app: &AppHandle, icon_state: TrayIconState) -> TrayDesired {
+fn compute_desired(app: &AppHandle, icon_state: TrayIconState, meeting: bool) -> TrayDesired {
     let settings = settings::get_settings(app);
     let theme = get_current_theme(app);
     let warning = crate::secure_input::tray_warning_active(app);
@@ -325,9 +337,18 @@ fn compute_desired(app: &AppHandle, icon_state: TrayIconState) -> TrayDesired {
     downloaded_models.sort_by(|a, b| a.1.cmp(&b.1));
 
     TrayDesired {
-        icon_path: get_icon_path(theme, icon_state, warning),
+        icon_path: get_icon_path(
+            theme,
+            if meeting {
+                TrayIconState::Recording
+            } else {
+                icon_state
+            },
+            warning,
+        ),
         menu: MenuInputs {
             busy: icon_state.is_busy(),
+            meeting,
             warning,
             model_loaded,
             selected_model: settings.selected_model,
@@ -512,7 +533,30 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
     let quit_i = MenuItem::with_id(app, "quit", &strings.quit, true, quit_accelerator)?;
     let separator = || PredefinedMenuItem::separator(app);
 
-    let menu = if inputs.busy {
+    let menu = if inputs.meeting {
+        let meeting_i = MenuItem::with_id(
+            app,
+            "open_meeting",
+            &strings.meeting_recording,
+            true,
+            None::<&str>,
+        )?;
+        Menu::with_items(
+            app,
+            &[
+                &version_i,
+                &separator()?,
+                &meeting_i,
+                &separator()?,
+                &copy_last_transcript_i,
+                &separator()?,
+                &settings_i,
+                &check_updates_i,
+                &separator()?,
+                &quit_i,
+            ],
+        )?
+    } else if inputs.busy {
         let cancel_i = MenuItem::with_id(app, "cancel", &strings.cancel, true, None::<&str>)?;
         Menu::with_items(
             app,
@@ -682,12 +726,14 @@ mod tests {
             post_processed_text: post_processed.map(|text| text.to_string()),
             post_process_prompt: None,
             post_process_requested: false,
+            file: None,
         }
     }
 
     fn inputs(busy: bool) -> MenuInputs {
         MenuInputs {
             busy,
+            meeting: false,
             warning: false,
             model_loaded: true,
             selected_model: "small".to_string(),

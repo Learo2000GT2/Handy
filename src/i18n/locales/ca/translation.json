@@ -7,16 +7,23 @@
     "model": "Model",
     "quit": "Surt",
     "cancel": "Cancel·la",
-    "secureInputWarning": "⚠ Dreceres blocades per l'entrada segura"
+    "secureInputWarning": "⚠ Dreceres blocades per l'entrada segura",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "General",
+    "transcribe": "Transcripció",
+    "transcribeProgress": "S'està transcrivint: {{percent}} fet",
+    "transcribeRunning": "S'està transcrivint…",
+    "speakersProgress": "S'estan identificant els parlants: {{percent}} fet",
+    "speakersRunning": "S'estan identificant els parlants…",
     "models": "Models",
     "advanced": "Avançat",
     "postProcessing": "Postprocessament",
     "history": "Historial",
     "debug": "Depuració",
-    "about": "Quant a"
+    "about": "Quant a",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "Per començar, trieu un model de transcripció",
@@ -124,6 +131,9 @@
     "custom": "Personalitzat",
     "legacy": "Antic",
     "streaming": "En temps real",
+    "bestForRecordings": "El millor per a enregistraments",
+    "timestamps": "Marques de temps",
+    "noTimestamps": "Sense marques de temps",
     "active": "Actiu",
     "switching": "S'està canviant...",
     "noModelsAvailable": "No hi ha models disponibles",
@@ -151,7 +161,10 @@
       "languageOnly": "Només {{language}}",
       "translation": "Pot traduir a l'anglès",
       "translate": "Tradueix",
-      "streaming": "Mostra la transcripció en temps real mentre parleu"
+      "streaming": "Mostra la transcripció en temps real mentre parleu",
+      "bestForRecordings": "Precís, amb un temps per a cada frase. Una bona opció per a enregistraments i reunions.",
+      "timestamps": "Dona un temps per a cada frase, de manera que la transcripció i les etiquetes de parlants coincideixen amb l'enregistrament.",
+      "noTimestamps": "Els temps només són aproximats, cada 30 segons aproximadament."
     }
   },
   "settings": {
@@ -179,6 +192,10 @@
           "transcribe_with_post_process": {
             "name": "Drecera de postprocessament",
             "description": "Opcional: una drecera específica que sempre aplica postprocessament amb IA a la transcripció."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -212,11 +229,13 @@
     "models": {
       "title": "Models de transcripció",
       "description": "Seleccioneu un model de transcripció o baixeu-ne més. Els models ofereixen diferents nivells de precisió i velocitat.",
+      "recordingsTip": "Per a enregistraments i reunions, trieu un model marcat amb «{{badge}}». Parakeet TDT 0.6B v3 és la millor opció en general; Whisper Large v3 Turbo admet més idiomes.",
       "searchPlaceholder": "Cerqueu models pel nom…",
       "yourModels": "Models baixats",
       "availableModels": "Disponibles per baixar",
       "deleteConfirm": "Segur que voleu suprimir {{modelName}}? Haureu de tornar-lo a baixar per utilitzar-lo.",
       "deleteActiveConfirm": "{{modelName}} és el model actiu. Si el suprimiu, no podreu fer transcripcions fins que seleccioneu un altre model. N'esteu segur?",
+      "deleteRecordingsConfirm": "{{modelName}} és el model per a enregistraments. Si el suprimiu, els enregistraments utilitzaran el model de dictat. N'esteu segur?",
       "deleteTitle": "Suprimeix el model",
       "filters": {
         "allLanguages": "Totes les llengües",
@@ -378,10 +397,47 @@
       "customWords": {
         "title": "Paraules personalitzades",
         "description": "Ajudeu els models compatibles a reconèixer noms i termes especialitzats. Actualment, la correcció per similitu es limita a paraules amb lletres de la A a la Z i números.",
-        "placeholder": "Afegiu una paraula",
         "add": "Afegiu",
         "remove": "Suprimiu {{word}}",
-        "duplicate": "«{{word}}» ja existeix"
+        "duplicate": "«{{word}}» ja existeix",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "Detecció d'activitat de veu",
@@ -410,6 +466,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Com funciona",
+        "intro": "El postprocessament envia el que dicteu a un model d'IA, que ho neteja abans que el Handy ho enganxi.",
+        "shortcut": "S'executa quan dicteu amb la drecera de postprocessament ({{shortcut}}), no amb la drecera habitual ({{normal}}), que enganxa les vostres paraules tal com les heu dites.",
+        "shortcutEvery": "S'executa en cada dictat: amb la drecera de postprocessament ({{shortcut}}) i amb la drecera habitual ({{normal}}).",
+        "notSet": "sense definir",
+        "stepProvider": "Trieu un proveïdor. Per al Lemonade d'aquest ordinador, trieu Lemonade Server.",
+        "stepModel": "Trieu un model. El botó d'actualitzar carrega els models del servidor.",
+        "stepPrompt": "Trieu una indicació o creeu-ne una de pròpia.",
+        "stepTest": "Premeu «Prova» a la part inferior d'aquesta pàgina per provar-ho.",
+        "fallback": "Si la neteja falla, el Handy enganxa les vostres paraules tal com les heu dites.",
+        "everyDictation": {
+          "label": "Neteja cada dictat",
+          "description": "Neteja també els dictats fets amb la drecera habitual, no només els fets amb la drecera de postprocessament."
+        }
+      },
       "hotkey": {
         "title": "Drecera de teclat"
       },
@@ -424,21 +496,29 @@
         },
         "baseUrl": {
           "title": "URL de base",
-          "description": "URL de base de l'API del proveïdor seleccionat. Només es pot editar la del proveïdor personalitzat.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "L'adreça de l'API compatible amb OpenAI del vostre servidor, per exemple http://localhost:11434/v1.",
+          "descriptionLemonade": "L'adreça del vostre Lemonade Server, normalment http://localhost:13305/api/v1. Les versions antigues de Lemonade utilitzaven el port 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Introduïu una adreça com http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "Clau de l'API",
           "description": "Clau de l'API del proveïdor seleccionat.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Només cal si el servidor en demana una.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Opcional"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Introduïu l'identificador de model que espera el punt de connexió personalitzat.",
           "descriptionDefault": "Trieu un model ofert pel proveïdor seleccionat.",
+          "descriptionLemonade": "Un model de xat del vostre Lemonade Server. No s'hi mostren els models de veu, d'incrustacions ni d'imatges.",
           "placeholderWithOptions": "Cerqueu o seleccioneu un model",
           "placeholderNoOptions": "Escriviu el nom d'un model",
-          "refreshModels": "Actualitzeu els models"
+          "refreshModels": "Actualitzeu els models",
+          "use": "Utilitza «{{model}}»",
+          "loadError": "No s'han pogut carregar els models. {{problem}}"
         }
       },
       "prompts": {
@@ -455,12 +535,305 @@
         "promptInstructions": "Instruccions de la indicació",
         "promptInstructionsPlaceholder": "Escriviu les instruccions que s'executaran després de la transcripció. Exemple: Millora la gramàtica i la claredat del text següol: ${output}",
         "promptTip": "Consell: utilitzeu <code>${output}</code> per inserir el text transcrit a la indicació.",
+        "promptTipNoMarker": "Sense ${output}, el Handy envia la transcripció després de la indicació, entre etiquetes {{tag}}.",
         "updatePrompt": "Actualitzeu la indicació",
         "deletePrompt": "Suprimiu la indicació",
         "createPrompt": "Creeu la indicació",
         "cancel": "Cancel·leu",
         "selectToEdit": "Seleccioneu una indicació more amunt per veure'n i editar-ne els detalls.",
         "createFirst": "Feu clic a «Creeu una indicació nova» més amunt per crear la primera indicació de postprocessament."
+      },
+      "test": {
+        "title": "Proveu-ho",
+        "label": "Dictat de mostra",
+        "description": "Neteja aquest text amb el proveïdor, el model i la indicació desada que heu triat a dalt, de la mateixa manera que es neteja un dictat.",
+        "sample": "eh doncs em podries mm enviar l'informe divendres",
+        "button": "Prova",
+        "testing": "S'està provant…",
+        "result": "Resultat ({{seconds}} s):",
+        "emptyResult": "El model ha respost sense text. Amb una indicació de neteja, vol dir que no ha trobat res que valgui la pena conservar.",
+        "failed": "No s'ha pogut fer la prova: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Escriviu un text per fer la prova.",
+        "noProvider": "Trieu un proveïdor a dalt.",
+        "noModel": "Trieu un model per a {{provider}} a dalt. El botó d'actualitzar que hi ha al costat de «Model» carrega els models del servidor.",
+        "noPrompt": "Trieu una indicació a sota.",
+        "emptyPrompt": "La indicació seleccionada és buida. Escriviu-ne les instruccions i premeu «Actualitzeu la indicació».",
+        "missingApiKey": "{{provider}} necessita una clau de l'API. Introduïu-la al camp «Clau de l'API» de dalt.",
+        "invalidApiKey": "La clau de l'API conté caràcters que no es poden enviar. Torneu-la a introduir.",
+        "invalidAddress": "{{address}} no és una adreça de servidor que el Handy pugui utilitzar. Hauria de ser com http://localhost:13305/api/v1.",
+        "unreachable": "No es pot connectar amb el servidor a {{address}}. Comproveu que s'estigui executant i que l'adreça sigui correcta.",
+        "timeout": "El servidor a {{address}} no ha respost a temps. Si encara està carregant el model, torneu-ho a provar d'aquí a un minut.",
+        "unauthorized": "El servidor a {{address}} no ha acceptat la clau de l'API (error {{status}}). Comproveu el camp «Clau de l'API».",
+        "modelNotFound": "El servidor a {{address}} no té el model «{{model}}». Trieu un altre model a dalt.",
+        "notFound": "No ha respost res a {{address}} (error 404). Comproveu l'adreça.",
+        "serverError": "El servidor a {{address}} ha respost amb un error (error {{status}}).",
+        "serverErrorNoStatus": "{{provider}} ha respost amb un error.",
+        "noAnswer": "{{provider}} ha respost sense text. Proveu un altre model.",
+        "badAnswer": "{{provider}} ha enviat una resposta que el Handy no ha pogut llegir.",
+        "noChatModels": "{{provider}} a {{address}} no té cap model de xat. Baixeu-ne un al Lemonade i premeu el botó d'actualitzar.",
+        "otherModels": "Models del servidor que no poden netejar text: {{models}}",
+        "internal": "Alguna cosa ha fallat dins del Handy.",
+        "detail": "Detalls: {{detail}}"
+      }
+    },
+    "transcribeFiles": {
+      "title": "Transcripció de fitxers",
+      "description": "Convertiu enregistraments existents en text en aquest ordinador. Els fitxers no surten mai del dispositiu.",
+      "settingsNote": "Utilitza el model seleccionat i la configuració de llengua, traducció, paraules personalitzades i falques.",
+      "settingsNoteLemonade": "Utilitza la configuració de llengua, paraules personalitzades i falques.",
+      "settingsNoteOwnModel": "Utilitza el model per a enregistraments i la configuració de llengua, traducció, paraules personalitzades i falques.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} a Lemonade Server",
+      "noModel": "Seleccioneu un model baixat a la pàgina Models per transcriure fitxers.",
+      "noLemonadeModel": "Trieu un model de Lemonade per transcriure fitxers.",
+      "noRecordingsModel": "El model per a enregistraments no està baixat. Trieu-ne un altre a dalt o baixeu-lo a la pàgina Models.",
+      "dropzone": {
+        "title": "Deixeu anar aquí fitxers d'àudio o de vídeo",
+        "hint": "Entrevistes, reunions, classes i notes de veu de qualsevol durada",
+        "active": "Deixeu anar per afegir",
+        "choose": "Tria els fitxers…",
+        "skipped": "S'han omès fitxers que no són d'àudio ni de vídeo: {{number}}"
+      },
+      "picker": {
+        "title": "Tria els enregistraments",
+        "filterName": "Fitxers d'àudio i de vídeo"
+      },
+      "formats": {
+        "native": "Obre {{formats}}",
+        "ffmpegAvailable": "Altres formats, com ara Opus, WebM, WMA i DSS, s'obren amb l'ffmpeg.",
+        "ffmpegMissing": "Instal·leu l'ffmpeg per obrir també Opus, WebM, WMA, DSS i altres formats."
+      },
+      "saveToHistory": {
+        "label": "Desa a l'historial",
+        "description": "Les transcripcions acabades es desen i es marquen amb una estrella perquè la neteja automàtica les conservi."
+      },
+      "autosave": {
+        "title": "Desament de transcripcions",
+        "enabled": {
+          "label": "Desa les transcripcions automàticament",
+          "description": "Quan s'acaba de transcriure un fitxer o una reunió, la transcripció es desa com un fitxer que podeu obrir amb Word o qualsevol editor de text."
+        },
+        "location": {
+          "label": "Desa a",
+          "description": "«Al costat de l'enregistrament» posa la transcripció a la carpeta de l'enregistrament (a la carpeta pròpia de cada reunió, per a les reunions). Si no es pot escriure en una carpeta, Handy fa servir Handy Transcripts, dins de la carpeta Documents.",
+          "nextToRecording": "Al costat de l'enregistrament",
+          "folder": "Una carpeta que triï…"
+        },
+        "chooseFolder": "Tria una carpeta…",
+        "folderPicker": "Trieu una carpeta per a les transcripcions",
+        "format": {
+          "label": "Format del fitxer",
+          "description": "Els documents de Word i Markdown inclouen els noms dels parlants i els temps. El text sense format inclou els noms dels parlants."
+        },
+        "note": "Els fitxers existents no se substitueixen mai: es fa servir un nom nou com ara «interview (2).docx». Una transcripció amb llacunes acaba en «(incomplete)».",
+        "saveError": "No s'ha pogut desar el paràmetre: {{error}}"
+      },
+      "engine": {
+        "title": "Motor de transcripció",
+        "label": "Transcriu amb",
+        "description": "El dictat sempre utilitza el model propi de Handy. Aquesta opció només s'aplica als fitxers.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model per a enregistraments",
+        "description": "Els enregistraments poden utilitzar un model més lent i més precís que el del dictat. Funciona per separat i només es carrega mentre es transcriuen fitxers, de manera que el model de dictat continua a punt. Tots dos models han de cabre a la memòria.",
+        "same": "El mateix que el dictat ({{model}})",
+        "sameNoModel": "El mateix que el dictat",
+        "timestamps": "(marques de temps)",
+        "noTimestamps": "(sense marques de temps)",
+        "switchWarning": "Aquest fitxer utilitza el model de dictat, així que si ara canvieu el model de dictat s'aturarà. Per mantenir-los separats, trieu un altre model per als enregistraments.",
+        "onCpu": "Els enregistraments s'estan executant al processador perquè no hi ha prou memòria gràfica per als dos models. Trieu un model més petit per als enregistraments per utilitzar la targeta gràfica."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Adreça del servidor",
+          "description": "Normalment http://localhost:13305. Les versions antigues de Lemonade utilitzaven el port 8000."
+        },
+        "apiKey": {
+          "label": "Clau de l'API",
+          "description": "Només cal si el vostre Lemonade Server en demana una.",
+          "placeholder": "Opcional"
+        },
+        "model": {
+          "label": "Model",
+          "description": "El model de Lemonade que transcriu els fitxers, com ara Whisper-Base.",
+          "placeholder": "Trieu un model Whisper",
+          "notDownloaded": "{{model}} (es baixa en el primer ús)",
+          "none": "No s'ha trobat cap model de transcripció en aquest servidor.",
+          "use": "Utilitza «{{model}}»"
+        },
+        "test": "Prova la connexió",
+        "testing": "S'està connectant…",
+        "connected": "Connectat. Models de transcripció disponibles: {{number}}",
+        "checkFailed": "No s'ha pogut comprovar Lemonade Server: {{error}}",
+        "saveError": "No s'ha pogut desar la configuració de Lemonade: {{error}}",
+        "firstChunkSlow": "És possible que Lemonade estigui baixant o carregant el model. La primera vegada pot trigar uns quants minuts.",
+        "errors": {
+          "invalidUrl": "Introduïu una adreça com ara http://localhost:13305.",
+          "unreachable": "No es pot connectar amb Lemonade Server a {{url}}. Comproveu que s'estigui executant.",
+          "timeout": "Lemonade Server no ha respost a temps.",
+          "unauthorized": "Lemonade Server no ha acceptat la clau de l'API.",
+          "modelNotFound": "Lemonade Server no té aquest model.",
+          "http": "Lemonade Server ha retornat un error.",
+          "badResponse": "Lemonade Server ha enviat una resposta que Handy no ha pogut llegir.",
+          "cancelled": "S'ha cancel·lat la prova de connexió."
+        },
+        "notes": {
+          "noTranslate": "La traducció a l'anglès no està disponible amb Lemonade Server. Els fitxers es transcriuen en la llengua parlada.",
+          "remote": "Aquesta adreça no és d'aquest ordinador. Els enregistraments s'hi enviaran."
+        }
+      },
+      "speakers": {
+        "label": "Etiqueta els parlants",
+        "description": "Indica qui ha dit què, fins a 4 parlants. S'executa en aquest ordinador i requereix una baixada única de {{size}} MB.",
+        "download": "Baixa el model de parlants ({{size}} MB)",
+        "downloading": "S'està baixant el model de parlants… {{percent}}%",
+        "verifying": "S'està comprovant la baixada…",
+        "cancelDownload": "Cancel·la la baixada",
+        "downloadFailed": "No s'ha pogut baixar el model de parlants: {{error}}",
+        "installed": "Model de parlants instal·lat ({{size}} MB)",
+        "remove": "Suprimeix el model de parlants",
+        "removeError": "No s'ha pogut suprimir el model de parlants: {{error}}",
+        "removeConfirm": "Voleu suprimir el model de parlants? L'haureu de tornar a baixar ({{size}} MB) per etiquetar els parlants.",
+        "license": "Model de parlants d'NVIDIA, amb la llicència NVIDIA Open Model License (<page>pàgina del model</page>).",
+        "title": "Parlants",
+        "defaultName": "Parlant {{number}}",
+        "rename": "Canvia el nom de {{name}}",
+        "nameLabel": "Nom nou per a {{name}}",
+        "save": "Desa",
+        "cancel": "Cancel·la",
+        "renameError": "No s'ha pogut canviar el nom del parlant: {{error}}",
+        "approximate": "Els canvis de parlant són aproximats perquè aquest model no proporciona marques de temps.",
+        "unassigned": "Alguns fragments no s'han pogut associar a cap parlant.",
+        "none": "Aquesta transcripció no té etiquetes de parlants.",
+        "labelAction": "Etiqueta els parlants",
+        "labelHint": "Les etiquetes de parlants es generen en aquest ordinador a partir de l'enregistrament original, {{file}}. Els enregistraments llargs triguen uns minuts.",
+        "needsModel": "Per etiquetar els parlants cal el model de parlants, una baixada única de {{size}} MB.",
+        "labelError": "No s'han pogut afegir les etiquetes de parlants: {{error}}",
+        "findRecording": "Cerca l'enregistrament…",
+        "findRecordingHint": "Trieu l'enregistrament que s'ha mogut. Ha de ser el mateix fitxer que es va transcriure.",
+        "relabel": "Torna a etiquetar…",
+        "relabelTitle": "Torna a etiquetar els parlants",
+        "relabelConfirm": "Voleu tornar a etiquetar els parlants a partir de l'enregistrament? Es perdran els noms, les fusions i els canvis de fragments.",
+        "mergeInto": "Fusiona {{name}} amb un altre parlant",
+        "mergePrompt": "Fusiona {{name}} amb:",
+        "mergeTitle": "Fusiona els parlants",
+        "mergeConfirm": "Voleu fusionar {{from}} amb {{into}}? Tots els fragments de {{from}} es marcaran com a {{into}}. Podeu desfer-ho fins que tanqueu la transcripció.",
+        "mergeError": "No s'han pogut fusionar els parlants: {{error}}",
+        "changeSpeaker": "Canvia el parlant d'aquest fragment ({{name}})",
+        "changeSpeakerPrompt": "Qui ho ha dit?",
+        "newSpeaker": "Parlant nou",
+        "unknownSpeaker": "Parlant desconegut",
+        "changeSpeakerError": "No s'ha pogut canviar el parlant: {{error}}",
+        "undo": "Desfés",
+        "undoError": "No s'ha pogut desfer: {{error}}",
+        "jobKind": "Etiquetes de parlants",
+        "state": {
+          "running": "S'estan identificant els parlants…",
+          "done": "Parlants: {{number}}",
+          "failed": "No s'han pogut etiquetar els parlants",
+          "skipped": {
+            "modelMissing": "S'ha omès l'etiquetatge de parlants: el model de parlants no s'ha baixat.",
+            "noSpeech": "S'ha omès l'etiquetatge de parlants: no s'ha detectat parla."
+          }
+        }
+      },
+      "queue": {
+        "title": "Fitxers",
+        "cancelAll": "Cancel·la-ho tot",
+        "clearFinished": "Esborra les acabades"
+      },
+      "status": {
+        "queued": "Pendent d'iniciar",
+        "preparing": "S'està preparant…",
+        "waiting": "En pausa mentre dicteu",
+        "transcribing": "S'està transcrivint…",
+        "completed": "Fet",
+        "partial": "Fet, amb buits",
+        "cancelled": "Cancel·lat",
+        "failed": "Ha fallat"
+      },
+      "progress": "{{processed}} de {{total}}",
+      "progressNoTotal": "{{processed}} transcrits",
+      "elapsed": "Temps transcorregut: {{time}}",
+      "took": "Processat en {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Temps restant: menys d'un minut",
+        "minutes": "Temps restant: aprox. {{minutes}} min",
+        "hours": "Temps restant: aprox. {{hours}} h {{minutes}} min",
+        "hoursOnly": "Temps restant: aprox. {{hours}} h"
+      },
+      "noSpeech": "No s'ha detectat parla en aquest fitxer.",
+      "actions": {
+        "cancel": "Cancel·la",
+        "remove": "Treu de la llista",
+        "removeWhileLabelling": "No es pot treure mentre s'identifiquen els parlants",
+        "view": "Mostra la transcripció",
+        "copy": "Copia la transcripció",
+        "showFile": "Mostra el fitxer"
+      },
+      "copied": "S'ha copiat la transcripció al porta-retalls.",
+      "copyError": "No s'ha pogut copiar la transcripció.",
+      "savedToHistory": "Desat a l'historial",
+      "ready": {
+        "title": "Transcripció a punt: {{file}}",
+        "open": "Obre a Handy",
+        "showFile": "Mostra el fitxer"
+      },
+      "saved": {
+        "savedTo": "Desat a {{path}}",
+        "open": "Obre",
+        "showInFolder": "Mostra a la carpeta",
+        "fallback": "No s'ha pogut desar a {{folder}}, així que la transcripció s'ha desat a Handy Transcripts, dins de la carpeta Documents.",
+        "failed": "No s'ha pogut desar la transcripció com a fitxer. Feu servir Exporta per desar-la.",
+        "openError": "No s'ha pogut obrir la transcripció: {{error}}",
+        "notFound": "No es troba la transcripció desada. Potser s'ha mogut o suprimit.",
+        "exportAgain": "Aquest fitxer no canvia quan editeu els parlants aquí. Torneu a exportar per incloure els canvis posteriors."
+      },
+      "errors": {
+        "notFound": "No es pot trobar o obrir el fitxer.",
+        "unsupportedFormat": "Aquest tipus de fitxer no és compatible.",
+        "needsFfmpeg": "Aquest format necessita l'ffmpeg. Instal·leu l'ffmpeg i torneu-ho a provar.",
+        "noModel": "No hi ha cap model de transcripció seleccionat.",
+        "modelChanged": "El model ha canviat mentre es transcrivia aquest fitxer.",
+        "decodeFailed": "No s'ha pogut llegir l'àudio d'aquest fitxer.",
+        "engineFailed": "La transcripció ha fallat.",
+        "serverUnreachable": "No es pot connectar amb Lemonade Server. Comproveu que s'estigui executant.",
+        "serverUnauthorized": "Lemonade Server no ha acceptat la clau de l'API.",
+        "serverModelMissing": "Lemonade Server no té el model seleccionat.",
+        "internal": "Alguna cosa no ha anat bé.",
+        "sourceChanged": "L'enregistrament d'aquesta ubicació ha canviat des que es va transcriure, de manera que els seus parlants no es poden associar a aquesta transcripció. Si és el mateix enregistrament, trieu-lo amb «Cerca l'enregistrament…».",
+        "speakerLabelsFailed": "No s'han pogut etiquetar els parlants.",
+        "enqueue": "No s'han pogut afegir els fitxers: {{error}}",
+        "cancel": "No s'ha pogut cancel·lar: {{error}}",
+        "remove": "No s'ha pogut treure de la llista: {{error}}",
+        "loadTranscript": "No s'ha pogut carregar la transcripció: {{error}}"
+      },
+      "transcript": {
+        "title": "Transcripció: {{file}}",
+        "live": "S'actualitza mentre es transcriu",
+        "partial": "Aquesta transcripció és incompleta: {{reason}}",
+        "partialNoReason": "Aquesta transcripció és incompleta.",
+        "approximateTimes": "Els temps són aproximats perquè aquest model no proporciona marques de temps.",
+        "empty": "No s'ha detectat parla.",
+        "segmentsLabel": "Transcripció amb marques de temps"
+      },
+      "export": {
+        "button": "Exporta…",
+        "dialogTitle": "Exporta la transcripció",
+        "formats": {
+          "docx": "Document de Word (.docx)",
+          "txt": "Text sense format (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Subtítols SubRip (.srt)",
+          "vtt": "Subtítols WebVTT (.vtt)"
+        },
+        "success": "S'ha exportat la transcripció.",
+        "showInFolder": "Mostra a la carpeta",
+        "error": "No s'ha pogut exportar: {{error}}"
       }
     },
     "history": {
@@ -477,7 +850,14 @@
       "retranscribe": "Torneu a transcriure",
       "retranscribeError": "No s'ha pogut tornar a transcriure. Torneu-ho a provar.",
       "transcribing": "S'està transcrivint...",
-      "transcriptionFailed": "La transcripció ha fallat. Podeu tornar a transcriure amb la icona de reintent."
+      "transcriptionFailed": "La transcripció ha fallat. Podeu tornar a transcriure amb la icona de reintent.",
+      "openTranscript": "Obre la transcripció",
+      "showOriginal": "Mostra el fitxer original",
+      "originalMissing": "El fitxer original s'ha mogut o suprimit.",
+      "fileDuration": "Durada {{duration}}",
+      "incomplete": "Incompleta",
+      "speakerCount": "Parlants: {{number}}",
+      "retranscribeFileUnavailable": "Per tornar a transcriure aquest fitxer, utilitzeu la pàgina Transcripció."
     },
     "debug": {
       "title": "Depuració",
@@ -644,6 +1024,142 @@
           "description": "Biblioteca de tensors d'alt rendiment per a la inferència d'aprenentatge automàtic al dispositiu",
           "details": "La transcripció local de veu a text del Handy es basa en el transcribe.cpp i el ggml. Gràcies a la gran feina de Georgi Gerganov i dels col·laboradors."
         }
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

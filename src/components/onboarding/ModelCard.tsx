@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next";
 import {
   AudioLines,
   Check,
+  Clock,
   Download,
   Globe,
   HardDrive,
   Languages,
   Loader2,
+  TimerOff,
   Trash2,
 } from "lucide-react";
 import type { ModelInfo } from "@/bindings";
@@ -75,6 +77,8 @@ interface ModelCardProps {
   downloadProgress?: number;
   downloadSpeed?: number; // MB/s
   showRecommended?: boolean;
+  /** Show whether the model gives timestamps and is best for recordings. */
+  showRecordingsInfo?: boolean;
 }
 
 const ModelCard: React.FC<ModelCardProps> = ({
@@ -90,6 +94,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
   downloadProgress,
   downloadSpeed,
   showRecommended = true,
+  showRecordingsInfo = false,
 }) => {
   const { t } = useTranslation();
   const debugMode = useSettingsStore(
@@ -173,6 +178,23 @@ const ModelCard: React.FC<ModelCardProps> = ({
             {showRecommended && model.is_recommended && (
               <Badge variant="primary">{t("onboarding.recommended")}</Badge>
             )}
+            {showRecordingsInfo && model.is_recommended_for_recordings && (
+              <Badge
+                variant="success"
+                title={t("modelSelector.capabilities.bestForRecordings")}
+              >
+                {t("modelSelector.bestForRecordings")}
+              </Badge>
+            )}
+            {showRecordingsInfo && model.supports_timestamps && (
+              <Badge
+                variant="secondary"
+                title={t("modelSelector.capabilities.timestamps")}
+              >
+                <Clock className="w-3 h-3 mr-1" />
+                {t("modelSelector.timestamps")}
+              </Badge>
+            )}
             {status === "active" && (
               <Badge variant="primary">
                 <Check className="w-3 h-3 mr-1" />
@@ -228,8 +250,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
 
       <hr className="w-full border-mid-gray/20" />
 
-      {/* Bottom row: tags + action buttons (full width) */}
-      <div className="flex items-center gap-3 w-full -mb-0.5 mt-0.5 h-5">
+      {/* Bottom row: tags + action buttons (full width). Wraps rather than
+          overflowing when the tags don't fit (longer locales, narrow window). */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 w-full -mb-0.5 mt-0.5 min-h-5">
         {capabilityLanguages.length > 0 && (
           <div
             className="flex items-center gap-1 text-xs text-text/50"
@@ -261,6 +284,15 @@ const ModelCard: React.FC<ModelCardProps> = ({
             <span>{t("modelSelector.streaming")}</span>
           </div>
         )}
+        {showRecordingsInfo && !model.supports_timestamps && (
+          <div
+            className="flex items-center gap-1 text-xs text-text/40"
+            title={t("modelSelector.capabilities.noTimestamps")}
+          >
+            <TimerOff className="w-3.5 h-3.5" />
+            <span>{t("modelSelector.noTimestamps")}</span>
+          </div>
+        )}
         {showModelSize && (
           <span className="flex items-center gap-1.5 ms-auto text-xs text-text/50">
             {status === "downloadable" ? (
@@ -280,7 +312,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
             size="sm"
             onClick={handleDelete}
             title={t("modelSelector.deleteModel", { modelName: displayName })}
-            className="flex items-center gap-1.5 text-logo-primary/85 hover:text-logo-primary hover:bg-logo-primary/10"
+            // -my-[3px]: the button is a few px taller than the row; it
+            // overhangs it as before instead of making a one-line row taller.
+            className="flex items-center gap-1.5 -my-[3px] text-logo-primary/85 hover:text-logo-primary hover:bg-logo-primary/10"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>{t("common.delete")}</span>

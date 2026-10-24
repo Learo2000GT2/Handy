@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import type { ModelCardStatus } from "@/components/onboarding";
 import { ModelCard } from "@/components/onboarding";
+import { Alert } from "@/components/ui/Alert";
 import { useModelStore } from "@/stores/modelStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 import {
   getLanguageLabel,
   MODEL_CAPABILITY_LANGUAGES,
@@ -147,11 +149,17 @@ export const ModelsSettings: React.FC = () => {
     const model = models.find((m: ModelInfo) => m.id === modelId);
     const modelName = model?.name || modelId;
     const isActive = modelId === currentModel;
+    const isRecordingsModel =
+      (
+        useSettingsStore.getState().settings?.file_transcription_model ?? ""
+      ).trim() === modelId;
 
     const confirmed = await ask(
       isActive
         ? t("settings.models.deleteActiveConfirm", { modelName })
-        : t("settings.models.deleteConfirm", { modelName }),
+        : isRecordingsModel
+          ? t("settings.models.deleteRecordingsConfirm", { modelName })
+          : t("settings.models.deleteConfirm", { modelName }),
       {
         title: t("settings.models.deleteTitle"),
         kind: "warning",
@@ -161,6 +169,11 @@ export const ModelsSettings: React.FC = () => {
     if (confirmed) {
       try {
         await deleteModel(modelId);
+        // Recordings now use the dictation model: the backend reset the
+        // setting before deleting, so re-read it even if the delete failed.
+        if (isRecordingsModel) {
+          await useSettingsStore.getState().refreshSettings();
+        }
       } catch (err) {
         console.error(`Failed to delete model ${modelId}:`, err);
       }
@@ -247,6 +260,12 @@ export const ModelsSettings: React.FC = () => {
           {t("settings.models.description")}
         </p>
       </div>
+
+      <Alert variant="info">
+        {t("settings.models.recordingsTip", {
+          badge: t("modelSelector.bestForRecordings"),
+        })}
+      </Alert>
 
       {/* Search bar — filter the catalog by name or description */}
       <div className="relative">
@@ -418,6 +437,7 @@ export const ModelsSettings: React.FC = () => {
               downloadProgress={getDownloadProgress(model.id)}
               downloadSpeed={getDownloadSpeed(model.id)}
               showRecommended={false}
+              showRecordingsInfo={true}
             />
           ))}
         </div>
@@ -440,6 +460,7 @@ export const ModelsSettings: React.FC = () => {
                 downloadProgress={getDownloadProgress(model.id)}
                 downloadSpeed={getDownloadSpeed(model.id)}
                 showRecommended={true}
+                showRecordingsInfo={true}
               />
             ))}
           </div>

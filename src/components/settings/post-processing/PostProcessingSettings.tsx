@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { RefreshCcw } from "lucide-react";
-import { commands } from "@/bindings";
+import { commands, type PostProcessProblem } from "@/bindings";
 
 import { Alert } from "../../ui/Alert";
 import {
@@ -21,6 +21,12 @@ import { ModelSelect } from "../PostProcessingSettingsApi/ModelSelect";
 import { usePostProcessProviderState } from "../PostProcessingSettingsApi/usePostProcessProviderState";
 import { ShortcutInput } from "../ShortcutInput";
 import { useSettings } from "../../../hooks/useSettings";
+import { HowItWorks } from "./HowItWorks";
+import { PostProcessingTest } from "./PostProcessingTest";
+import {
+  postProcessProblemDetail,
+  postProcessProblemText,
+} from "./problemText";
 
 const PostProcessingSettingsApiComponent: React.FC = () => {
   const { t } = useTranslation();
@@ -52,31 +58,48 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
         ) : null
       ) : (
         <>
-          {state.selectedProvider?.id === "custom" && (
+          {state.canEditBaseUrl && (
             <SettingContainer
               title={t("settings.postProcessing.api.baseUrl.title")}
-              description={t("settings.postProcessing.api.baseUrl.description")}
+              description={
+                state.isLemonadeProvider
+                  ? t("settings.postProcessing.api.baseUrl.descriptionLemonade")
+                  : t("settings.postProcessing.api.baseUrl.descriptionCustom")
+              }
               descriptionMode="tooltip"
               layout="horizontal"
               grouped={true}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col items-end gap-1">
                 <BaseUrlField
                   value={state.baseUrl}
                   onBlur={state.handleBaseUrlChange}
-                  placeholder={t(
-                    "settings.postProcessing.api.baseUrl.placeholder",
-                  )}
+                  placeholder={
+                    state.isLemonadeProvider
+                      ? t(
+                          "settings.postProcessing.api.baseUrl.placeholderLemonade",
+                        )
+                      : t("settings.postProcessing.api.baseUrl.placeholder")
+                  }
                   disabled={state.isBaseUrlUpdating}
                   className="min-w-[380px]"
                 />
+                {state.baseUrlInvalid && (
+                  <p className="text-xs text-red-400">
+                    {t("settings.postProcessing.api.baseUrl.invalid")}
+                  </p>
+                )}
               </div>
             </SettingContainer>
           )}
 
           <SettingContainer
             title={t("settings.postProcessing.api.apiKey.title")}
-            description={t("settings.postProcessing.api.apiKey.description")}
+            description={
+              state.canEditBaseUrl
+                ? t("settings.postProcessing.api.apiKey.descriptionOptional")
+                : t("settings.postProcessing.api.apiKey.description")
+            }
             descriptionMode="tooltip"
             layout="horizontal"
             grouped={true}
@@ -85,9 +108,13 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
               <ApiKeyField
                 value={state.apiKey}
                 onBlur={state.handleApiKeyChange}
-                placeholder={t(
-                  "settings.postProcessing.api.apiKey.placeholder",
-                )}
+                placeholder={
+                  state.canEditBaseUrl
+                    ? t(
+                        "settings.postProcessing.api.apiKey.placeholderOptional",
+                      )
+                    : t("settings.postProcessing.api.apiKey.placeholder")
+                }
                 disabled={state.isApiKeyUpdating}
                 className="min-w-[320px]"
               />
@@ -100,9 +127,11 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
         <SettingContainer
           title={t("settings.postProcessing.api.model.title")}
           description={
-            state.isCustomProvider
-              ? t("settings.postProcessing.api.model.descriptionCustom")
-              : t("settings.postProcessing.api.model.descriptionDefault")
+            state.isLemonadeProvider
+              ? t("settings.postProcessing.api.model.descriptionLemonade")
+              : state.isCustomProvider
+                ? t("settings.postProcessing.api.model.descriptionCustom")
+                : t("settings.postProcessing.api.model.descriptionDefault")
           }
           descriptionMode="tooltip"
           layout="stacked"
@@ -124,6 +153,9 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
               onSelect={state.handleModelSelect}
               onCreate={state.handleModelCreate}
               onBlur={() => {}}
+              formatCreateLabel={(input) =>
+                t("settings.postProcessing.api.model.use", { model: input })
+              }
               className="flex-1 min-w-[380px]"
             />
             <ResetButton
@@ -137,9 +169,32 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
               />
             </ResetButton>
           </div>
+          {state.modelProblem && !state.isFetchingModels && (
+            <ModelProblem problem={state.modelProblem} />
+          )}
         </SettingContainer>
       )}
     </>
+  );
+};
+
+/** Why the model list couldn't be loaded. */
+const ModelProblem: React.FC<{ problem: PostProcessProblem }> = ({
+  problem,
+}) => {
+  const { t } = useTranslation();
+  const detail = postProcessProblemDetail(t, problem);
+  return (
+    <Alert variant="error" contained className="mt-2 rounded-md">
+      <p>
+        {t("settings.postProcessing.api.model.loadError", {
+          problem: postProcessProblemText(t, problem),
+        })}
+      </p>
+      {detail && (
+        <p className="mt-1 text-xs break-words opacity-80">{detail}</p>
+      )}
+    </Alert>
   );
 };
 
@@ -319,7 +374,10 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
                 <Trans
                   i18nKey="settings.postProcessing.prompts.promptTip"
                   components={{ code: <code /> }}
-                />
+                />{" "}
+                {t("settings.postProcessing.prompts.promptTipNoMarker", {
+                  tag: "<transcript>",
+                })}
               </p>
             </div>
 
@@ -386,7 +444,10 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
                 <Trans
                   i18nKey="settings.postProcessing.prompts.promptTip"
                   components={{ code: <code /> }}
-                />
+                />{" "}
+                {t("settings.postProcessing.prompts.promptTipNoMarker", {
+                  tag: "<transcript>",
+                })}
               </p>
             </div>
 
@@ -429,6 +490,8 @@ export const PostProcessingSettings: React.FC = () => {
 
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
+      <HowItWorks />
+
       <SettingsGroup title={t("settings.postProcessing.hotkey.title")}>
         <ShortcutInput
           shortcutId="transcribe_with_post_process"
@@ -444,6 +507,8 @@ export const PostProcessingSettings: React.FC = () => {
       <SettingsGroup title={t("settings.postProcessing.prompts.title")}>
         <PostProcessingSettingsPrompts />
       </SettingsGroup>
+
+      <PostProcessingTest />
     </div>
   );
 };

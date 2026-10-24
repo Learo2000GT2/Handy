@@ -7,16 +7,23 @@
     "model": "Mô hình",
     "quit": "Thoát",
     "cancel": "Hủy",
-    "secureInputWarning": "⚠ Phím tắt bị Secure Input chặn"
+    "secureInputWarning": "⚠ Phím tắt bị Secure Input chặn",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "Chung",
+    "transcribe": "Phiên âm",
+    "transcribeProgress": "Đang phiên âm: xong {{percent}}",
+    "transcribeRunning": "Đang phiên âm…",
+    "speakersProgress": "Đang xác định người nói: xong {{percent}}",
+    "speakersRunning": "Đang xác định người nói…",
     "models": "Mô hình",
     "advanced": "Nâng cao",
     "postProcessing": "Xử lý sau",
     "history": "Lịch sử",
     "debug": "Gỡ lỗi",
-    "about": "Giới thiệu"
+    "about": "Giới thiệu",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "Để bắt đầu, hãy chọn một mô hình chuyển đổi giọng nói",
@@ -123,6 +130,9 @@
   "modelSelector": {
     "custom": "Tùy chỉnh",
     "streaming": "Truyền trực tiếp",
+    "bestForRecordings": "Tốt nhất cho bản ghi âm",
+    "timestamps": "Dấu thời gian",
+    "noTimestamps": "Không có dấu thời gian",
     "active": "Đang hoạt động",
     "switching": "Đang chuyển...",
     "noModelsAvailable": "Không có mô hình nào",
@@ -148,7 +158,10 @@
       "translate": "Dịch sang tiếng Anh",
       "singleLanguage": "Chỉ hỗ trợ ngôn ngữ này",
       "languageOnly": "Chỉ {{language}}",
-      "streaming": "Hiển thị phiên âm trực tiếp khi bạn nói"
+      "streaming": "Hiển thị phiên âm trực tiếp khi bạn nói",
+      "bestForRecordings": "Chính xác, có thời gian cho từng câu. Lựa chọn tốt cho bản ghi âm và cuộc họp.",
+      "timestamps": "Cho thời gian của từng câu, nhờ đó bản chép lời và nhãn người nói khớp với bản ghi âm.",
+      "noTimestamps": "Thời gian chỉ là ước tính, khoảng 30 giây một lần."
     },
     "cancel": "Hủy",
     "cancelDownload": "Hủy tải xuống",
@@ -161,8 +174,10 @@
     "models": {
       "title": "Mô hình chuyển đổi",
       "description": "Chọn mô hình chuyển đổi hoặc tải thêm mô hình. Các mô hình khác nhau có mức độ chính xác và tốc độ khác nhau.",
+      "recordingsTip": "Với bản ghi âm và cuộc họp, hãy chọn mô hình có nhãn \"{{badge}}\". Parakeet TDT 0.6B v3 là lựa chọn tốt nhất cho hầu hết nhu cầu; Whisper Large v3 Turbo hỗ trợ nhiều ngôn ngữ hơn.",
       "deleteConfirm": "Bạn có chắc chắn muốn xóa {{modelName}}? Bạn sẽ cần tải lại để sử dụng.",
       "deleteActiveConfirm": "{{modelName}} là mô hình đang hoạt động của bạn. Xóa nó sẽ dừng phiên âm cho đến khi bạn chọn một mô hình mới. Bạn có chắc không?",
+      "deleteRecordingsConfirm": "{{modelName}} là mô hình cho bản ghi âm của bạn. Nếu xóa nó, bản ghi âm sẽ dùng mô hình nhập bằng giọng nói của bạn. Bạn có chắc không?",
       "deleteTitle": "Xóa mô hình",
       "filters": {
         "allLanguages": "Tất cả ngôn ngữ",
@@ -199,6 +214,10 @@
           "transcribe_with_post_process": {
             "name": "Phím tắt xử lý sau",
             "description": "Tùy chọn: Phím tắt chuyên dụng luôn áp dụng xử lý sau bằng AI cho bản chuyển đổi của bạn."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -378,10 +397,47 @@
       "customWords": {
         "title": "Từ tùy chỉnh",
         "description": "Giúp các mô hình được hỗ trợ nhận dạng tên và thuật ngữ chuyên ngành. Tính năng sửa gần đúng hiện chỉ áp dụng cho các từ sử dụng chữ cái A–Z và chữ số.",
-        "placeholder": "Thêm một từ",
         "add": "Thêm",
         "remove": "Xóa {{word}}",
-        "duplicate": "\"{{word}}\" đã tồn tại"
+        "duplicate": "\"{{word}}\" đã tồn tại",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "Phát hiện hoạt động giọng nói",
@@ -410,6 +466,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Cách hoạt động",
+        "intro": "Xử lý sau gửi nội dung bạn đọc chính tả tới một mô hình AI, mô hình này làm gọn văn bản trước khi Handy dán vào.",
+        "shortcut": "Tính năng chạy khi bạn đọc chính tả bằng phím tắt xử lý sau ({{shortcut}}), không phải bằng phím tắt thông thường ({{normal}}) — phím này dán nguyên văn những gì bạn nói.",
+        "shortcutEvery": "Tính năng chạy ở mọi lần đọc chính tả: với phím tắt xử lý sau ({{shortcut}}) và với phím tắt thông thường ({{normal}}).",
+        "notSet": "chưa đặt",
+        "stepProvider": "Chọn một nhà cung cấp. Với Lemonade trên máy tính này, hãy chọn Lemonade Server.",
+        "stepModel": "Chọn một mô hình. Nút làm mới sẽ tải các mô hình của máy chủ.",
+        "stepPrompt": "Chọn một prompt, hoặc tự tạo prompt của bạn.",
+        "stepTest": "Nhấn Kiểm tra ở cuối trang này để thử.",
+        "fallback": "Nếu làm gọn thất bại, Handy sẽ dán nguyên văn những gì bạn nói.",
+        "everyDictation": {
+          "label": "Làm gọn mọi lần đọc chính tả",
+          "description": "Làm gọn cả những lần đọc chính tả bằng phím tắt thông thường, không chỉ những lần dùng phím tắt xử lý sau."
+        }
+      },
       "hotkey": {
         "title": "Phím tắt"
       },
@@ -424,21 +496,29 @@
         },
         "baseUrl": {
           "title": "URL cơ sở",
-          "description": "URL cơ sở API cho nhà cung cấp đã chọn. Chỉ có thể chỉnh sửa nhà cung cấp tùy chỉnh.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Địa chỉ API tương thích OpenAI của máy chủ, ví dụ http://localhost:11434/v1.",
+          "descriptionLemonade": "Địa chỉ Lemonade Server của bạn, thường là http://localhost:13305/api/v1. Các phiên bản Lemonade cũ hơn dùng cổng 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Nhập địa chỉ như http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "Khóa API",
           "description": "Khóa API cho nhà cung cấp đã chọn.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Chỉ cần khi máy chủ của bạn yêu cầu.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Tùy chọn"
         },
         "model": {
           "title": "Mô hình",
           "descriptionCustom": "Cung cấp định danh mô hình được yêu cầu bởi điểm cuối tùy chỉnh của bạn.",
           "descriptionDefault": "Chọn một mô hình được cung cấp bởi nhà cung cấp đã chọn.",
+          "descriptionLemonade": "Một mô hình trò chuyện trên Lemonade Server của bạn. Các mô hình giọng nói, embedding và hình ảnh không được liệt kê.",
           "placeholderWithOptions": "Tìm kiếm hoặc chọn một mô hình",
           "placeholderNoOptions": "Nhập tên mô hình",
-          "refreshModels": "Làm mới mô hình"
+          "refreshModels": "Làm mới mô hình",
+          "use": "Dùng “{{model}}”",
+          "loadError": "Không thể tải các mô hình. {{problem}}"
         }
       },
       "prompts": {
@@ -455,12 +535,305 @@
         "promptInstructions": "Hướng dẫn Prompt",
         "promptInstructionsPlaceholder": "Viết hướng dẫn để chạy sau khi chuyển đổi. Ví dụ: Cải thiện ngữ pháp và độ rõ ràng cho văn bản sau: ${output}",
         "promptTip": "Mẹo: Sử dụng <code>${output}</code> để chèn văn bản đã chuyển đổi vào prompt của bạn.",
+        "promptTipNoMarker": "Nếu không có ${output}, Handy sẽ gửi bản chép lời sau prompt của bạn, giữa các thẻ {{tag}}.",
         "updatePrompt": "Cập nhật Prompt",
         "deletePrompt": "Xóa Prompt",
         "createPrompt": "Tạo Prompt",
         "cancel": "Hủy",
         "selectToEdit": "Chọn một prompt ở trên để xem và chỉnh sửa chi tiết.",
         "createFirst": "Nhấn 'Tạo Prompt mới' ở trên để tạo prompt xử lý sau đầu tiên của bạn."
+      },
+      "test": {
+        "title": "Thử ngay",
+        "label": "Đoạn đọc chính tả mẫu",
+        "description": "Làm gọn văn bản này bằng nhà cung cấp, mô hình và prompt đã lưu được chọn ở trên, giống như cách làm gọn một lần đọc chính tả.",
+        "sample": "ờ thì bạn có thể ừm gửi cho tôi báo cáo trước thứ sáu không",
+        "button": "Kiểm tra",
+        "testing": "Đang kiểm tra…",
+        "result": "Kết quả ({{seconds}} giây):",
+        "emptyResult": "Mô hình trả lời mà không có văn bản. Với prompt làm gọn, điều này nghĩa là nó không tìm thấy gì đáng giữ lại.",
+        "failed": "Không thể chạy kiểm tra: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Hãy nhập văn bản để kiểm tra.",
+        "noProvider": "Hãy chọn một nhà cung cấp ở trên.",
+        "noModel": "Hãy chọn một mô hình cho {{provider}} ở trên. Nút làm mới cạnh mục Mô hình sẽ tải các mô hình của máy chủ.",
+        "noPrompt": "Hãy chọn một prompt ở dưới.",
+        "emptyPrompt": "Prompt đã chọn đang trống. Hãy viết hướng dẫn cho nó rồi nhấn Cập nhật Prompt.",
+        "missingApiKey": "{{provider}} cần khóa API. Hãy nhập vào ô Khóa API ở trên.",
+        "invalidApiKey": "Khóa API chứa ký tự không thể gửi đi. Hãy nhập lại.",
+        "invalidAddress": "{{address}} không phải địa chỉ máy chủ mà Handy dùng được. Địa chỉ cần có dạng http://localhost:13305/api/v1.",
+        "unreachable": "Không thể kết nối tới máy chủ tại {{address}}. Hãy đảm bảo máy chủ đang chạy và địa chỉ đúng.",
+        "timeout": "Máy chủ tại {{address}} không trả lời kịp. Nếu máy chủ vẫn đang tải mô hình, hãy thử lại sau một phút.",
+        "unauthorized": "Máy chủ tại {{address}} không chấp nhận khóa API (lỗi {{status}}). Hãy kiểm tra ô Khóa API.",
+        "modelNotFound": "Máy chủ tại {{address}} không có mô hình “{{model}}”. Hãy chọn mô hình khác ở trên.",
+        "notFound": "Không có gì trả lời tại {{address}} (lỗi 404). Hãy kiểm tra địa chỉ.",
+        "serverError": "Máy chủ tại {{address}} trả lời bằng một lỗi (lỗi {{status}}).",
+        "serverErrorNoStatus": "{{provider}} trả lời bằng một lỗi.",
+        "noAnswer": "{{provider}} trả lời mà không có văn bản. Hãy thử mô hình khác.",
+        "badAnswer": "{{provider}} gửi một câu trả lời mà Handy không đọc được.",
+        "noChatModels": "{{provider}} tại {{address}} không có mô hình trò chuyện nào. Hãy tải một mô hình trong Lemonade rồi nhấn nút làm mới.",
+        "otherModels": "Các mô hình trên máy chủ không thể làm gọn văn bản: {{models}}",
+        "internal": "Đã xảy ra lỗi bên trong Handy.",
+        "detail": "Chi tiết: {{detail}}"
+      }
+    },
+    "transcribeFiles": {
+      "title": "Phiên âm tệp",
+      "description": "Chuyển các bản ghi âm có sẵn thành văn bản ngay trên máy tính này. Tệp của bạn không bao giờ rời khỏi thiết bị.",
+      "settingsNote": "Sử dụng mô hình bạn đã chọn cùng các cài đặt ngôn ngữ, dịch, từ tùy chỉnh và từ đệm của bạn.",
+      "settingsNoteLemonade": "Sử dụng các cài đặt ngôn ngữ, từ tùy chỉnh và từ đệm của bạn.",
+      "settingsNoteOwnModel": "Sử dụng mô hình cho bản ghi âm cùng các cài đặt ngôn ngữ, dịch, từ tùy chỉnh và từ đệm của bạn.",
+      "model": "Mô hình: {{model}}",
+      "modelLemonade": "Mô hình: {{model}} trên Lemonade Server",
+      "noModel": "Chọn một mô hình đã tải xuống ở trang Mô hình để phiên âm tệp.",
+      "noLemonadeModel": "Chọn một mô hình Lemonade để phiên âm tệp.",
+      "noRecordingsModel": "Mô hình cho bản ghi âm của bạn chưa được tải xuống. Hãy chọn mô hình khác ở trên hoặc tải xuống ở trang Mô hình.",
+      "dropzone": {
+        "title": "Thả tệp âm thanh hoặc video vào đây",
+        "hint": "Phỏng vấn, cuộc họp, bài giảng và ghi chú giọng nói với mọi độ dài",
+        "active": "Thả ra để thêm",
+        "choose": "Chọn tệp…",
+        "skipped": "Đã bỏ qua các tệp không phải âm thanh hoặc video: {{number}}"
+      },
+      "picker": {
+        "title": "Chọn bản ghi âm",
+        "filterName": "Tệp âm thanh và video"
+      },
+      "formats": {
+        "native": "Hỗ trợ {{formats}}",
+        "ffmpegAvailable": "Các định dạng khác như Opus, WebM, WMA và DSS được mở bằng ffmpeg.",
+        "ffmpegMissing": "Cài đặt ffmpeg để mở thêm Opus, WebM, WMA, DSS và các định dạng khác."
+      },
+      "saveToHistory": {
+        "label": "Lưu vào lịch sử",
+        "description": "Bản chép lời hoàn tất được lưu và gắn sao để tính năng tự động dọn dẹp giữ lại chúng."
+      },
+      "autosave": {
+        "title": "Lưu bản chép lời",
+        "enabled": {
+          "label": "Tự động lưu bản chép lời",
+          "description": "Khi một tệp hoặc cuộc họp được phiên âm xong, bản chép lời sẽ được lưu thành tệp mà bạn có thể mở bằng Word hoặc bất kỳ trình soạn thảo văn bản nào."
+        },
+        "location": {
+          "label": "Lưu vào",
+          "description": "“Cạnh bản ghi âm” đặt bản chép lời trong thư mục của bản ghi âm (với cuộc họp là thư mục riêng của cuộc họp). Nếu không thể ghi vào một thư mục, Handy sẽ dùng Handy Transcripts trong thư mục Tài liệu của bạn.",
+          "nextToRecording": "Cạnh bản ghi âm",
+          "folder": "Thư mục do tôi chọn…"
+        },
+        "chooseFolder": "Chọn thư mục…",
+        "folderPicker": "Chọn thư mục cho bản chép lời",
+        "format": {
+          "label": "Định dạng tệp",
+          "description": "Tài liệu Word và Markdown có tên người nói và thời gian. Văn bản thuần có tên người nói."
+        },
+        "note": "Tệp hiện có không bao giờ bị thay thế: thay vào đó sẽ dùng tên mới như “interview (2).docx”. Bản chép lời bị thiếu đoạn có tên kết thúc bằng “(incomplete)”.",
+        "saveError": "Không thể lưu cài đặt: {{error}}"
+      },
+      "engine": {
+        "title": "Công cụ phiên âm",
+        "label": "Phiên âm bằng",
+        "description": "Nhập bằng giọng nói luôn dùng mô hình riêng của Handy. Lựa chọn này chỉ áp dụng cho tệp.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Mô hình cho bản ghi âm",
+        "description": "Bản ghi âm có thể dùng một mô hình chậm hơn nhưng chính xác hơn mô hình nhập bằng giọng nói. Mô hình này chạy riêng và chỉ được tải trong lúc phiên âm tệp, nên mô hình nhập bằng giọng nói của bạn luôn sẵn sàng. Cả hai mô hình phải vừa trong bộ nhớ.",
+        "same": "Giống nhập bằng giọng nói ({{model}})",
+        "sameNoModel": "Giống nhập bằng giọng nói",
+        "timestamps": "(có dấu thời gian)",
+        "noTimestamps": "(không có dấu thời gian)",
+        "switchWarning": "Tệp này dùng mô hình nhập bằng giọng nói của bạn, nên đổi mô hình nhập bằng giọng nói lúc này sẽ dừng nó. Để tách riêng hai việc, hãy chọn một mô hình khác cho bản ghi âm.",
+        "onCpu": "Bản ghi âm đang chạy trên bộ xử lý vì bộ nhớ đồ họa không đủ cho cả hai mô hình. Hãy chọn một mô hình nhỏ hơn cho bản ghi âm để dùng card đồ họa."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Địa chỉ máy chủ",
+          "description": "Thường là http://localhost:13305. Các phiên bản Lemonade cũ hơn dùng cổng 8000."
+        },
+        "apiKey": {
+          "label": "Khóa API",
+          "description": "Chỉ cần khi Lemonade Server của bạn yêu cầu.",
+          "placeholder": "Tùy chọn"
+        },
+        "model": {
+          "label": "Mô hình",
+          "description": "Mô hình Lemonade dùng để phiên âm tệp của bạn, chẳng hạn Whisper-Base.",
+          "placeholder": "Chọn một mô hình Whisper",
+          "notDownloaded": "{{model}} (tải xuống khi dùng lần đầu)",
+          "none": "Không tìm thấy mô hình phiên âm nào trên máy chủ này.",
+          "use": "Dùng “{{model}}”"
+        },
+        "test": "Kiểm tra kết nối",
+        "testing": "Đang kết nối…",
+        "connected": "Đã kết nối. Mô hình phiên âm khả dụng: {{number}}",
+        "checkFailed": "Không thể kiểm tra Lemonade Server: {{error}}",
+        "saveError": "Không thể lưu cài đặt Lemonade: {{error}}",
+        "firstChunkSlow": "Lemonade có thể đang tải xuống hoặc nạp mô hình. Lần đầu có thể mất vài phút.",
+        "errors": {
+          "invalidUrl": "Nhập địa chỉ dạng http://localhost:13305.",
+          "unreachable": "Không thể kết nối tới Lemonade Server tại {{url}}. Hãy đảm bảo máy chủ đang chạy.",
+          "timeout": "Lemonade Server không phản hồi kịp thời.",
+          "unauthorized": "Lemonade Server không chấp nhận khóa API.",
+          "modelNotFound": "Lemonade Server không có mô hình này.",
+          "http": "Lemonade Server trả về lỗi.",
+          "badResponse": "Lemonade Server gửi phản hồi mà Handy không đọc được.",
+          "cancelled": "Đã hủy kiểm tra kết nối."
+        },
+        "notes": {
+          "noTranslate": "Không thể dùng Dịch sang tiếng Anh với Lemonade Server. Tệp sẽ được phiên âm theo ngôn ngữ được nói.",
+          "remote": "Địa chỉ này không nằm trên máy tính này. Bản ghi âm của bạn sẽ được gửi tới đó."
+        }
+      },
+      "speakers": {
+        "label": "Gắn nhãn người nói",
+        "description": "Đánh dấu ai nói gì, tối đa 4 người nói. Chạy trên máy tính này và cần tải xuống một lần {{size}} MB.",
+        "download": "Tải xuống mô hình người nói ({{size}} MB)",
+        "downloading": "Đang tải xuống mô hình người nói… {{percent}}%",
+        "verifying": "Đang kiểm tra bản tải xuống…",
+        "cancelDownload": "Hủy tải xuống",
+        "downloadFailed": "Không thể tải xuống mô hình người nói: {{error}}",
+        "installed": "Đã cài đặt mô hình người nói ({{size}} MB)",
+        "remove": "Gỡ mô hình người nói",
+        "removeError": "Không thể gỡ mô hình người nói: {{error}}",
+        "removeConfirm": "Gỡ mô hình người nói? Bạn sẽ cần tải lại mô hình ({{size}} MB) để gắn nhãn người nói.",
+        "license": "Mô hình người nói do NVIDIA phát triển, theo giấy phép NVIDIA Open Model License (<page>trang mô hình</page>).",
+        "title": "Người nói",
+        "defaultName": "Người nói {{number}}",
+        "rename": "Đổi tên {{name}}",
+        "nameLabel": "Tên mới cho {{name}}",
+        "save": "Lưu",
+        "cancel": "Hủy",
+        "renameError": "Không thể đổi tên người nói: {{error}}",
+        "approximate": "Thời điểm đổi người nói chỉ là ước tính vì mô hình này không cung cấp dấu thời gian.",
+        "unassigned": "Một số đoạn không khớp được với người nói nào.",
+        "none": "Bản chép lời này chưa có nhãn người nói.",
+        "labelAction": "Gắn nhãn người nói",
+        "labelHint": "Nhãn người nói được tạo trên máy tính này từ bản ghi âm gốc, {{file}}. Bản ghi âm dài sẽ mất vài phút.",
+        "needsModel": "Gắn nhãn người nói cần mô hình người nói, tải xuống một lần {{size}} MB.",
+        "labelError": "Không thể thêm nhãn người nói: {{error}}",
+        "findRecording": "Tìm bản ghi âm…",
+        "findRecordingHint": "Chọn bản ghi âm đã bị di chuyển. Đó phải là đúng tệp đã được phiên âm.",
+        "relabel": "Gắn nhãn lại…",
+        "relabelTitle": "Gắn nhãn người nói lại",
+        "relabelConfirm": "Gắn nhãn lại người nói từ bản ghi âm? Tên, các lần gộp và thay đổi đoạn sẽ bị mất.",
+        "mergeInto": "Gộp {{name}} vào người nói khác",
+        "mergePrompt": "Gộp {{name}} vào:",
+        "mergeTitle": "Gộp người nói",
+        "mergeConfirm": "Gộp {{from}} vào {{into}}? Tất cả các đoạn của {{from}} sẽ được đánh dấu là {{into}}. Bạn có thể hoàn tác cho đến khi đóng bản chép lời.",
+        "mergeError": "Không thể gộp người nói: {{error}}",
+        "changeSpeaker": "Đổi người nói của đoạn này ({{name}})",
+        "changeSpeakerPrompt": "Ai đã nói câu này?",
+        "newSpeaker": "Người nói mới",
+        "unknownSpeaker": "Người nói không xác định",
+        "changeSpeakerError": "Không thể đổi người nói: {{error}}",
+        "undo": "Hoàn tác",
+        "undoError": "Không thể hoàn tác: {{error}}",
+        "jobKind": "Nhãn người nói",
+        "state": {
+          "running": "Đang xác định người nói…",
+          "done": "Số người nói: {{number}}",
+          "failed": "Không thể gắn nhãn người nói",
+          "skipped": {
+            "modelMissing": "Đã bỏ qua nhãn người nói: chưa tải xuống mô hình người nói.",
+            "noSpeech": "Đã bỏ qua nhãn người nói: không tìm thấy giọng nói."
+          }
+        }
+      },
+      "queue": {
+        "title": "Tệp",
+        "cancelAll": "Hủy tất cả",
+        "clearFinished": "Xóa mục đã xong"
+      },
+      "status": {
+        "queued": "Đang chờ bắt đầu",
+        "preparing": "Đang chuẩn bị…",
+        "waiting": "Tạm dừng trong lúc bạn nhập bằng giọng nói",
+        "transcribing": "Đang phiên âm…",
+        "completed": "Xong",
+        "partial": "Xong, có đoạn bị thiếu",
+        "cancelled": "Đã hủy",
+        "failed": "Thất bại"
+      },
+      "progress": "{{processed}} / {{total}}",
+      "progressNoTotal": "Đã phiên âm {{processed}}",
+      "elapsed": "Thời gian đã qua: {{time}}",
+      "took": "Mất {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Còn chưa đến một phút",
+        "minutes": "Còn khoảng {{minutes}} phút",
+        "hours": "Còn khoảng {{hours}} giờ {{minutes}} phút",
+        "hoursOnly": "Còn khoảng {{hours}} giờ"
+      },
+      "noSpeech": "Không tìm thấy giọng nói trong tệp này.",
+      "actions": {
+        "cancel": "Hủy",
+        "remove": "Xóa khỏi danh sách",
+        "removeWhileLabelling": "Không thể xóa khi đang xác định người nói",
+        "view": "Xem bản chép lời",
+        "copy": "Sao chép bản chép lời",
+        "showFile": "Hiển thị tệp"
+      },
+      "copied": "Đã sao chép bản chép lời vào bảng nhớ tạm.",
+      "copyError": "Không thể sao chép bản chép lời.",
+      "savedToHistory": "Đã lưu vào lịch sử",
+      "ready": {
+        "title": "Bản chép lời đã sẵn sàng: {{file}}",
+        "open": "Mở trong Handy",
+        "showFile": "Hiển thị tệp"
+      },
+      "saved": {
+        "savedTo": "Đã lưu vào {{path}}",
+        "open": "Mở",
+        "showInFolder": "Hiển thị trong thư mục",
+        "fallback": "Không thể lưu vào {{folder}}, vì vậy bản chép lời đã được lưu vào Handy Transcripts trong thư mục Tài liệu của bạn.",
+        "failed": "Không thể lưu bản chép lời thành tệp. Hãy dùng Xuất để lưu.",
+        "openError": "Không thể mở bản chép lời: {{error}}",
+        "notFound": "Không tìm thấy bản chép lời đã lưu. Có thể tệp đã bị di chuyển hoặc xóa.",
+        "exportAgain": "Tệp này không thay đổi khi bạn chỉnh sửa người nói ở đây. Hãy xuất lại để bao gồm các thay đổi sau này."
+      },
+      "errors": {
+        "notFound": "Không thể tìm thấy hoặc mở tệp.",
+        "unsupportedFormat": "Loại tệp này không được hỗ trợ.",
+        "needsFfmpeg": "Định dạng này cần ffmpeg. Hãy cài đặt ffmpeg rồi thử lại.",
+        "noModel": "Chưa chọn mô hình phiên âm.",
+        "modelChanged": "Mô hình đã thay đổi trong khi tệp này đang được phiên âm.",
+        "decodeFailed": "Không thể đọc âm thanh trong tệp này.",
+        "engineFailed": "Phiên âm thất bại.",
+        "serverUnreachable": "Không thể kết nối tới Lemonade Server. Hãy đảm bảo máy chủ đang chạy.",
+        "serverUnauthorized": "Lemonade Server không chấp nhận khóa API.",
+        "serverModelMissing": "Lemonade Server không có mô hình đã chọn.",
+        "internal": "Đã xảy ra lỗi.",
+        "sourceChanged": "Bản ghi âm ở vị trí này đã thay đổi kể từ khi được phiên âm, nên không thể khớp người nói của nó với bản chép lời này. Nếu đó là cùng một bản ghi âm, hãy chọn nó bằng “Tìm bản ghi âm…”.",
+        "speakerLabelsFailed": "Gắn nhãn người nói thất bại.",
+        "enqueue": "Không thể thêm tệp: {{error}}",
+        "cancel": "Không thể hủy: {{error}}",
+        "remove": "Không thể xóa khỏi danh sách: {{error}}",
+        "loadTranscript": "Không thể tải bản chép lời: {{error}}"
+      },
+      "transcript": {
+        "title": "Bản chép lời: {{file}}",
+        "live": "Đang cập nhật trong khi phiên âm",
+        "partial": "Bản chép lời này chưa đầy đủ: {{reason}}",
+        "partialNoReason": "Bản chép lời này chưa đầy đủ.",
+        "approximateTimes": "Thời gian chỉ là ước tính vì mô hình này không cung cấp dấu thời gian.",
+        "empty": "Không tìm thấy giọng nói.",
+        "segmentsLabel": "Bản chép lời kèm dấu thời gian"
+      },
+      "export": {
+        "button": "Xuất…",
+        "dialogTitle": "Xuất tệp bản chép lời",
+        "formats": {
+          "docx": "Tài liệu Word (.docx)",
+          "txt": "Văn bản thuần (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Phụ đề SubRip (.srt)",
+          "vtt": "Phụ đề WebVTT (.vtt)"
+        },
+        "success": "Đã xuất tệp bản chép lời.",
+        "showInFolder": "Hiển thị trong thư mục",
+        "error": "Xuất tệp thất bại: {{error}}"
       }
     },
     "history": {
@@ -477,7 +850,14 @@
       "retranscribe": "Phiên âm lại",
       "retranscribeError": "Không thể phiên âm lại. Vui lòng thử lại.",
       "transcribing": "Đang phiên âm...",
-      "transcriptionFailed": "Phiên âm thất bại. Bạn có thể phiên âm lại bằng biểu tượng thử lại."
+      "transcriptionFailed": "Phiên âm thất bại. Bạn có thể phiên âm lại bằng biểu tượng thử lại.",
+      "openTranscript": "Mở bản chép lời",
+      "showOriginal": "Hiển thị tệp gốc",
+      "originalMissing": "Tệp gốc đã bị di chuyển hoặc xóa.",
+      "fileDuration": "Thời lượng {{duration}}",
+      "incomplete": "Chưa đầy đủ",
+      "speakerCount": "Số người nói: {{number}}",
+      "retranscribeFileUnavailable": "Để phiên âm lại tệp này, hãy dùng trang Phiên âm."
     },
     "debug": {
       "title": "Gỡ lỗi",
@@ -644,6 +1024,142 @@
       "whatsNewUpdates": {
         "label": "Hiển thị điểm mới",
         "description": "Hiển thị ghi chú phát hành sau khi Handy cập nhật"
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

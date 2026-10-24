@@ -7,16 +7,23 @@
     "model": "Model",
     "quit": "Afsluiten",
     "cancel": "Annuleren",
-    "secureInputWarning": "⚠ Sneltoetsen geblokkeerd door Secure Input"
+    "secureInputWarning": "⚠ Sneltoetsen geblokkeerd door Secure Input",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "Algemeen",
+    "transcribe": "Transcriberen",
+    "transcribeProgress": "Transcriberen: {{percent}} klaar",
+    "transcribeRunning": "Transcriberen…",
+    "speakersProgress": "Sprekers identificeren: {{percent}} klaar",
+    "speakersRunning": "Sprekers identificeren…",
     "models": "Modellen",
     "advanced": "Geavanceerd",
     "postProcessing": "Naverwerking",
     "history": "Geschiedenis",
     "debug": "Probleemoplossing",
-    "about": "Over Handy"
+    "about": "Over Handy",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "Kies een transcriptiemodel om aan de slag te gaan",
@@ -124,6 +131,9 @@
     "custom": "Aangepast",
     "legacy": "Klassiek",
     "streaming": "Streaming",
+    "bestForRecordings": "Beste voor opnames",
+    "timestamps": "Tijdstempels",
+    "noTimestamps": "Geen tijdstempels",
     "active": "Actief",
     "switching": "Wisselen...",
     "noModelsAvailable": "Geen modellen beschikbaar",
@@ -151,7 +161,10 @@
       "languageOnly": "Alleen {{language}}",
       "translation": "Kan vertalen naar het Engels",
       "translate": "Vertalen",
-      "streaming": "Toont live transcriptie tijdens het spreken"
+      "streaming": "Toont live transcriptie tijdens het spreken",
+      "bestForRecordings": "Nauwkeurig, met een tijd voor elke zin. Een goede keuze voor opnames en vergaderingen.",
+      "timestamps": "Geeft een tijd voor elke zin, zodat de transcriptie en de sprekeraanduiding overeenkomen met de opname.",
+      "noTimestamps": "De tijden zijn slechts bij benadering, ongeveer elke 30 seconden."
     }
   },
   "settings": {
@@ -179,6 +192,10 @@
           "transcribe_with_post_process": {
             "name": "Sneltoets voor naverwerking",
             "description": "Optioneel: Een specifieke sneltoets die altijd AI-naverwerking toepast op je transcriptie."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -212,11 +229,13 @@
     "models": {
       "title": "Transcriptiemodellen",
       "description": "Selecteer een transcriptiemodel of download extra modellen. Verschillende modellen bieden variërende niveaus van nauwkeurigheid en snelheid.",
+      "recordingsTip": "Kies voor opnames en vergaderingen een model met het label ‘{{badge}}’. Parakeet TDT 0.6B v3 is de beste keuze voor vrijwel alles; Whisper Large v3 Turbo kan meer talen aan.",
       "searchPlaceholder": "Modellen zoeken op naam...",
       "yourModels": "Gedownloade modellen",
       "availableModels": "Beschikbaar voor download",
       "deleteConfirm": "Weet je zeker dat je {{modelName}} wilt verwijderen? Je moet het model opnieuw downloaden om het weer te gebruiken.",
       "deleteActiveConfirm": "{{modelName}} is je actieve model. Als je dit verwijdert, stoppen de transcripties totdat je een nieuw model selecteert. Weet je het zeker?",
+      "deleteRecordingsConfirm": "{{modelName}} is je model voor opnames. Als je het verwijdert, gebruiken opnames je dicteermodel. Weet je het zeker?",
       "deleteTitle": "Model verwijderen",
       "filters": {
         "allLanguages": "Alle talen",
@@ -378,10 +397,47 @@
       "customWords": {
         "title": "Eigen woordenlijst",
         "description": "Help ondersteunde modellen namen en vaktermen te herkennen. Fuzzy-correctie is momenteel beperkt tot woorden met de letters A–Z en cijfers.",
-        "placeholder": "Woord toevoegen",
         "add": "Toevoegen",
         "remove": "{{word}} verwijderen",
-        "duplicate": "\"{{word}}\" bestaat al"
+        "duplicate": "\"{{word}}\" bestaat al",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "Spraakactiviteitsdetectie (VAD)",
@@ -410,6 +466,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Zo werkt het",
+        "intro": "Naverwerking stuurt wat je dicteert naar een AI-model, dat het opschoont voordat Handy het plakt.",
+        "shortcut": "Het werkt als je dicteert met de sneltoets voor naverwerking ({{shortcut}}), niet met je normale sneltoets ({{normal}}), die je woorden plakt zoals je ze zei.",
+        "shortcutEvery": "Het werkt bij elk dictaat: met de sneltoets voor naverwerking ({{shortcut}}) en met je normale sneltoets ({{normal}}).",
+        "notSet": "niet ingesteld",
+        "stepProvider": "Kies een provider. Kies voor Lemonade op deze computer Lemonade Server.",
+        "stepModel": "Kies een model. De verversknop laadt de modellen van de server.",
+        "stepPrompt": "Kies een prompt of maak er zelf een.",
+        "stepTest": "Druk onderaan deze pagina op Testen om het uit te proberen.",
+        "fallback": "Als het opschonen mislukt, plakt Handy je woorden zoals je ze zei.",
+        "everyDictation": {
+          "label": "Elk dictaat opschonen",
+          "description": "Schoon ook dictaten met je normale sneltoets op, niet alleen die met de sneltoets voor naverwerking."
+        }
+      },
       "hotkey": {
         "title": "Sneltoets"
       },
@@ -424,21 +496,29 @@
         },
         "baseUrl": {
           "title": "Basis-URL",
-          "description": "API-basis-URL voor de geselecteerde provider. Alleen de aangepaste provider kan worden bewerkt.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Het adres van de OpenAI-compatibele API van je server, bijvoorbeeld http://localhost:11434/v1.",
+          "descriptionLemonade": "Het adres van je Lemonade Server, meestal http://localhost:13305/api/v1. Oudere versies van Lemonade gebruikten poort 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Voer een adres in zoals http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "API-sleutel",
           "description": "API-sleutel voor de geselecteerde provider.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Alleen nodig als je server erom vraagt.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Optioneel"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Geef de model-ID op die door je aangepaste eindpunt wordt verwacht.",
           "descriptionDefault": "Kies een model dat door de geselecteerde provider wordt aangeboden.",
+          "descriptionLemonade": "Een chatmodel op je Lemonade Server. Spraak-, embedding- en beeldmodellen worden niet getoond.",
           "placeholderWithOptions": "Zoek of selecteer een model",
           "placeholderNoOptions": "Typ een modelnaam",
-          "refreshModels": "Modellen verversen"
+          "refreshModels": "Modellen verversen",
+          "use": "„{{model}}” gebruiken",
+          "loadError": "De modellen konden niet worden geladen. {{problem}}"
         }
       },
       "prompts": {
@@ -455,12 +535,305 @@
         "promptInstructions": "Prompt-instructies",
         "promptInstructionsPlaceholder": "Schrijf de instructies die na de transcriptie moeten worden uitgevoerd. Voorbeeld: Verbeter de grammatica en helderheid van de volgende tekst: ${output}",
         "promptTip": "Tip: Gebruik <code>${output}</code> om de getranscribeerde tekst in je prompt in te voegen.",
+        "promptTipNoMarker": "Zonder ${output} stuurt Handy de transcriptie na je prompt, tussen {{tag}}-tags.",
         "updatePrompt": "Prompt bijwerken",
         "deletePrompt": "Prompt verwijderen",
         "createPrompt": "Prompt maken",
         "cancel": "Annuleren",
         "selectToEdit": "Selecteer hierboven een prompt om de details te bekijken en te bewerken.",
         "createFirst": "Klik hierboven op 'Nieuwe prompt maken' om je eerste naverwerkingsprompt aan te maken."
+      },
+      "test": {
+        "title": "Uitproberen",
+        "label": "Voorbeelddictaat",
+        "description": "Schoont deze tekst op met de provider, het model en de opgeslagen prompt die hierboven zijn gekozen, op dezelfde manier als een dictaat.",
+        "sample": "eh dus kun je me uh het rapport voor vrijdag sturen",
+        "button": "Testen",
+        "testing": "Bezig met testen…",
+        "result": "Resultaat ({{seconds}} s):",
+        "emptyResult": "Het model antwoordde zonder tekst. Met een opschoonprompt betekent dat dat het niets vond dat het bewaren waard was.",
+        "failed": "De test kon niet worden uitgevoerd: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Typ wat tekst om mee te testen.",
+        "noProvider": "Kies hierboven een provider.",
+        "noModel": "Kies hierboven een model voor {{provider}}. De verversknop naast Model laadt de modellen van de server.",
+        "noPrompt": "Kies hieronder een prompt.",
+        "emptyPrompt": "De gekozen prompt is leeg. Schrijf de instructies en druk dan op Prompt bijwerken.",
+        "missingApiKey": "{{provider}} heeft een API-sleutel nodig. Voer die hierboven in bij API-sleutel.",
+        "invalidApiKey": "De API-sleutel bevat tekens die niet kunnen worden verzonden. Voer hem opnieuw in.",
+        "invalidAddress": "{{address}} is geen serveradres dat Handy kan gebruiken. Het moet eruitzien als http://localhost:13305/api/v1.",
+        "unreachable": "De server op {{address}} is niet bereikbaar. Controleer of hij draait en of het adres klopt.",
+        "timeout": "De server op {{address}} antwoordde niet op tijd. Als hij het model nog laadt, probeer het dan over een minuut opnieuw.",
+        "unauthorized": "De server op {{address}} accepteerde de API-sleutel niet (fout {{status}}). Controleer het veld API-sleutel.",
+        "modelNotFound": "De server op {{address}} heeft het model „{{model}}” niet. Kies hierboven een ander model.",
+        "notFound": "Er antwoordde niets op {{address}} (fout 404). Controleer het adres.",
+        "serverError": "De server op {{address}} antwoordde met een fout (fout {{status}}).",
+        "serverErrorNoStatus": "{{provider}} antwoordde met een fout.",
+        "noAnswer": "{{provider}} antwoordde zonder tekst. Probeer een ander model.",
+        "badAnswer": "{{provider}} stuurde een antwoord dat Handy niet kon lezen.",
+        "noChatModels": "{{provider}} op {{address}} heeft geen chatmodellen. Download er een in Lemonade en druk dan op de verversknop.",
+        "otherModels": "Modellen op de server die geen tekst kunnen opschonen: {{models}}",
+        "internal": "Er ging iets mis in Handy.",
+        "detail": "Details: {{detail}}"
+      }
+    },
+    "transcribeFiles": {
+      "title": "Bestanden transcriberen",
+      "description": "Zet bestaande opnames om in tekst op deze computer. Je bestanden verlaten je apparaat nooit.",
+      "settingsNote": "Gebruikt je geselecteerde model en je instellingen voor taal, vertaling, eigen woordenlijst en opvulwoorden.",
+      "settingsNoteLemonade": "Gebruikt je instellingen voor taal, eigen woordenlijst en opvulwoorden.",
+      "settingsNoteOwnModel": "Gebruikt je model voor opnames en je instellingen voor taal, vertaling, eigen woordenlijst en opvulwoorden.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} op Lemonade Server",
+      "noModel": "Selecteer een gedownload model op de pagina Modellen om bestanden te transcriberen.",
+      "noLemonadeModel": "Kies een Lemonade-model om bestanden te transcriberen.",
+      "noRecordingsModel": "Je model voor opnames is niet gedownload. Kies hierboven een ander of download het op de pagina Modellen.",
+      "dropzone": {
+        "title": "Sleep audio- of videobestanden hierheen",
+        "hint": "Interviews, vergaderingen, colleges en spraakmemo's van elke lengte",
+        "active": "Loslaten om toe te voegen",
+        "choose": "Bestanden kiezen…",
+        "skipped": "Overgeslagen bestanden die geen audio of video zijn: {{number}}"
+      },
+      "picker": {
+        "title": "Opnames kiezen",
+        "filterName": "Audio- en videobestanden"
+      },
+      "formats": {
+        "native": "Opent {{formats}}",
+        "ffmpegAvailable": "Andere formaten zoals Opus, WebM, WMA en DSS worden geopend met ffmpeg.",
+        "ffmpegMissing": "Installeer ffmpeg om ook Opus, WebM, WMA, DSS en andere formaten te openen."
+      },
+      "saveToHistory": {
+        "label": "Opslaan in geschiedenis",
+        "description": "Voltooide transcripties worden opgeslagen en met een ster gemarkeerd, zodat automatisch opschonen ze bewaart."
+      },
+      "autosave": {
+        "title": "Transcripties opslaan",
+        "enabled": {
+          "label": "Transcripties automatisch opslaan",
+          "description": "Als een bestand of vergadering is getranscribeerd, wordt de transcriptie opgeslagen als bestand dat je in Word of een teksteditor kunt openen."
+        },
+        "location": {
+          "label": "Opslaan in",
+          "description": "‘Naast de opname’ zet de transcriptie in de map van de opname (bij vergaderingen in de eigen map van de vergadering). Als er niet naar een map kan worden geschreven, gebruikt Handy Handy Transcripts in je map Documenten.",
+          "nextToRecording": "Naast de opname",
+          "folder": "Een map die ik kies…"
+        },
+        "chooseFolder": "Map kiezen…",
+        "folderPicker": "Kies een map voor transcripties",
+        "format": {
+          "label": "Bestandsindeling",
+          "description": "Word-documenten en Markdown bevatten sprekersnamen en tijden. Platte tekst bevat sprekersnamen."
+        },
+        "note": "Bestaande bestanden worden nooit vervangen: in plaats daarvan wordt een nieuwe naam zoals ‘interview (2).docx’ gebruikt. Een transcriptie met gaten eindigt op ‘(incomplete)’.",
+        "saveError": "Kan de instelling niet opslaan: {{error}}"
+      },
+      "engine": {
+        "title": "Transcriptie-engine",
+        "label": "Transcriberen met",
+        "description": "Dicteren gebruikt altijd het eigen model van Handy. Deze keuze geldt alleen voor bestanden.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model voor opnames",
+        "description": "Opnames kunnen een trager maar nauwkeuriger model gebruiken dan dicteren. Het draait apart en wordt alleen geladen terwijl bestanden worden getranscribeerd, zodat je dicteermodel klaar blijft. Beide modellen moeten in het geheugen passen.",
+        "same": "Zelfde als dicteren ({{model}})",
+        "sameNoModel": "Zelfde als dicteren",
+        "timestamps": "(tijdstempels)",
+        "noTimestamps": "(geen tijdstempels)",
+        "switchWarning": "Dit bestand gebruikt je dicteermodel, dus als je nu van dicteermodel wisselt, stopt het. Kies een ander model voor opnames om ze gescheiden te houden.",
+        "onCpu": "Opnames draaien op de processor, omdat er niet genoeg grafisch geheugen is voor beide modellen. Kies een kleiner model voor opnames om de grafische kaart te gebruiken."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Serveradres",
+          "description": "Meestal http://localhost:13305. Oudere versies van Lemonade gebruikten poort 8000."
+        },
+        "apiKey": {
+          "label": "API-sleutel",
+          "description": "Alleen nodig als je Lemonade Server erom vraagt.",
+          "placeholder": "Optioneel"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Het Lemonade-model dat je bestanden transcribeert, zoals Whisper-Base.",
+          "placeholder": "Kies een Whisper-model",
+          "notDownloaded": "{{model}} (wordt bij eerste gebruik gedownload)",
+          "none": "Geen transcriptiemodellen gevonden op deze server.",
+          "use": "“{{model}}” gebruiken"
+        },
+        "test": "Verbinding testen",
+        "testing": "Verbinden…",
+        "connected": "Verbonden. Beschikbare transcriptiemodellen: {{number}}",
+        "checkFailed": "Lemonade Server controleren mislukt: {{error}}",
+        "saveError": "Lemonade-instellingen opslaan mislukt: {{error}}",
+        "firstChunkSlow": "Lemonade is mogelijk het model aan het downloaden of laden. De eerste keer kan dit enkele minuten duren.",
+        "errors": {
+          "invalidUrl": "Voer een adres in zoals http://localhost:13305.",
+          "unreachable": "Lemonade Server op {{url}} is niet bereikbaar. Controleer of de server draait.",
+          "timeout": "Lemonade Server reageerde niet op tijd.",
+          "unauthorized": "Lemonade Server heeft de API-sleutel niet geaccepteerd.",
+          "modelNotFound": "Lemonade Server heeft dit model niet.",
+          "http": "Lemonade Server gaf een fout terug.",
+          "badResponse": "Lemonade Server stuurde een antwoord dat Handy niet kon lezen.",
+          "cancelled": "De verbindingstest is geannuleerd."
+        },
+        "notes": {
+          "noTranslate": "Vertalen naar het Engels is niet beschikbaar met Lemonade Server. Bestanden worden getranscribeerd in de gesproken taal.",
+          "remote": "Dit adres staat niet op deze computer. Je opnames worden ernaartoe verzonden."
+        }
+      },
+      "speakers": {
+        "label": "Sprekers aanduiden",
+        "description": "Geef aan wie wat zei, voor maximaal 4 sprekers. Draait op deze computer en vereist een eenmalige download van {{size}} MB.",
+        "download": "Sprekermodel downloaden ({{size}} MB)",
+        "downloading": "Sprekermodel downloaden… {{percent}}%",
+        "verifying": "Download controleren…",
+        "cancelDownload": "Download annuleren",
+        "downloadFailed": "Sprekermodel downloaden mislukt: {{error}}",
+        "installed": "Sprekermodel geïnstalleerd ({{size}} MB)",
+        "remove": "Sprekermodel verwijderen",
+        "removeError": "Sprekermodel verwijderen mislukt: {{error}}",
+        "removeConfirm": "Sprekermodel verwijderen? Om sprekers aan te duiden moet je het opnieuw downloaden ({{size}} MB).",
+        "license": "Sprekermodel van NVIDIA, onder de NVIDIA Open Model License (<page>modelpagina</page>).",
+        "title": "Sprekers",
+        "defaultName": "Spreker {{number}}",
+        "rename": "{{name}} hernoemen",
+        "nameLabel": "Nieuwe naam voor {{name}}",
+        "save": "Opslaan",
+        "cancel": "Annuleren",
+        "renameError": "Spreker hernoemen mislukt: {{error}}",
+        "approximate": "Sprekerwisselingen zijn bij benadering omdat dit model geen tijdstempels geeft.",
+        "unassigned": "Sommige passages konden niet aan een spreker worden gekoppeld.",
+        "none": "Deze transcriptie heeft geen sprekeraanduiding.",
+        "labelAction": "Sprekers aanduiden",
+        "labelHint": "Sprekers worden op deze computer aangeduid op basis van de oorspronkelijke opname, {{file}}. Lange opnames duren een paar minuten.",
+        "needsModel": "Voor het aanduiden van sprekers is het sprekermodel nodig, een eenmalige download van {{size}} MB.",
+        "labelError": "Sprekers aanduiden mislukt: {{error}}",
+        "findRecording": "Opname zoeken…",
+        "findRecordingHint": "Kies de verplaatste opname. Het moet hetzelfde bestand zijn dat is getranscribeerd.",
+        "relabel": "Opnieuw aanduiden…",
+        "relabelTitle": "Sprekers opnieuw aanduiden",
+        "relabelConfirm": "Sprekers opnieuw aanduiden op basis van de opname? Namen, samenvoegingen en wijzigingen aan passages gaan verloren.",
+        "mergeInto": "{{name}} samenvoegen met een andere spreker",
+        "mergePrompt": "{{name}} samenvoegen met:",
+        "mergeTitle": "Sprekers samenvoegen",
+        "mergeConfirm": "{{from}} samenvoegen met {{into}}? Alle passages van {{from}} worden aan {{into}} toegewezen. Je kunt dit ongedaan maken tot je de transcriptie sluit.",
+        "mergeError": "Sprekers samenvoegen mislukt: {{error}}",
+        "changeSpeaker": "Spreker van deze passage wijzigen ({{name}})",
+        "changeSpeakerPrompt": "Wie zei dit?",
+        "newSpeaker": "Nieuwe spreker",
+        "unknownSpeaker": "Onbekende spreker",
+        "changeSpeakerError": "Spreker wijzigen mislukt: {{error}}",
+        "undo": "Ongedaan maken",
+        "undoError": "Ongedaan maken mislukt: {{error}}",
+        "jobKind": "Sprekeraanduiding",
+        "state": {
+          "running": "Sprekers identificeren…",
+          "done": "Sprekers: {{number}}",
+          "failed": "Sprekers aanduiden mislukt",
+          "skipped": {
+            "modelMissing": "Sprekeraanduiding overgeslagen: het sprekermodel is niet gedownload.",
+            "noSpeech": "Sprekeraanduiding overgeslagen: geen spraak gevonden."
+          }
+        }
+      },
+      "queue": {
+        "title": "Bestanden",
+        "cancelAll": "Alles annuleren",
+        "clearFinished": "Voltooide wissen"
+      },
+      "status": {
+        "queued": "Wacht op start",
+        "preparing": "Voorbereiden…",
+        "waiting": "Gepauzeerd tijdens het dicteren",
+        "transcribing": "Transcriberen…",
+        "completed": "Klaar",
+        "partial": "Klaar, met hiaten",
+        "cancelled": "Geannuleerd",
+        "failed": "Mislukt"
+      },
+      "progress": "{{processed}} van {{total}}",
+      "progressNoTotal": "{{processed}} getranscribeerd",
+      "elapsed": "Verstreken: {{time}}",
+      "took": "Duurde {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Nog minder dan een minuut",
+        "minutes": "Nog ongeveer {{minutes}} min",
+        "hours": "Nog ongeveer {{hours}} u {{minutes}} min",
+        "hoursOnly": "Nog ongeveer {{hours}} u"
+      },
+      "noSpeech": "Geen spraak gevonden in dit bestand.",
+      "actions": {
+        "cancel": "Annuleren",
+        "remove": "Verwijderen uit lijst",
+        "removeWhileLabelling": "Kan niet worden verwijderd terwijl sprekers worden geïdentificeerd",
+        "view": "Transcriptie bekijken",
+        "copy": "Transcriptie kopiëren",
+        "showFile": "Bestand tonen"
+      },
+      "copied": "Transcriptie naar klembord gekopieerd.",
+      "copyError": "Transcriptie kopiëren mislukt.",
+      "savedToHistory": "Opgeslagen in geschiedenis",
+      "ready": {
+        "title": "Transcriptie klaar: {{file}}",
+        "open": "Openen in Handy",
+        "showFile": "Bestand tonen"
+      },
+      "saved": {
+        "savedTo": "Opgeslagen in {{path}}",
+        "open": "Openen",
+        "showInFolder": "Tonen in map",
+        "fallback": "Opslaan in {{folder}} lukte niet, dus de transcriptie is opgeslagen in Handy Transcripts in je map Documenten.",
+        "failed": "De transcriptie kon niet als bestand worden opgeslagen. Gebruik Exporteren om haar op te slaan.",
+        "openError": "Kan de transcriptie niet openen: {{error}}",
+        "notFound": "De opgeslagen transcriptie is niet gevonden. Misschien is ze verplaatst of verwijderd.",
+        "exportAgain": "Dit bestand verandert niet als je hier sprekers bewerkt. Exporteer opnieuw om latere wijzigingen op te nemen."
+      },
+      "errors": {
+        "notFound": "Het bestand kan niet worden gevonden of geopend.",
+        "unsupportedFormat": "Dit bestandstype wordt niet ondersteund.",
+        "needsFfmpeg": "Dit formaat vereist ffmpeg. Installeer ffmpeg en probeer het opnieuw.",
+        "noModel": "Er is geen transcriptiemodel geselecteerd.",
+        "modelChanged": "Het model is gewijzigd terwijl dit bestand werd getranscribeerd.",
+        "decodeFailed": "De audio in dit bestand kon niet worden gelezen.",
+        "engineFailed": "Transcriptie mislukt.",
+        "serverUnreachable": "Lemonade Server is niet bereikbaar. Controleer of de server draait.",
+        "serverUnauthorized": "Lemonade Server heeft de API-sleutel niet geaccepteerd.",
+        "serverModelMissing": "Lemonade Server heeft het geselecteerde model niet.",
+        "internal": "Er is iets misgegaan.",
+        "sourceChanged": "De opname op deze locatie is gewijzigd sinds ze is getranscribeerd, dus de sprekers ervan kunnen niet aan deze transcriptie worden gekoppeld. Is het dezelfde opname, kies die dan met ‘Opname zoeken…’.",
+        "speakerLabelsFailed": "Sprekeraanduiding mislukt.",
+        "enqueue": "Bestanden toevoegen mislukt: {{error}}",
+        "cancel": "Annuleren mislukt: {{error}}",
+        "remove": "Verwijderen uit de lijst mislukt: {{error}}",
+        "loadTranscript": "Transcriptie laden mislukt: {{error}}"
+      },
+      "transcript": {
+        "title": "Transcriptie: {{file}}",
+        "live": "Wordt bijgewerkt tijdens het transcriberen",
+        "partial": "Deze transcriptie is onvolledig: {{reason}}",
+        "partialNoReason": "Deze transcriptie is onvolledig.",
+        "approximateTimes": "Tijden zijn bij benadering omdat dit model geen tijdstempels geeft.",
+        "empty": "Geen spraak gevonden.",
+        "segmentsLabel": "Transcriptie met tijdstempels"
+      },
+      "export": {
+        "button": "Exporteren…",
+        "dialogTitle": "Transcriptie exporteren",
+        "formats": {
+          "docx": "Word-document (.docx)",
+          "txt": "Platte tekst (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "SubRip-ondertitels (.srt)",
+          "vtt": "WebVTT-ondertitels (.vtt)"
+        },
+        "success": "Transcriptie geëxporteerd.",
+        "showInFolder": "Tonen in map",
+        "error": "Exporteren mislukt: {{error}}"
       }
     },
     "history": {
@@ -477,7 +850,14 @@
       "retranscribe": "Opnieuw transcriberen",
       "retranscribeError": "Opnieuw transcriberen mislukt. Probeer het opnieuw.",
       "transcribing": "Transcriberen...",
-      "transcriptionFailed": "Transcriptie mislukt. Je kunt het opnieuw proberen via het herlaad-pictogram."
+      "transcriptionFailed": "Transcriptie mislukt. Je kunt het opnieuw proberen via het herlaad-pictogram.",
+      "openTranscript": "Transcriptie openen",
+      "showOriginal": "Origineel bestand tonen",
+      "originalMissing": "Het originele bestand is verplaatst of verwijderd.",
+      "fileDuration": "Lengte {{duration}}",
+      "incomplete": "Onvolledig",
+      "speakerCount": "Sprekers: {{number}}",
+      "retranscribeFileUnavailable": "Gebruik de pagina Transcriberen om dit bestand opnieuw te transcriberen."
     },
     "debug": {
       "title": "Probleemoplossing",
@@ -644,6 +1024,142 @@
           "description": "Krachtige tensorbibliotheek voor lokale AI-verwerking",
           "details": "Handy's lokale spraak-naar-tekst is gebouwd op transcribe.cpp en ggml. Met dank aan het geweldige werk van Georgi Gerganov en alle bijdragers."
         }
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

@@ -7,16 +7,23 @@
     "model": "Model",
     "quit": "Ukončit",
     "cancel": "Zrušit",
-    "secureInputWarning": "⚠ Zkratky blokuje Secure Input"
+    "secureInputWarning": "⚠ Zkratky blokuje Secure Input",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "Obecné",
+    "transcribe": "Přepis",
+    "transcribeProgress": "Přepisuji: hotovo {{percent}}",
+    "transcribeRunning": "Přepisuji…",
+    "speakersProgress": "Rozpoznávám mluvčí: hotovo {{percent}}",
+    "speakersRunning": "Rozpoznávám mluvčí…",
     "models": "Modely",
     "advanced": "Pokročilé",
     "postProcessing": "Následné zpracování",
     "history": "Historie",
     "debug": "Ladění",
-    "about": "O aplikaci"
+    "about": "O aplikaci",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "Pro začátek vyberte model pro přepis",
@@ -123,6 +130,9 @@
   "modelSelector": {
     "custom": "Vlastní",
     "streaming": "Streaming",
+    "bestForRecordings": "Nejlepší pro nahrávky",
+    "timestamps": "Časové značky",
+    "noTimestamps": "Bez časových značek",
     "active": "Aktivní",
     "noModelsAvailable": "Nejsou dostupné žádné modely",
     "verifying": "Ověřování {{modelName}}...",
@@ -148,7 +158,10 @@
       "translate": "Přeložit do angličtiny",
       "singleLanguage": "Podporuje pouze tento jazyk",
       "languageOnly": "Pouze {{language}}",
-      "streaming": "Zobrazuje přepis živě, jak mluvíte"
+      "streaming": "Zobrazuje přepis živě, jak mluvíte",
+      "bestForRecordings": "Přesný, s časem u každé věty. Dobrá volba pro nahrávky a schůzky.",
+      "timestamps": "Udává čas u každé věty, takže přepis i označení mluvčích odpovídají nahrávce.",
+      "noTimestamps": "Časy jsou jen přibližné, zhruba po 30 sekundách."
     },
     "cancel": "Zrušit",
     "cancelDownload": "Zrušit stahování",
@@ -161,8 +174,10 @@
     "models": {
       "title": "Modely přepisu",
       "description": "Vyberte model přepisu nebo stáhněte další modely. Různé modely nabízejí různé úrovně přesnosti a rychlosti.",
+      "recordingsTip": "Pro nahrávky a schůzky vyberte model označený „{{badge}}“. Parakeet TDT 0.6B v3 je nejlepší univerzální volba; Whisper Large v3 Turbo zvládá více jazyků.",
       "deleteConfirm": "Opravdu chcete smazat {{modelName}}? Pro opětovné použití jej budete muset znovu stáhnout.",
       "deleteActiveConfirm": "{{modelName}} je váš aktivní model. Jeho smazáním se zastaví přepisy, dokud nevyberete nový model. Opravdu chcete pokračovat?",
+      "deleteRecordingsConfirm": "{{modelName}} je váš model pro nahrávky. Pokud ho smažete, nahrávky budou používat model pro diktování. Opravdu chcete pokračovat?",
       "deleteTitle": "Smazat model",
       "filters": {
         "allLanguages": "Všechny jazyky",
@@ -199,6 +214,10 @@
           "transcribe_with_post_process": {
             "name": "Klávesa pro následné zpracování",
             "description": "Volitelné: Vyhrazená klávesová zkratka, která vždy použije AI následné zpracování na váš přepis."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -378,10 +397,47 @@
       "customWords": {
         "title": "Vlastní slova",
         "description": "Pomozte podporovaným modelům rozpoznávat jména a odborné termíny. Přibližné opravy jsou v současnosti omezeny na slova obsahující písmena A–Z a číslice.",
-        "placeholder": "Přidat slovo",
         "add": "Přidat",
         "remove": "Odebrat {{word}}",
-        "duplicate": "\"{{word}}\" již existuje"
+        "duplicate": "\"{{word}}\" již existuje",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "Detekce hlasové aktivity",
@@ -410,6 +466,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Jak to funguje",
+        "intro": "Následné zpracování pošle to, co nadiktujete, modelu AI, který text upraví dřív, než ho Handy vloží.",
+        "shortcut": "Spustí se, když diktujete se zkratkou pro následné zpracování ({{shortcut}}), ne s běžnou zkratkou ({{normal}}), která vloží vaše slova tak, jak zazněla.",
+        "shortcutEvery": "Spustí se při každém diktování: se zkratkou pro následné zpracování ({{shortcut}}) i s běžnou zkratkou ({{normal}}).",
+        "notSet": "nenastaveno",
+        "stepProvider": "Vyberte poskytovatele. Pro Lemonade na tomto počítači zvolte Lemonade Server.",
+        "stepModel": "Vyberte model. Tlačítko pro obnovení načte modely ze serveru.",
+        "stepPrompt": "Vyberte prompt, nebo si vytvořte vlastní.",
+        "stepTest": "Vyzkoušejte to tlačítkem „Otestovat“ dole na této stránce.",
+        "fallback": "Pokud úprava selže, Handy vloží vaše slova tak, jak zazněla.",
+        "everyDictation": {
+          "label": "Upravovat každé diktování",
+          "description": "Upravovat i diktování s běžnou zkratkou, nejen to se zkratkou pro následné zpracování."
+        }
+      },
       "hotkey": {
         "title": "Klávesová zkratka"
       },
@@ -424,21 +496,29 @@
         },
         "baseUrl": {
           "title": "Základní URL",
-          "description": "Základní URL API pro vybraného poskytovatele. Upravitelné je pouze u vlastního poskytovatele.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Adresa API vašeho serveru kompatibilního s OpenAI, například http://localhost:11434/v1.",
+          "descriptionLemonade": "Adresa vašeho Lemonade Serveru, obvykle http://localhost:13305/api/v1. Starší verze Lemonade používaly port 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Zadejte adresu jako http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "API klíč",
           "description": "API klíč pro vybraného poskytovatele.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Potřeba jen tehdy, když ho váš server vyžaduje.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Volitelné"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Zadejte identifikátor modelu očekávaný vaším vlastním endpointem.",
           "descriptionDefault": "Vyberte model dostupný u vybraného poskytovatele.",
+          "descriptionLemonade": "Chatovací model na vašem Lemonade Serveru. Modely pro řeč, embeddingy a obrázky se v seznamu nezobrazují.",
           "placeholderWithOptions": "Vyhledejte nebo vyberte model",
           "placeholderNoOptions": "Zadejte název modelu",
-          "refreshModels": "Obnovit modely"
+          "refreshModels": "Obnovit modely",
+          "use": "Použít „{{model}}“",
+          "loadError": "Modely se nepodařilo načíst. {{problem}}"
         }
       },
       "prompts": {
@@ -455,12 +535,305 @@
         "promptInstructions": "Instrukce promptu",
         "promptInstructionsPlaceholder": "Napište instrukce, které se mají spustit po přepisu. Příklad: Zlepšete gramatiku a srozumitelnost následujícího textu: ${output}",
         "promptTip": "Tip: Použijte <code>${output}</code> pro vložení přepsaného textu do promptu.",
+        "promptTipNoMarker": "Bez ${output} pošle Handy přepis za váš prompt, mezi značkami {{tag}}.",
         "updatePrompt": "Aktualizovat prompt",
         "deletePrompt": "Smazat prompt",
         "createPrompt": "Vytvořit prompt",
         "cancel": "Zrušit",
         "selectToEdit": "Vyberte výše prompt, abyste zobrazili a upravili jeho podrobnosti.",
         "createFirst": "Klikněte nahoře na 'Vytvořit nový prompt' a vytvořte svůj první prompt pro následné zpracování."
+      },
+      "test": {
+        "title": "Vyzkoušejte",
+        "label": "Ukázkové diktování",
+        "description": "Upraví tento text pomocí poskytovatele, modelu a uloženého promptu vybraných výše, stejně jako se upravuje diktování.",
+        "sample": "ehm takže mohl bys mi ehm poslat tu zprávu do pátku",
+        "button": "Otestovat",
+        "testing": "Testuji…",
+        "result": "Výsledek ({{seconds}} s):",
+        "emptyResult": "Model odpověděl bez textu. U promptu pro úpravu to znamená, že nenašel nic, co by stálo za zachování.",
+        "failed": "Test se nepodařilo spustit: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Napište text, se kterým chcete testovat.",
+        "noProvider": "Vyberte poskytovatele výše.",
+        "noModel": "Vyberte model pro {{provider}} výše. Tlačítko pro obnovení vedle pole Model načte modely ze serveru.",
+        "noPrompt": "Vyberte prompt níže.",
+        "emptyPrompt": "Vybraný prompt je prázdný. Napište jeho pokyny a stiskněte „Aktualizovat prompt“.",
+        "missingApiKey": "{{provider}} potřebuje API klíč. Zadejte ho do pole „API klíč“ výše.",
+        "invalidApiKey": "API klíč obsahuje znaky, které nelze odeslat. Zadejte ho znovu.",
+        "invalidAddress": "{{address}} není adresa serveru, kterou Handy může použít. Měla by vypadat jako http://localhost:13305/api/v1.",
+        "unreachable": "Server na adrese {{address}} není dostupný. Ujistěte se, že běží a že je adresa správná.",
+        "timeout": "Server na adrese {{address}} neodpověděl včas. Pokud ještě načítá model, zkuste to znovu za minutu.",
+        "unauthorized": "Server na adrese {{address}} nepřijal API klíč (chyba {{status}}). Zkontrolujte pole „API klíč“.",
+        "modelNotFound": "Server na adrese {{address}} nemá model „{{model}}“. Vyberte výše jiný model.",
+        "notFound": "Na adrese {{address}} nic neodpovídá (chyba 404). Zkontrolujte adresu.",
+        "serverError": "Server na adrese {{address}} odpověděl chybou (chyba {{status}}).",
+        "serverErrorNoStatus": "{{provider}} odpověděl chybou.",
+        "noAnswer": "{{provider}} odpověděl bez textu. Zkuste jiný model.",
+        "badAnswer": "{{provider}} poslal odpověď, kterou Handy nedokázal přečíst.",
+        "noChatModels": "{{provider}} na adrese {{address}} nemá žádné chatovací modely. Stáhněte si nějaký v Lemonade a stiskněte tlačítko pro obnovení.",
+        "otherModels": "Modely na serveru, které neumí upravit text: {{models}}",
+        "internal": "V Handy se něco pokazilo.",
+        "detail": "Podrobnosti: {{detail}}"
+      }
+    },
+    "transcribeFiles": {
+      "title": "Přepis souborů",
+      "description": "Převeďte existující nahrávky na text přímo v tomto počítači. Vaše soubory nikdy neopustí vaše zařízení.",
+      "settingsNote": "Používá vybraný model a vaše nastavení jazyka, překladu, vlastních slov a výplňových slov.",
+      "settingsNoteLemonade": "Používá vaše nastavení jazyka, vlastních slov a výplňových slov.",
+      "settingsNoteOwnModel": "Používá model pro nahrávky a vaše nastavení jazyka, překladu, vlastních slov a výplňových slov.",
+      "model": "Model: {{model}}",
+      "modelLemonade": "Model: {{model}} přes Lemonade Server",
+      "noModel": "Chcete-li přepisovat soubory, vyberte stažený model na stránce Modely.",
+      "noLemonadeModel": "Chcete-li přepisovat soubory, vyberte model Lemonade.",
+      "noRecordingsModel": "Model pro nahrávky není stažený. Vyberte výše jiný nebo ho stáhněte na stránce Modely.",
+      "dropzone": {
+        "title": "Přetáhněte sem zvukové nebo video soubory",
+        "hint": "Rozhovory, schůzky, přednášky a hlasové poznámky libovolné délky",
+        "active": "Pusťte pro přidání",
+        "choose": "Vybrat soubory…",
+        "skipped": "Přeskočené soubory, které nejsou zvuk ani video: {{number}}"
+      },
+      "picker": {
+        "title": "Vybrat nahrávky",
+        "filterName": "Zvukové a video soubory"
+      },
+      "formats": {
+        "native": "Otevírá formáty {{formats}}",
+        "ffmpegAvailable": "Další formáty, jako jsou Opus, WebM, WMA a DSS, se otevírají pomocí ffmpeg.",
+        "ffmpegMissing": "Nainstalujte ffmpeg, abyste mohli otevírat i Opus, WebM, WMA, DSS a další formáty."
+      },
+      "saveToHistory": {
+        "label": "Uložit do historie",
+        "description": "Dokončené přepisy se uloží a označí hvězdičkou, takže je automatické mazání ponechá."
+      },
+      "autosave": {
+        "title": "Ukládání přepisů",
+        "enabled": {
+          "label": "Automaticky ukládat přepisy",
+          "description": "Po přepsání souboru nebo schůzky se přepis uloží jako soubor, který otevřete ve Wordu nebo v libovolném textovém editoru."
+        },
+        "location": {
+          "label": "Uložit do",
+          "description": "Možnost Vedle nahrávky uloží přepis do složky nahrávky (u schůzek do vlastní složky schůzky). Pokud do složky nelze zapisovat, Handy použije složku Handy Transcripts ve vašich Dokumentech.",
+          "nextToRecording": "Vedle nahrávky",
+          "folder": "Do složky, kterou vyberu…"
+        },
+        "chooseFolder": "Vybrat složku…",
+        "folderPicker": "Vyberte složku pro přepisy",
+        "format": {
+          "label": "Formát souboru",
+          "description": "Dokumenty Word a Markdown obsahují jména mluvčích a časy. Prostý text obsahuje jména mluvčích."
+        },
+        "note": "Existující soubory se nikdy nenahrazují: místo toho se použije nový název, například „interview (2).docx“. Přepis s mezerami končí na „(incomplete)“.",
+        "saveError": "Nastavení se nepodařilo uložit: {{error}}"
+      },
+      "engine": {
+        "title": "Nástroj pro přepis",
+        "label": "Přepisovat pomocí",
+        "description": "Diktování vždy používá vlastní model aplikace Handy. Tato volba platí jen pro soubory.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "Model pro nahrávky",
+        "description": "Nahrávky mohou používat pomalejší, ale přesnější model než diktování. Běží samostatně a načítá se jen během přepisu souborů, takže model pro diktování zůstává připravený. Oba modely se musí vejít do paměti.",
+        "same": "Stejný jako pro diktování ({{model}})",
+        "sameNoModel": "Stejný jako pro diktování",
+        "timestamps": "(časové značky)",
+        "noTimestamps": "(bez časových značek)",
+        "switchWarning": "Tento soubor používá model pro diktování, takže změna modelu pro diktování ho teď zastaví. Chcete-li je oddělit, vyberte pro nahrávky jiný model.",
+        "onCpu": "Nahrávky se zpracovávají na procesoru, protože grafická paměť nestačí pro oba modely. Chcete-li využít grafickou kartu, vyberte pro nahrávky menší model."
+      },
+      "lemonade": {
+        "url": {
+          "label": "Adresa serveru",
+          "description": "Obvykle http://localhost:13305. Starší verze Lemonade používaly port 8000."
+        },
+        "apiKey": {
+          "label": "API klíč",
+          "description": "Potřebný jen tehdy, pokud ho váš Lemonade Server vyžaduje.",
+          "placeholder": "Volitelné"
+        },
+        "model": {
+          "label": "Model",
+          "description": "Model Lemonade, který přepisuje vaše soubory, například Whisper-Base.",
+          "placeholder": "Vyberte model Whisper",
+          "notDownloaded": "{{model}} (stáhne se při prvním použití)",
+          "none": "Na tomto serveru nebyly nalezeny žádné modely pro přepis.",
+          "use": "Použít „{{model}}“"
+        },
+        "test": "Otestovat připojení",
+        "testing": "Připojuji…",
+        "connected": "Připojeno. Dostupné modely pro přepis: {{number}}",
+        "checkFailed": "Lemonade Server se nepodařilo zkontrolovat: {{error}}",
+        "saveError": "Nastavení Lemonade se nepodařilo uložit: {{error}}",
+        "firstChunkSlow": "Lemonade možná stahuje nebo načítá model. Poprvé to může trvat několik minut.",
+        "errors": {
+          "invalidUrl": "Zadejte adresu ve tvaru http://localhost:13305.",
+          "unreachable": "Lemonade Server na adrese {{url}} není dostupný. Ujistěte se, že běží.",
+          "timeout": "Lemonade Server neodpověděl včas.",
+          "unauthorized": "Lemonade Server nepřijal API klíč.",
+          "modelNotFound": "Lemonade Server tento model nemá.",
+          "http": "Lemonade Server vrátil chybu.",
+          "badResponse": "Lemonade Server poslal odpověď, kterou Handy nedokázal přečíst.",
+          "cancelled": "Test připojení byl zrušen."
+        },
+        "notes": {
+          "noTranslate": "Funkce „Překládat do angličtiny“ není s Lemonade Server k dispozici. Soubory se přepisují v mluveném jazyce.",
+          "remote": "Tato adresa není v tomto počítači. Vaše nahrávky na ni budou odeslány."
+        }
+      },
+      "speakers": {
+        "label": "Označit mluvčí",
+        "description": "Označí, kdo co řekl, až pro 4 mluvčí. Běží v tomto počítači a vyžaduje jednorázové stažení {{size}} MB.",
+        "download": "Stáhnout model mluvčích ({{size}} MB)",
+        "downloading": "Stahuji model mluvčích… {{percent}}%",
+        "verifying": "Kontroluji stažený soubor…",
+        "cancelDownload": "Zrušit stahování",
+        "downloadFailed": "Model mluvčích se nepodařilo stáhnout: {{error}}",
+        "installed": "Model mluvčích je nainstalován ({{size}} MB)",
+        "remove": "Odebrat model mluvčích",
+        "removeError": "Model mluvčích se nepodařilo odebrat: {{error}}",
+        "removeConfirm": "Odebrat model mluvčích? Pro označování mluvčích jej budete muset znovu stáhnout ({{size}} MB).",
+        "license": "Model mluvčích od společnosti NVIDIA v rámci licence NVIDIA Open Model License (<page>stránka modelu</page>).",
+        "title": "Mluvčí",
+        "defaultName": "Mluvčí {{number}}",
+        "rename": "Přejmenovat {{name}}",
+        "nameLabel": "Nové jméno pro {{name}}",
+        "save": "Uložit",
+        "cancel": "Zrušit",
+        "renameError": "Mluvčího se nepodařilo přejmenovat: {{error}}",
+        "approximate": "Změny mluvčích jsou přibližné, protože tento model neposkytuje časové značky.",
+        "unassigned": "Některé pasáže se nepodařilo přiřadit k žádnému mluvčímu.",
+        "none": "Tento přepis nemá označené mluvčí.",
+        "labelAction": "Označit mluvčí",
+        "labelHint": "Mluvčí se označují na tomto počítači podle původní nahrávky {{file}}. Dlouhé nahrávky trvají několik minut.",
+        "needsModel": "K označení mluvčích je potřeba model mluvčích, jednorázové stažení {{size}} MB.",
+        "labelError": "Mluvčí se nepodařilo označit: {{error}}",
+        "findRecording": "Najít nahrávku…",
+        "findRecordingHint": "Vyberte přesunutou nahrávku. Musí to být stejný soubor, který byl přepsán.",
+        "relabel": "Označit znovu…",
+        "relabelTitle": "Znovu označit mluvčí",
+        "relabelConfirm": "Znovu označit mluvčí podle nahrávky? Jména, sloučení a změny pasáží budou ztraceny.",
+        "mergeInto": "Sloučit {{name}} s jiným mluvčím",
+        "mergePrompt": "Sloučit {{name}} s:",
+        "mergeTitle": "Sloučit mluvčí",
+        "mergeConfirm": "Sloučit {{from}} s {{into}}? Všechny pasáže mluvčího {{from}} budou přiřazeny mluvčímu {{into}}. Dokud přepis nezavřete, můžete to vrátit zpět.",
+        "mergeError": "Mluvčí se nepodařilo sloučit: {{error}}",
+        "changeSpeaker": "Změnit mluvčího této pasáže ({{name}})",
+        "changeSpeakerPrompt": "Kdo to řekl?",
+        "newSpeaker": "Nový mluvčí",
+        "unknownSpeaker": "Neznámý mluvčí",
+        "changeSpeakerError": "Mluvčího se nepodařilo změnit: {{error}}",
+        "undo": "Zpět",
+        "undoError": "Akci se nepodařilo vrátit zpět: {{error}}",
+        "jobKind": "Označení mluvčích",
+        "state": {
+          "running": "Rozpoznávám mluvčí…",
+          "done": "Mluvčí: {{number}}",
+          "failed": "Mluvčí se nepodařilo označit",
+          "skipped": {
+            "modelMissing": "Označení mluvčích přeskočeno: model mluvčích není stažen.",
+            "noSpeech": "Označení mluvčích přeskočeno: nebyla nalezena žádná řeč."
+          }
+        }
+      },
+      "queue": {
+        "title": "Soubory",
+        "cancelAll": "Zrušit vše",
+        "clearFinished": "Vymazat dokončené"
+      },
+      "status": {
+        "queued": "Čeká na spuštění",
+        "preparing": "Připravuji…",
+        "waiting": "Pozastaveno během diktování",
+        "transcribing": "Přepisuji…",
+        "completed": "Hotovo",
+        "partial": "Hotovo, s mezerami",
+        "cancelled": "Zrušeno",
+        "failed": "Selhalo"
+      },
+      "progress": "{{processed}} z {{total}}",
+      "progressNoTotal": "Přepsáno {{processed}}",
+      "elapsed": "Uplynulo {{time}}",
+      "took": "Trvalo {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "Zbývá méně než minuta",
+        "minutes": "Zbývá asi {{minutes}} min",
+        "hours": "Zbývá asi {{hours}} h {{minutes}} min",
+        "hoursOnly": "Zbývá asi {{hours}} h"
+      },
+      "noSpeech": "V tomto souboru nebyla nalezena žádná řeč.",
+      "actions": {
+        "cancel": "Zrušit",
+        "remove": "Odebrat ze seznamu",
+        "removeWhileLabelling": "Nelze odebrat, dokud probíhá rozpoznávání mluvčích",
+        "view": "Zobrazit přepis",
+        "copy": "Kopírovat přepis",
+        "showFile": "Zobrazit soubor"
+      },
+      "copied": "Přepis byl zkopírován do schránky.",
+      "copyError": "Přepis se nepodařilo zkopírovat.",
+      "savedToHistory": "Uloženo do historie",
+      "ready": {
+        "title": "Přepis je hotový: {{file}}",
+        "open": "Otevřít v Handy",
+        "showFile": "Zobrazit soubor"
+      },
+      "saved": {
+        "savedTo": "Uloženo do {{path}}",
+        "open": "Otevřít",
+        "showInFolder": "Zobrazit ve složce",
+        "fallback": "Do složky {{folder}} nelze ukládat, proto byl přepis uložen do složky Handy Transcripts ve vašich Dokumentech.",
+        "failed": "Přepis se nepodařilo uložit jako soubor. Uložte ho pomocí Exportovat.",
+        "openError": "Přepis se nepodařilo otevřít: {{error}}",
+        "notFound": "Uložený přepis nebyl nalezen. Možná byl přesunut nebo smazán.",
+        "exportAgain": "Tento soubor se nezmění, když zde upravíte mluvčí. Pozdější změny zahrnete opětovným exportem."
+      },
+      "errors": {
+        "notFound": "Soubor nelze najít ani otevřít.",
+        "unsupportedFormat": "Tento typ souboru není podporován.",
+        "needsFfmpeg": "Tento formát vyžaduje ffmpeg. Nainstalujte ffmpeg a zkuste to znovu.",
+        "noModel": "Není vybrán žádný model pro přepis.",
+        "modelChanged": "Model se změnil během přepisu tohoto souboru.",
+        "decodeFailed": "Zvuk v tomto souboru se nepodařilo přečíst.",
+        "engineFailed": "Přepis selhal.",
+        "serverUnreachable": "Lemonade Server není dostupný. Ujistěte se, že běží.",
+        "serverUnauthorized": "Lemonade Server nepřijal API klíč.",
+        "serverModelMissing": "Lemonade Server nemá vybraný model.",
+        "internal": "Něco se pokazilo.",
+        "sourceChanged": "Nahrávka v tomto umístění se od přepisu změnila, takže její mluvčí nelze přiřadit k tomuto přepisu. Pokud jde o stejnou nahrávku, vyberte ji pomocí „Najít nahrávku…“.",
+        "speakerLabelsFailed": "Označení mluvčích se nezdařilo.",
+        "enqueue": "Soubory se nepodařilo přidat: {{error}}",
+        "cancel": "Nepodařilo se zrušit: {{error}}",
+        "remove": "Nepodařilo se odebrat ze seznamu: {{error}}",
+        "loadTranscript": "Přepis se nepodařilo načíst: {{error}}"
+      },
+      "transcript": {
+        "title": "Přepis: {{file}}",
+        "live": "Průběžně se aktualizuje během přepisu",
+        "partial": "Tento přepis je neúplný: {{reason}}",
+        "partialNoReason": "Tento přepis je neúplný.",
+        "approximateTimes": "Časy jsou přibližné, protože tento model neposkytuje časové značky.",
+        "empty": "Nebyla nalezena žádná řeč.",
+        "segmentsLabel": "Přepis s časovými značkami"
+      },
+      "export": {
+        "button": "Exportovat…",
+        "dialogTitle": "Exportovat přepis",
+        "formats": {
+          "docx": "Dokument Word (.docx)",
+          "txt": "Prostý text (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "Titulky SubRip (.srt)",
+          "vtt": "Titulky WebVTT (.vtt)"
+        },
+        "success": "Přepis byl exportován.",
+        "showInFolder": "Zobrazit ve složce",
+        "error": "Export se nezdařil: {{error}}"
       }
     },
     "history": {
@@ -477,7 +850,14 @@
       "retranscribe": "Přepsat znovu",
       "retranscribeError": "Opětovný přepis se nezdařil. Zkuste to prosím znovu.",
       "transcribing": "Přepisuji...",
-      "transcriptionFailed": "Přepis selhal. Můžete zkusit přepis znovu pomocí ikony opakování."
+      "transcriptionFailed": "Přepis selhal. Můžete zkusit přepis znovu pomocí ikony opakování.",
+      "openTranscript": "Otevřít přepis",
+      "showOriginal": "Zobrazit původní soubor",
+      "originalMissing": "Původní soubor byl přesunut nebo smazán.",
+      "fileDuration": "Délka {{duration}}",
+      "incomplete": "Neúplný",
+      "speakerCount": "Mluvčí: {{number}}",
+      "retranscribeFileUnavailable": "Chcete-li tento soubor přepsat znovu, použijte stránku Přepis."
     },
     "debug": {
       "title": "Ladění",
@@ -644,6 +1024,142 @@
       "whatsNewUpdates": {
         "label": "Zobrazovat novinky",
         "description": "Zobrazovat poznámky k vydání po aktualizacích Handy"
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },

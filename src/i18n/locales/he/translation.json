@@ -7,16 +7,23 @@
     "model": "מודל",
     "quit": "יציאה",
     "cancel": "ביטול",
-    "secureInputWarning": "⚠ קיצורי המקשים חסומים על ידי Secure Input"
+    "secureInputWarning": "⚠ קיצורי המקשים חסומים על ידי Secure Input",
+    "meetingRecording": "● Meeting recording: open Handy"
   },
   "sidebar": {
     "general": "כללי",
+    "transcribe": "תמלול",
+    "transcribeProgress": "מתמלל: הושלמו {{percent}}",
+    "transcribeRunning": "מתמלל…",
+    "speakersProgress": "מזהה דוברים: הושלמו {{percent}}",
+    "speakersRunning": "מזהה דוברים…",
     "models": "מודלים",
     "advanced": "מתקדם",
     "postProcessing": "עיבוד משלים",
     "history": "היסטוריה",
     "debug": "ניפוי שגיאות",
-    "about": "אודות"
+    "about": "אודות",
+    "meetings": "Meetings"
   },
   "onboarding": {
     "subtitle": "כדי להתחיל, בחר מודל תמלול",
@@ -123,6 +130,9 @@
   "modelSelector": {
     "custom": "מותאם אישית",
     "streaming": "סטרימינג",
+    "bestForRecordings": "הכי טוב להקלטות",
+    "timestamps": "חותמות זמן",
+    "noTimestamps": "ללא חותמות זמן",
     "active": "פעיל",
     "switching": "מחליף...",
     "noModelsAvailable": "אין מודלים זמינים",
@@ -150,7 +160,10 @@
       "languageOnly": "{{language}} בלבד",
       "translation": "יכול לתרגם לאנגלית",
       "translate": "תרגם לאנגלית",
-      "streaming": "מציג תמלול חי תוך כדי דיבור"
+      "streaming": "מציג תמלול חי תוך כדי דיבור",
+      "bestForRecordings": "מדויק, עם זמן לכל משפט. בחירה טובה להקלטות ולפגישות.",
+      "timestamps": "נותן זמן לכל משפט, כך שהתמלול וסימון הדוברים תואמים להקלטה.",
+      "noTimestamps": "הזמנים משוערים בלבד, בערך כל 30 שניות."
     },
     "legacy": "מדור קודם"
   },
@@ -179,6 +192,10 @@
           "transcribe_with_post_process": {
             "name": "קיצור לעיבוד משלים",
             "description": "אופציונלי: קיצור מקשים ייעודי שתמיד מפעיל עיבוד AI על התמלול."
+          },
+          "add_custom_word": {
+            "name": "Add Word Shortcut",
+            "description": "Select a word Handy got wrong in any app, then press this shortcut to add the right spelling."
           }
         },
         "errors": {
@@ -212,10 +229,12 @@
     "models": {
       "title": "מודלי תמלול",
       "description": "בחר מודל תמלול או הורד מודלים נוספים. מודלים שונים מציעים רמות שונות של דיוק ומהירות.",
+      "recordingsTip": "להקלטות ולפגישות, בחר מודל שמסומן „{{badge}}”. Parakeet TDT 0.6B v3 הוא הבחירה הטובה ביותר לרוב השימושים; Whisper Large v3 Turbo תומך ביותר שפות.",
       "yourModels": "מודלים שהורדו",
       "availableModels": "זמינים להורדה",
       "deleteConfirm": "האם למחוק את {{modelName}}? יהיה צורך להוריד אותו שוב כדי להשתמש בו.",
       "deleteActiveConfirm": "{{modelName}} הוא המודל הפעיל שלך כרגע. מחיקה שלו תעצור את התמלול עד שתבחר מודל חדש. להמשיך?",
+      "deleteRecordingsConfirm": "{{modelName}} הוא מודל ההקלטות שלך. אם תמחק אותו, ההקלטות ישתמשו במודל ההכתבה. להמשיך?",
       "deleteTitle": "מחיקת מודל",
       "filters": {
         "allLanguages": "כל השפות",
@@ -378,10 +397,47 @@
       "customWords": {
         "title": "מילים מותאמות אישית",
         "description": "עזרו למודלים נתמכים לזהות שמות ומונחים מקצועיים. תיקון בקירוב מוגבל כרגע למילים המשתמשות באותיות A–Z ובמספרים.",
-        "placeholder": "הוסף מילה",
         "add": "הוסף",
         "remove": "הסר את {{word}}",
-        "duplicate": "\"{{word}}\" כבר קיימת"
+        "duplicate": "\"{{word}}\" כבר קיימת",
+        "editSpellings": "Edit spellings for {{word}}",
+        "spellingsHint": "Other spellings to change to \"{{word}}\". Each one is replaced exactly wherever it appears, so avoid common words.",
+        "spellingPlaceholder": "Add a spelling",
+        "removeSpelling": "Remove spelling {{spelling}}",
+        "spellingIsCustomWord": "\"{{spelling}}\" is already a custom word",
+        "spellingDuplicate": "\"{{spelling}}\" is already a spelling of \"{{word}}\"",
+        "spellingTooManyWords": "A spelling can have at most {{max}} words",
+        "addWord": {
+          "title": "Add word or phrase",
+          "writtenLabel": "Spell or type the word(s) to add to the vocabulary:",
+          "spokenLabel": "Spoken form (if different):",
+          "trainLabel": "I want to train the pronunciation of this word or phrase",
+          "add": "Add",
+          "cancel": "Cancel",
+          "help": "Help",
+          "helpWritten": "Type the word or phrase exactly as Handy should write it, for example \"Stacey\".",
+          "helpSpoken": "If Handy writes it another way when you say it, type that version here, for example \"Stacy\". Handy will change it to the written form. To add more spoken forms later, select the word in the Custom Words list.",
+          "helpTrain": "Check the training box to say the word once after adding it. Handy shows what it wrote and saves that as a spoken form if it is different.",
+          "helpCaution": "Don't use an ordinary word as a spoken form, such as \"when\" for \"Nguyen\". Handy would change that word everywhere.",
+          "addedWord": "Added \"{{word}}\"",
+          "addedSpoken": "Added \"{{word}}\". Handy will write it when it hears \"{{spoken}}\"",
+          "spokenInvalid": "\"{{spoken}}\" can't be used as a spoken form",
+          "trainTitle": "Train pronunciation",
+          "trainPrompt": "Click Record, then say \"{{word}}\" the way you normally do. Handy listens for up to {{seconds}} seconds, or click Stop when you finish.",
+          "record": "Record",
+          "stop": "Stop",
+          "tryAgain": "Try again",
+          "done": "Done",
+          "starting": "Starting the microphone…",
+          "listening": "Listening… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy wrote: {{text}}",
+          "alreadyCorrect": "Handy already writes \"{{word}}\" correctly. Nothing to change.",
+          "savedSpoken": "Saved \"{{spoken}}\" as a spoken form. Handy will now write \"{{word}}\" instead.",
+          "notSaved": "This was not saved. Try again, or type the spoken form yourself.",
+          "nothingHeard": "Handy didn't hear anything. Check the microphone and try again."
+        },
+        "addWordButton": "Add word or phrase…"
       },
       "voiceActivityDetection": {
         "title": "זיהוי פעילות קולית",
@@ -410,6 +466,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "איך זה עובד",
+        "intro": "העיבוד המשלים שולח את מה שאתה מכתיב למודל בינה מלאכותית, שמנקה אותו לפני ש-Handy מדביק אותו.",
+        "shortcut": "הוא פועל כשאתה מכתיב עם קיצור המקשים לעיבוד משלים ({{shortcut}}), ולא עם קיצור המקשים הרגיל ({{normal}}), שמדביק את המילים שלך כפי שנאמרו.",
+        "shortcutEvery": "הוא פועל בכל הכתבה: עם קיצור המקשים לעיבוד משלים ({{shortcut}}) ועם קיצור המקשים הרגיל ({{normal}}).",
+        "notSet": "לא הוגדר",
+        "stepProvider": "בחר ספק. עבור Lemonade במחשב הזה, בחר Lemonade Server.",
+        "stepModel": "בחר מודל. כפתור הרענון טוען את המודלים של השרת.",
+        "stepPrompt": "בחר פרומפט, או צור פרומפט משלך.",
+        "stepTest": "לחץ על „בדיקה” בתחתית הדף כדי לנסות.",
+        "fallback": "אם הניקוי נכשל, Handy מדביק את המילים שלך כפי שנאמרו.",
+        "everyDictation": {
+          "label": "ניקוי כל הכתבה",
+          "description": "לנקות גם הכתבות שנעשו עם קיצור המקשים הרגיל, ולא רק כאלה שנעשו עם קיצור המקשים לעיבוד משלים."
+        }
+      },
       "hotkey": {
         "title": "קיצור מקשים"
       },
@@ -424,21 +496,29 @@
         },
         "baseUrl": {
           "title": "כתובת URL בסיסית",
-          "description": "כתובת ה-API הבסיסית עבור הספק הנבחר. רק ספק מותאם אישית ניתן לעריכה.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "הכתובת של ה-API התואם ל-OpenAI בשרת שלך, לדוגמה http://localhost:11434/v1.",
+          "descriptionLemonade": "הכתובת של Lemonade Server שלך, בדרך כלל http://localhost:13305/api/v1. גרסאות ישנות של Lemonade השתמשו בפורט 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "הזן כתובת כמו http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "מפתח API",
           "description": "מפתח API עבור הספק הנבחר.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "נדרש רק אם השרת שלך מבקש אותו.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "אופציונלי"
         },
         "model": {
           "title": "מודל",
           "descriptionCustom": "ספק את מזהה המודל שה-endpoint המותאם שלך מצפה לו.",
           "descriptionDefault": "בחר מודל שהספק הנבחר חושף.",
+          "descriptionLemonade": "מודל צ'אט ב-Lemonade Server שלך. מודלים של דיבור, הטמעות ותמונות אינם מופיעים ברשימה.",
           "placeholderWithOptions": "חפש או בחר מודל",
           "placeholderNoOptions": "הקלד שם מודל",
-          "refreshModels": "רענן מודלים"
+          "refreshModels": "רענן מודלים",
+          "use": "שימוש ב-{{model}}",
+          "loadError": "לא ניתן לטעון את המודלים. {{problem}}"
         }
       },
       "prompts": {
@@ -455,12 +535,305 @@
         "promptInstructions": "הוראות לפרומפט",
         "promptInstructionsPlaceholder": "כתוב את ההוראות שירוצו אחרי התמלול. לדוגמה: שפר דקדוק ובהירות עבור הטקסט הבא: ${output}",
         "promptTip": "טיפ: השתמש ב-<code>${output}</code> כדי להכניס את הטקסט המתומלל לפרומפט שלך.",
+        "promptTipNoMarker": "בלי ${output}, Handy שולח את התמליל אחרי הפרומפט שלך, בין תגי {{tag}}.",
         "updatePrompt": "עדכן פרומפט",
         "deletePrompt": "מחק פרומפט",
         "createPrompt": "צור פרומפט",
         "cancel": "ביטול",
         "selectToEdit": "בחר פרומפט למעלה כדי לצפות בפרטים שלו ולערוך אותם.",
         "createFirst": "לחץ על 'צור פרומפט חדש' למעלה כדי ליצור את פרומפט העיבוד הראשון שלך."
+      },
+      "test": {
+        "title": "נסה את זה",
+        "label": "הכתבה לדוגמה",
+        "description": "מנקה את הטקסט הזה עם הספק, המודל והפרומפט השמור שנבחרו למעלה, באותה דרך שבה מנוקה הכתבה.",
+        "sample": "אממ אז אתה יכול אה לשלוח לי את הדוח עד יום שישי",
+        "button": "בדיקה",
+        "testing": "בודק…",
+        "result": "תוצאה ({{seconds}} שנ׳):",
+        "emptyResult": "המודל ענה בלי טקסט. עם פרומפט ניקוי, המשמעות היא שהוא לא מצא שום דבר ששווה לשמור.",
+        "failed": "לא ניתן להריץ את הבדיקה: {{error}}"
+      },
+      "problems": {
+        "emptyText": "הקלד טקסט לבדיקה.",
+        "noProvider": "בחר ספק למעלה.",
+        "noModel": "בחר מודל עבור {{provider}} למעלה. כפתור הרענון שליד „מודל” טוען את המודלים של השרת.",
+        "noPrompt": "בחר פרומפט למטה.",
+        "emptyPrompt": "הפרומפט שנבחר ריק. כתוב את ההוראות שלו ולחץ על „עדכן פרומפט”.",
+        "missingApiKey": "{{provider}} דורש מפתח API. הזן אותו בשדה „מפתח API” למעלה.",
+        "invalidApiKey": "מפתח ה-API מכיל תווים שאי אפשר לשלוח. הזן אותו שוב.",
+        "invalidAddress": "{{address}} אינה כתובת שרת ש-Handy יכול להשתמש בה. היא צריכה להיראות כמו http://localhost:13305/api/v1.",
+        "unreachable": "לא ניתן להתחבר לשרת בכתובת {{address}}. ודא שהוא פועל ושהכתובת נכונה.",
+        "timeout": "השרת בכתובת {{address}} לא ענה בזמן. אם הוא עדיין טוען את המודל, נסה שוב בעוד דקה.",
+        "unauthorized": "השרת בכתובת {{address}} לא קיבל את מפתח ה-API (שגיאה {{status}}). בדוק את השדה „מפתח API”.",
+        "modelNotFound": "לשרת בכתובת {{address}} אין את המודל {{model}}. בחר מודל אחר למעלה.",
+        "notFound": "שום דבר לא ענה בכתובת {{address}} (שגיאה 404). בדוק את הכתובת.",
+        "serverError": "השרת בכתובת {{address}} ענה בשגיאה (שגיאה {{status}}).",
+        "serverErrorNoStatus": "{{provider}} ענה בשגיאה.",
+        "noAnswer": "{{provider}} ענה בלי טקסט. נסה מודל אחר.",
+        "badAnswer": "{{provider}} שלח תשובה ש-Handy לא הצליח לקרוא.",
+        "noChatModels": "ב-{{provider}} בכתובת {{address}} אין מודלי צ'אט. הורד מודל ב-Lemonade ולחץ על כפתור הרענון.",
+        "otherModels": "מודלים בשרת שלא יכולים לנקות טקסט: {{models}}",
+        "internal": "משהו השתבש בתוך Handy.",
+        "detail": "פרטים: {{detail}}"
+      }
+    },
+    "transcribeFiles": {
+      "title": "תמלול קבצים",
+      "description": "המר הקלטות קיימות לטקסט במחשב הזה. הקבצים שלך אף פעם לא יוצאים מהמכשיר.",
+      "settingsNote": "משתמש במודל שבחרת ובהגדרות השפה, התרגום, המילים המותאמות אישית ומילות המילוי שלך.",
+      "settingsNoteLemonade": "משתמש בהגדרות השפה, המילים המותאמות אישית ומילות המילוי שלך.",
+      "settingsNoteOwnModel": "משתמש במודל ההקלטות ובהגדרות השפה, התרגום, המילים המותאמות אישית ומילות המילוי שלך.",
+      "model": "מודל: {{model}}",
+      "modelLemonade": "מודל: {{model}} ב-Lemonade Server",
+      "noModel": "בחר מודל שהורד בעמוד 'מודלים' כדי לתמלל קבצים.",
+      "noLemonadeModel": "בחר מודל של Lemonade כדי לתמלל קבצים.",
+      "noRecordingsModel": "מודל ההקלטות שלך לא הורד. בחר מודל אחר למעלה או הורד אותו בעמוד 'מודלים'.",
+      "dropzone": {
+        "title": "גרור לכאן קובצי אודיו או וידאו",
+        "hint": "ראיונות, פגישות, הרצאות ותזכירים קוליים בכל אורך",
+        "active": "שחרר כדי להוסיף",
+        "choose": "בחר קבצים…",
+        "skipped": "דולגו קבצים שאינם אודיו או וידאו: {{number}}"
+      },
+      "picker": {
+        "title": "בחר הקלטות",
+        "filterName": "קובצי אודיו ווידאו"
+      },
+      "formats": {
+        "native": "פותח קובצי {{formats}}",
+        "ffmpegAvailable": "פורמטים אחרים, כמו Opus, WebM, WMA ו-DSS, נפתחים באמצעות ffmpeg.",
+        "ffmpegMissing": "התקן את ffmpeg כדי לפתוח גם Opus, WebM, WMA, DSS ופורמטים נוספים."
+      },
+      "saveToHistory": {
+        "label": "שמור בהיסטוריה",
+        "description": "תמלולים שהסתיימו נשמרים ומסומנים בכוכב, כך שהניקוי האוטומטי לא ימחק אותם."
+      },
+      "autosave": {
+        "title": "שמירת תמלולים",
+        "enabled": {
+          "label": "שמור תמלולים אוטומטית",
+          "description": "כשהתמלול של קובץ או פגישה מסתיים, התמלול נשמר כקובץ שאפשר לפתוח ב-Word או בכל עורך טקסט."
+        },
+        "location": {
+          "label": "מיקום השמירה",
+          "description": "„ליד ההקלטה” שומר את התמלול בתיקיית ההקלטה (ובתיקייה של הפגישה, עבור פגישות). אם אי אפשר לכתוב לתיקייה, Handy משתמש ב-Handy Transcripts בתיקיית המסמכים שלך.",
+          "nextToRecording": "ליד ההקלטה",
+          "folder": "תיקייה שאבחר…"
+        },
+        "chooseFolder": "בחר תיקייה…",
+        "folderPicker": "בחר תיקייה לתמלולים",
+        "format": {
+          "label": "פורמט קובץ",
+          "description": "מסמכי Word ו-Markdown כוללים את שמות הדוברים ואת הזמנים. טקסט פשוט כולל את שמות הדוברים."
+        },
+        "note": "קבצים קיימים לעולם אינם מוחלפים: במקום זאת נעשה שימוש בשם חדש כמו “interview (2).docx”. שם של תמלול עם פערים מסתיים ב-“(incomplete)”.",
+        "saveError": "לא ניתן לשמור את ההגדרה: {{error}}"
+      },
+      "engine": {
+        "title": "מנוע תמלול",
+        "label": "תמלל באמצעות",
+        "description": "ההכתבה תמיד משתמשת במודל המובנה של Handy. הבחירה הזו חלה רק על קבצים.",
+        "handy": "Handy",
+        "lemonade": "Lemonade Server"
+      },
+      "recordingsModel": {
+        "label": "מודל להקלטות",
+        "description": "ההקלטות יכולות להשתמש במודל איטי ומדויק יותר מזה של ההכתבה. הוא פועל בנפרד ונטען רק בזמן תמלול קבצים, כך שמודל ההכתבה נשאר מוכן. שני המודלים צריכים להיכנס לזיכרון.",
+        "same": "כמו בהכתבה ({{model}})",
+        "sameNoModel": "כמו בהכתבה",
+        "timestamps": "(חותמות זמן)",
+        "noTimestamps": "(ללא חותמות זמן)",
+        "switchWarning": "הקובץ הזה משתמש במודל ההכתבה, ולכן החלפת מודל ההכתבה עכשיו תעצור אותו. כדי להפריד ביניהם, בחר מודל אחר להקלטות.",
+        "onCpu": "ההקלטות פועלות על המעבד כי אין מספיק זיכרון גרפי לשני המודלים. בחר מודל קטן יותר להקלטות כדי להשתמש בכרטיס הגרפי."
+      },
+      "lemonade": {
+        "url": {
+          "label": "כתובת השרת",
+          "description": "בדרך כלל http://localhost:13305. גרסאות ישנות של Lemonade השתמשו בפורט 8000."
+        },
+        "apiKey": {
+          "label": "מפתח API",
+          "description": "נדרש רק אם ה-Lemonade Server שלך מבקש מפתח.",
+          "placeholder": "אופציונלי"
+        },
+        "model": {
+          "label": "מודל",
+          "description": "מודל ה-Lemonade שמתמלל את הקבצים שלך, למשל Whisper-Base.",
+          "placeholder": "בחר מודל Whisper",
+          "notDownloaded": "{{model}} (יורד בשימוש הראשון)",
+          "none": "לא נמצאו מודלי תמלול בשרת הזה.",
+          "use": "השתמש ב-\"{{model}}\""
+        },
+        "test": "בדוק חיבור",
+        "testing": "מתחבר…",
+        "connected": "מחובר. מודלי תמלול זמינים: {{number}}",
+        "checkFailed": "לא ניתן לבדוק את Lemonade Server: {{error}}",
+        "saveError": "לא ניתן לשמור את הגדרות Lemonade: {{error}}",
+        "firstChunkSlow": "ייתכן ש-Lemonade מוריד או טוען את המודל. בפעם הראשונה זה עשוי להימשך כמה דקות.",
+        "errors": {
+          "invalidUrl": "הזן כתובת כמו http://localhost:13305.",
+          "unreachable": "לא ניתן להתחבר ל-Lemonade Server בכתובת {{url}}. ודא שהוא פועל.",
+          "timeout": "Lemonade Server לא הגיב בזמן.",
+          "unauthorized": "Lemonade Server לא קיבל את מפתח ה-API.",
+          "modelNotFound": "המודל הזה לא קיים ב-Lemonade Server.",
+          "http": "Lemonade Server החזיר שגיאה.",
+          "badResponse": "Lemonade Server שלח תשובה ש-Handy לא הצליח לקרוא.",
+          "cancelled": "בדיקת החיבור בוטלה."
+        },
+        "notes": {
+          "noTranslate": "האפשרות 'תרגם לאנגלית' אינה זמינה עם Lemonade Server. הקבצים מתומללים בשפה המדוברת.",
+          "remote": "הכתובת הזו אינה במחשב הזה. ההקלטות שלך יישלחו אליה."
+        }
+      },
+      "speakers": {
+        "label": "סמן דוברים",
+        "description": "מסמן מי אמר מה, עבור עד 4 דוברים. פועל במחשב הזה ודורש הורדה חד-פעמית של {{size}} MB.",
+        "download": "הורד את מודל הדוברים ({{size}} MB)",
+        "downloading": "מוריד את מודל הדוברים… {{percent}}%",
+        "verifying": "בודק את ההורדה…",
+        "cancelDownload": "בטל הורדה",
+        "downloadFailed": "לא ניתן להוריד את מודל הדוברים: {{error}}",
+        "installed": "מודל הדוברים מותקן ({{size}} MB)",
+        "remove": "הסר את מודל הדוברים",
+        "removeError": "לא ניתן להסיר את מודל הדוברים: {{error}}",
+        "removeConfirm": "להסיר את מודל הדוברים? יהיה צורך להוריד אותו שוב ({{size}} MB) כדי לסמן דוברים.",
+        "license": "מודל הדוברים מאת NVIDIA, ברישיון NVIDIA Open Model License (<page>עמוד המודל</page>).",
+        "title": "דוברים",
+        "defaultName": "דובר {{number}}",
+        "rename": "שנה את השם של {{name}}",
+        "nameLabel": "שם חדש עבור {{name}}",
+        "save": "שמור",
+        "cancel": "ביטול",
+        "renameError": "לא ניתן לשנות את שם הדובר: {{error}}",
+        "approximate": "החלפות הדוברים משוערות, כי המודל הזה לא מספק חותמות זמן.",
+        "unassigned": "לא ניתן היה לשייך חלק מהקטעים לדובר.",
+        "none": "בתמלול הזה אין סימון דוברים.",
+        "labelAction": "סמן דוברים",
+        "labelHint": "סימון הדוברים נעשה במחשב הזה מתוך ההקלטה המקורית, {{file}}. הקלטות ארוכות נמשכות כמה דקות.",
+        "needsModel": "כדי לסמן דוברים נדרש מודל הדוברים, הורדה חד-פעמית של {{size}} MB.",
+        "labelError": "לא ניתן להוסיף סימון דוברים: {{error}}",
+        "findRecording": "חפש הקלטה…",
+        "findRecordingHint": "בחר את ההקלטה שהועברה. היא חייבת להיות אותו קובץ שתומלל.",
+        "relabel": "סמן מחדש…",
+        "relabelTitle": "סימון דוברים מחדש",
+        "relabelConfirm": "לסמן מחדש את הדוברים מתוך ההקלטה? שמות, מיזוגים ושינויים בקטעים יאבדו.",
+        "mergeInto": "מזג את {{name}} עם דובר אחר",
+        "mergePrompt": "מזג את {{name}} עם:",
+        "mergeTitle": "מיזוג דוברים",
+        "mergeConfirm": "למזג את {{from}} עם {{into}}? כל הקטעים של {{from}} יסומנו כשייכים ל{{into}}. אפשר לבטל זאת עד לסגירת התמלול.",
+        "mergeError": "לא ניתן למזג את הדוברים: {{error}}",
+        "changeSpeaker": "שנה את הדובר של הקטע הזה ({{name}})",
+        "changeSpeakerPrompt": "מי אמר את זה?",
+        "newSpeaker": "דובר חדש",
+        "unknownSpeaker": "דובר לא ידוע",
+        "changeSpeakerError": "לא ניתן לשנות את הדובר: {{error}}",
+        "undo": "בטל פעולה",
+        "undoError": "לא ניתן לבטל את הפעולה: {{error}}",
+        "jobKind": "סימון דוברים",
+        "state": {
+          "running": "מזהה דוברים…",
+          "done": "דוברים: {{number}}",
+          "failed": "לא ניתן לסמן דוברים",
+          "skipped": {
+            "modelMissing": "סימון הדוברים דולג: מודל הדוברים לא הורד.",
+            "noSpeech": "סימון הדוברים דולג: לא נמצא דיבור."
+          }
+        }
+      },
+      "queue": {
+        "title": "קבצים",
+        "cancelAll": "בטל הכל",
+        "clearFinished": "נקה את שהסתיימו"
+      },
+      "status": {
+        "queued": "ממתין להתחלה",
+        "preparing": "בהכנה…",
+        "waiting": "מושהה בזמן שאתה מכתיב",
+        "transcribing": "מתמלל…",
+        "completed": "הושלם",
+        "partial": "הושלם, עם פערים",
+        "cancelled": "בוטל",
+        "failed": "נכשל"
+      },
+      "progress": "{{processed}} מתוך {{total}}",
+      "progressNoTotal": "תומללו {{processed}}",
+      "elapsed": "זמן שחלף: {{time}}",
+      "took": "נמשך {{time}}",
+      "timeLeft": {
+        "lessThanMinute": "נותרה פחות מדקה",
+        "minutes": "נותרו בערך {{minutes}} דק׳",
+        "hours": "נותרו בערך {{hours}} שע׳ {{minutes}} דק׳",
+        "hoursOnly": "נותרו בערך {{hours}} שע׳"
+      },
+      "noSpeech": "לא נמצא דיבור בקובץ הזה.",
+      "actions": {
+        "cancel": "ביטול",
+        "remove": "הסר מהרשימה",
+        "removeWhileLabelling": "לא ניתן להסיר בזמן זיהוי הדוברים",
+        "view": "הצג תמלול",
+        "copy": "העתק תמלול",
+        "showFile": "הצג קובץ"
+      },
+      "copied": "התמלול הועתק ללוח.",
+      "copyError": "העתקת התמלול נכשלה.",
+      "savedToHistory": "נשמר בהיסטוריה",
+      "ready": {
+        "title": "התמלול מוכן: {{file}}",
+        "open": "פתח ב-Handy",
+        "showFile": "הצג קובץ"
+      },
+      "saved": {
+        "savedTo": "נשמר ב-{{path}}",
+        "open": "פתח",
+        "showInFolder": "הצג בתיקייה",
+        "fallback": "לא ניתן היה לשמור ב-{{folder}}, ולכן התמלול נשמר ב-Handy Transcripts בתיקיית המסמכים שלך.",
+        "failed": "לא ניתן היה לשמור את התמלול כקובץ. השתמש בייצוא כדי לשמור אותו.",
+        "openError": "לא ניתן לפתוח את התמלול: {{error}}",
+        "notFound": "התמלול השמור לא נמצא. ייתכן שהוא הועבר או נמחק.",
+        "exportAgain": "הקובץ הזה לא משתנה כשאתה עורך כאן את הדוברים. ייצא שוב כדי לכלול שינויים מאוחרים יותר."
+      },
+      "errors": {
+        "notFound": "לא ניתן למצוא או לפתוח את הקובץ.",
+        "unsupportedFormat": "סוג הקובץ הזה אינו נתמך.",
+        "needsFfmpeg": "הפורמט הזה דורש ffmpeg. התקן את ffmpeg ונסה שוב.",
+        "noModel": "לא נבחר מודל תמלול.",
+        "modelChanged": "המודל השתנה בזמן שהקובץ הזה תומלל.",
+        "decodeFailed": "לא ניתן לקרוא את האודיו בקובץ הזה.",
+        "engineFailed": "התמלול נכשל.",
+        "serverUnreachable": "לא ניתן להתחבר ל-Lemonade Server. ודא שהוא פועל.",
+        "serverUnauthorized": "Lemonade Server לא קיבל את מפתח ה-API.",
+        "serverModelMissing": "המודל שנבחר לא קיים ב-Lemonade Server.",
+        "internal": "משהו השתבש.",
+        "sourceChanged": "ההקלטה במיקום הזה השתנתה מאז שתומללה, ולכן לא ניתן להתאים את הדוברים שלה לתמלול הזה. אם זו אותה הקלטה, בחר אותה באמצעות 'חפש הקלטה…'.",
+        "speakerLabelsFailed": "סימון הדוברים נכשל.",
+        "enqueue": "לא ניתן להוסיף קבצים: {{error}}",
+        "cancel": "לא ניתן לבטל: {{error}}",
+        "remove": "לא ניתן להסיר מהרשימה: {{error}}",
+        "loadTranscript": "לא ניתן לטעון את התמלול: {{error}}"
+      },
+      "transcript": {
+        "title": "תמלול: {{file}}",
+        "live": "מתעדכן תוך כדי התמלול",
+        "partial": "התמלול הזה אינו שלם: {{reason}}",
+        "partialNoReason": "התמלול הזה אינו שלם.",
+        "approximateTimes": "הזמנים משוערים, כי המודל הזה לא מספק חותמות זמן.",
+        "empty": "לא נמצא דיבור.",
+        "segmentsLabel": "תמלול עם חותמות זמן"
+      },
+      "export": {
+        "button": "ייצוא…",
+        "dialogTitle": "ייצוא תמלול",
+        "formats": {
+          "docx": "מסמך Word (.docx)",
+          "txt": "טקסט פשוט (.txt)",
+          "md": "Markdown (.md)",
+          "srt": "כתוביות SubRip (.srt)",
+          "vtt": "כתוביות WebVTT (.vtt)"
+        },
+        "success": "התמלול יוצא.",
+        "showInFolder": "הצג בתיקייה",
+        "error": "הייצוא נכשל: {{error}}"
       }
     },
     "history": {
@@ -477,7 +850,14 @@
       "retranscribe": "תמלל מחדש",
       "retranscribeError": "תמלול מחדש נכשל. נסה שוב.",
       "transcribing": "מתמלל...",
-      "transcriptionFailed": "התמלול נכשל. אפשר לתמלל מחדש באמצעות אייקון הניסיון החוזר."
+      "transcriptionFailed": "התמלול נכשל. אפשר לתמלל מחדש באמצעות אייקון הניסיון החוזר.",
+      "openTranscript": "פתח תמלול",
+      "showOriginal": "הצג את הקובץ המקורי",
+      "originalMissing": "הקובץ המקורי הועבר או נמחק.",
+      "fileDuration": "אורך {{duration}}",
+      "incomplete": "לא שלם",
+      "speakerCount": "דוברים: {{number}}",
+      "retranscribeFileUnavailable": "כדי לתמלל את הקובץ הזה מחדש, השתמש בעמוד 'תמלול'."
     },
     "debug": {
       "title": "ניפוי שגיאות",
@@ -644,6 +1024,142 @@
       "whatsNewUpdates": {
         "label": "הצג מה חדש",
         "description": "הצג הערות גרסה לאחר עדכוני Handy"
+      }
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Record an in-person meeting from one microphone. Handy saves the audio as it goes and shows a live transcript. When you stop, the recording is transcribed and saved in History.",
+      "dictationBlocked": "Dictation is off while a meeting is recording.",
+      "updateBlocked": "Stop the meeting before installing the update.",
+      "errors": {
+        "startFailed": "Could not start the meeting",
+        "stopFailed": "Could not stop the meeting",
+        "transcribeFailed": "Could not send the recording for transcription"
+      },
+      "setup": {
+        "title": "New meeting",
+        "meetingTitle": "Meeting name (optional)",
+        "meetingTitlePlaceholder": "For example: Mr. Lee intake",
+        "meetingTitleHint": "Used in the file name and as the title in History.",
+        "check": {
+          "title": "Microphone check",
+          "description": "Records {{seconds}} seconds. Say your name and a sentence, as you would in the meeting.",
+          "start": "Check microphone",
+          "again": "Check again",
+          "stop": "Stop",
+          "level": "Microphone level",
+          "opening": "Opening the microphone…",
+          "speak": "Speak now… {{seconds}}",
+          "checking": "Checking what Handy heard…",
+          "heard": "Handy heard: \"{{text}}\"",
+          "verdict": {
+            "good": "The microphone works and Handy hears speech clearly.",
+            "no_signal": "The microphone sends no sound. It may be muted, or Windows may be blocking microphone access.",
+            "no_speech": "Handy heard sound but almost no speech. Speak during the check, or move the microphone closer.",
+            "too_quiet": "Speech was very quiet. Move the microphone closer or raise its input level.",
+            "too_loud": "Speech was loud enough to distort. Lower the microphone's input level or move it back."
+          }
+        },
+        "liveTranscript": {
+          "label": "Live transcript",
+          "description": "Show text during the meeting. It is a preview; the final transcript is made from the recording after the meeting."
+        },
+        "consent": {
+          "label": "Everyone in the meeting knows it is being recorded and agrees.",
+          "note": "In Washington and some other states, everyone in a private conversation must agree before it is recorded."
+        },
+        "startHint": "The audio is saved every 2 seconds. The screen stays on during the meeting so the computer does not go to sleep; keep a laptop's lid open.",
+        "start": "Start meeting",
+        "starting": "Starting…"
+      },
+      "live": {
+        "phase": {
+          "recording": "Recording",
+          "paused": "Paused",
+          "stopping": "Saving the recording…",
+          "failed": "Saving paused: trying again"
+        },
+        "recordedFor": "Recorded {{time}}",
+        "level": "Microphone level",
+        "signal": {
+          "ok": "Hearing sound",
+          "quiet": "Very quiet for a while",
+          "no_signal": "No sound from the microphone",
+          "lost": "Microphone disconnected"
+        },
+        "defaultMicrophone": "Default microphone",
+        "alerts": {
+          "micLost": "The microphone stopped sending audio. Reconnect it; recording continues on its own when it is back.",
+          "noSignal": "The microphone sends no sound. Check that it is not muted.",
+          "writeFailed": "The audio could not be saved ({{error}}). Handy keeps up to 5 minutes of audio in memory and tries a new file every few seconds. Everything saved before is kept.",
+          "lowDisk": "The disk is almost full. Stop the meeting soon or free some space.",
+          "dropped": "{{seconds}} seconds of audio were lost because the computer was too busy."
+        },
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop meeting",
+        "stopping": "Saving…",
+        "stopConfirm": "Stop recording this meeting? The recording is then transcribed and saved in History.",
+        "openFolder": "Open folder",
+        "notePlaceholder": "Note for this moment (optional)",
+        "addNote": "Add marker",
+        "noteAdded": "Marker added",
+        "markers": {
+          "title": "Markers",
+          "note": "Marker",
+          "paused": "Paused",
+          "resumed": "Resumed",
+          "mic_lost": "Microphone disconnected",
+          "mic_back": "Microphone back",
+          "gap": "The computer was asleep",
+          "disk_full": "Disk full",
+          "write_failed": "Saving failed",
+          "write_resumed": "Saving resumed"
+        },
+        "transcript": {
+          "title": "Live transcript",
+          "preview": "A preview. The final transcript is made from the recording after the meeting.",
+          "off": "The live transcript is off for this meeting.",
+          "starting": "Loading the model…",
+          "unavailable": "Live transcript unavailable: {{message}}. The recording is not affected.",
+          "waiting": "Listening. Text appears about 15 seconds after people speak.",
+          "behind": "The preview fell behind and skipped some passages. The final transcript includes everything."
+        }
+      },
+      "stopped": {
+        "title": "Meeting saved",
+        "queued": "The recording is being transcribed. The transcript will appear in History.",
+        "notQueued": "The recording is saved in the meeting folder."
+      },
+      "past": {
+        "title": "Past meetings",
+        "openFolder": "Open meetings folder",
+        "openMeetingFolder": "Open this meeting's folder",
+        "empty": "No meetings recorded yet.",
+        "untitled": "Meeting",
+        "notes": "Markers: {{count}}",
+        "interrupted": "A meeting from {{date}} was interrupted. {{duration}} of audio was saved. Transcribe it from the list below.",
+        "interruptedBadge": "interrupted",
+        "state": {
+          "transcribed": "Transcribed. The transcript is in History.",
+          "running": "Being transcribed…",
+          "not_transcribed": "Not transcribed yet",
+          "no_audio": "No audio was saved"
+        },
+        "transcribe": "Transcribe",
+        "queued": "Recording sent for transcription"
+      },
+      "chip": {
+        "open": "Open the meeting",
+        "recording": "Meeting",
+        "paused": "Meeting paused"
+      },
+      "quit": {
+        "title": "A meeting is recording",
+        "body": "Quitting stops the meeting. The audio recorded so far is saved, and it can be transcribed from the Meetings page the next time Handy starts. Choosing Quit again within 15 seconds also stops and saves the meeting.",
+        "keepRecording": "Keep recording",
+        "stopAndQuit": "Stop and quit",
+        "saving": "Saving…"
       }
     }
   },
