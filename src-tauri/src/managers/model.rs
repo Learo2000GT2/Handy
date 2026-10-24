@@ -79,6 +79,25 @@ pub struct ModelInfo {
     pub is_custom: bool,            // Whether this is a user-provided custom model
     pub supports_streaming: bool, // Whether this model supports live streaming preview (transcribe-cpp)
     pub supports_language_detection: bool, // Whether the model can auto-detect language (gates the "Auto" option)
+    /// Whether the model gives real timestamps (a time for each sentence or
+    /// finer) when it transcribes a file. Without them a file transcript is
+    /// timed once per chunk, so its times are only approximate.
+    #[serde(default)]
+    pub supports_timestamps: bool,
+    /// Whether the model is on the short list recommended for transcribing
+    /// recordings and meetings: accurate, and with real timestamps so
+    /// transcripts and speaker labels line up with the audio. Catalog models
+    /// take it from `catalog::RECOMMENDED_FOR_RECORDINGS`; the legacy table
+    /// sets it per entry.
+    #[serde(default)]
+    pub is_recommended_for_recordings: bool,
+}
+
+/// Whether a transcribe-cpp model of `architecture` gives real timestamps
+/// when the catalog does not say: only the whisper and parakeet families are
+/// known to. Any other or unknown architecture counts as untimed.
+fn architecture_supports_timestamps(architecture: Option<&str>) -> bool {
+    matches!(architecture, Some("whisper" | "parakeet"))
 }
 
 const CHINESE_LANGUAGE_CODE: &str = "zh";
@@ -183,6 +202,12 @@ pub struct ModelDescriptor {
     /// onboarding (and badged "Recommended"). A model can be ranked for ordering
     /// without being in this set.
     pub recommended: bool,
+    /// Whether the model gives real timestamps (the catalog's `timestamps`
+    /// capability is word, token or segment).
+    pub supports_timestamps: bool,
+    /// Whether the model is recommended for transcribing recordings. Unlike
+    /// `recommended`, every quant of the model carries it.
+    pub recommended_for_recordings: bool,
 }
 
 impl ModelDescriptor {
@@ -254,6 +279,8 @@ impl ModelDescriptor {
             is_custom: false,
             supports_streaming: self.caps.supports_streaming.unwrap_or(false),
             supports_language_detection: self.caps.supports_language_detect.unwrap_or(false),
+            supports_timestamps: self.supports_timestamps,
+            is_recommended_for_recordings: self.recommended_for_recordings,
         }
     }
 }
@@ -392,6 +419,8 @@ struct LocalCaps {
     supports_language_selection: bool,
     supports_language_detection: bool,
     supported_languages: Vec<String>,
+    /// From the probed architecture ([`architecture_supports_timestamps`]).
+    supports_timestamps: bool,
 }
 
 fn local_caps(probe: &CapabilityProbe) -> LocalCaps {
@@ -403,6 +432,7 @@ fn local_caps(probe: &CapabilityProbe) -> LocalCaps {
         supports_language_selection: languages.len() > 1,
         supports_language_detection: probe.supports_language_detect.unwrap_or(false),
         supported_languages: languages,
+        supports_timestamps: architecture_supports_timestamps(probe.architecture.as_deref()),
     }
 }
 
@@ -551,16 +581,9 @@ pub struct ModelManager {
 }
 
 impl ModelManager {
-    pub fn new(app_handle: &AppHandle) -> Result<Self> {
-        // Create models directory in app data
-        let models_dir = crate::portable::app_data_dir(app_handle)
-            .map_err(|e| anyhow::anyhow!("Failed to get app data dir: {}", e))?
-            .join("models");
-
-        if !models_dir.exists() {
-            fs::create_dir_all(&models_dir)?;
-        }
-
+    /// The legacy built-in models (blob-hosted `.bin` and ONNX downloads),
+    /// keyed by id, before any disk status is known.
+    fn legacy_models() -> HashMap<String, ModelInfo> {
         let mut available_models = HashMap::new();
 
         // Whisper supported languages (99 languages from tokenizer)
@@ -607,6 +630,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: true,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -640,6 +665,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: true,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -672,6 +699,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: true,
+                is_recommended_for_recordings: true,
             },
         );
 
@@ -704,6 +733,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: true,
+                is_recommended_for_recordings: true,
             },
         );
 
@@ -737,6 +768,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: true,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -770,6 +803,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: true,
+                is_recommended_for_recordings: true,
             },
         );
 
@@ -812,6 +847,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: true,
+                is_recommended_for_recordings: true,
             },
         );
 
@@ -844,6 +881,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: false,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -877,6 +916,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: false,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -910,6 +951,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: false,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -943,6 +986,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: false,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -982,6 +1027,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: false,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -1017,6 +1064,8 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: false,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -1057,6 +1106,8 @@ impl ModelManager {
                 supports_streaming: false,
                 // Canary (NeMo) requires an explicit source language — no auto-detect.
                 supports_language_detection: false,
+                supports_timestamps: false,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -1100,6 +1151,8 @@ impl ModelManager {
                 supports_streaming: false,
                 // Canary (NeMo) requires an explicit source language — no auto-detect.
                 supports_language_detection: false,
+                supports_timestamps: false,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -1139,8 +1192,25 @@ impl ModelManager {
                 is_custom: false,
                 supports_streaming: false,
                 supports_language_detection: true,
+                supports_timestamps: false,
+                is_recommended_for_recordings: false,
             },
         );
+
+        available_models
+    }
+
+    pub fn new(app_handle: &AppHandle) -> Result<Self> {
+        // Create models directory in app data
+        let models_dir = crate::portable::app_data_dir(app_handle)
+            .map_err(|e| anyhow::anyhow!("Failed to get app data dir: {}", e))?
+            .join("models");
+
+        if !models_dir.exists() {
+            fs::create_dir_all(&models_dir)?;
+        }
+
+        let mut available_models = Self::legacy_models();
 
         // Seed the bundled offline catalog before the on-disk scans, so a model
         // already in the HF cache dedups onto its richer catalog entry (the scans
@@ -1754,6 +1824,9 @@ impl ModelManager {
                     is_custom: true,
                     supports_streaming: caps.supports_streaming,
                     supports_language_detection: caps.supports_language_detection,
+                    // A legacy GGML `.bin` file is always a whisper model.
+                    supports_timestamps: !is_gguf || caps.supports_timestamps,
+                    is_recommended_for_recordings: false,
                 },
             );
         }
@@ -1900,6 +1973,8 @@ impl ModelManager {
                         is_custom: false,
                         supports_streaming: caps.supports_streaming,
                         supports_language_detection: caps.supports_language_detection,
+                        supports_timestamps: caps.supports_timestamps,
+                        is_recommended_for_recordings: false,
                     },
                 );
             }
@@ -2903,6 +2978,8 @@ mod tests {
                 // Legacy entry: preserve the historical "Auto offered" behavior.
                 // (Catalog GGUFs and on-disk probes derive this from metadata.)
                 supports_language_detection: true,
+                supports_timestamps: true,
+                is_recommended_for_recordings: false,
             },
         );
 
@@ -3020,6 +3097,8 @@ mod tests {
             accuracy_score: 0.5,
             recommended_rank: None,
             recommended: true,
+            supports_timestamps: true,
+            recommended_for_recordings: true,
         };
         let status = DiskStatus::default();
 
@@ -3035,6 +3114,11 @@ mod tests {
         assert_eq!(alt_info.filename, "model-Q4_K_M.gguf");
         assert!(!alt_info.is_recommended);
         assert!(!alt_info.is_custom);
+        // Timestamps and the recordings recommendation belong to the model,
+        // so every quant keeps them.
+        assert!(default_info.supports_timestamps && alt_info.supports_timestamps);
+        assert!(default_info.is_recommended_for_recordings);
+        assert!(alt_info.is_recommended_for_recordings);
 
         // Catalog defaults stay visible for re-download when their file is gone.
         assert!(!ModelManager::disappears_when_missing(&default_info));
@@ -3179,9 +3263,147 @@ mod tests {
             m.supported_languages,
             vec!["en".to_string(), "de".to_string()]
         );
+        // A whisper model gives timestamps; nothing outside the curated list
+        // is recommended for recordings.
+        assert!(m.supports_timestamps);
+        assert!(!m.is_recommended_for_recordings);
         assert!(
             !models.contains_key("someone/llama-7b/llama-q8.gguf"),
             "non-ASR gguf must be ignored"
         );
+    }
+
+    #[test]
+    fn legacy_models_mark_timestamps_and_the_recordings_picks() {
+        let models = ModelManager::legacy_models();
+        assert_eq!(models.len(), 16);
+        for model in models.values() {
+            // Whisper (transcribe-cpp) and Parakeet return timed segments;
+            // the other legacy engines give one time per chunk.
+            let timed = matches!(
+                model.engine_type,
+                EngineType::TranscribeCpp | EngineType::Parakeet
+            );
+            assert_eq!(model.supports_timestamps, timed, "{}", model.id);
+            if model.is_recommended_for_recordings {
+                assert!(model.supports_timestamps, "{}", model.id);
+            }
+        }
+        let mut picks: Vec<&str> = models
+            .values()
+            .filter(|model| model.is_recommended_for_recordings)
+            .map(|model| model.id.as_str())
+            .collect();
+        picks.sort_unstable();
+        assert_eq!(
+            picks,
+            [
+                "large",
+                "parakeet-tdt-0.6b-v2",
+                "parakeet-tdt-0.6b-v3",
+                "turbo"
+            ]
+        );
+        assert!(!models["moonshine-base"].supports_timestamps);
+        assert!(!models["sense-voice-int8"].supports_timestamps);
+        assert!(!models["canary-1b-v2"].supports_timestamps);
+        assert!(models["breeze-asr"].supports_timestamps);
+        assert!(!models["breeze-asr"].is_recommended_for_recordings);
+    }
+
+    #[test]
+    fn catalog_models_take_timestamps_from_the_catalog() {
+        let mut models = HashMap::new();
+        ModelManager::seed_catalog_models(&mut models);
+        let by_repo = |repo: &str| {
+            models
+                .values()
+                .find(|model| {
+                    matches!(&model.source,
+                        ModelSource::HuggingFace { repo_id, .. } if repo_id == repo)
+                })
+                .unwrap_or_else(|| panic!("{repo} is in the catalog"))
+        };
+
+        // "segment" and "token" are real timestamps, "none" is not.
+        let turbo = by_repo("handy-computer/whisper-large-v3-turbo-gguf");
+        assert!(turbo.supports_timestamps && turbo.is_recommended_for_recordings);
+        let v3 = by_repo("handy-computer/parakeet-tdt-0.6b-v3-gguf");
+        assert!(v3.supports_timestamps && v3.is_recommended_for_recordings);
+        let small = by_repo("handy-computer/whisper-small-gguf");
+        assert!(small.supports_timestamps && !small.is_recommended_for_recordings);
+        for untimed in [
+            "handy-computer/canary-180m-flash-gguf",
+            "handy-computer/cohere-transcribe-03-2026-gguf",
+            "handy-computer/moonshine-base-gguf",
+            "handy-computer/Qwen3-ASR-0.6B-gguf",
+            "handy-computer/SenseVoiceSmall-gguf",
+        ] {
+            let model = by_repo(untimed);
+            assert!(!model.supports_timestamps, "{untimed}");
+            assert!(!model.is_recommended_for_recordings, "{untimed}");
+        }
+
+        let mut picks: Vec<String> = models
+            .values()
+            .filter(|model| model.is_recommended_for_recordings)
+            .filter_map(|model| match &model.source {
+                ModelSource::HuggingFace { repo_id, .. } => Some(repo_id.clone()),
+                _ => None,
+            })
+            .collect();
+        picks.sort_unstable();
+        assert_eq!(
+            picks,
+            [
+                "handy-computer/parakeet-tdt-0.6b-v2-gguf",
+                "handy-computer/parakeet-tdt-0.6b-v3-gguf",
+                "handy-computer/parakeet-unified-en-0.6b-gguf",
+                "handy-computer/whisper-large-v3-gguf",
+                "handy-computer/whisper-large-v3-turbo-gguf",
+            ]
+        );
+    }
+
+    #[test]
+    fn local_models_take_timestamps_from_their_architecture() {
+        assert!(architecture_supports_timestamps(Some("whisper")));
+        assert!(architecture_supports_timestamps(Some("parakeet")));
+        assert!(!architecture_supports_timestamps(Some("moonshine")));
+        assert!(!architecture_supports_timestamps(Some("qwen3_asr")));
+        assert!(!architecture_supports_timestamps(None));
+
+        let temp_dir = TempDir::new().unwrap();
+        // A legacy GGML file is whisper; a GGUF says its architecture.
+        fs::write(temp_dir.path().join("my-whisper.bin"), b"").unwrap();
+        write_synthetic_gguf(
+            &temp_dir.path().join("my-parakeet.gguf"),
+            "parakeet",
+            &["en"],
+        );
+        write_synthetic_gguf(
+            &temp_dir.path().join("my-moonshine.gguf"),
+            "moonshine",
+            &["en"],
+        );
+        let mut models = HashMap::new();
+        ModelManager::discover_custom_transcribe_models(temp_dir.path(), &mut models).unwrap();
+        assert!(models["my-whisper"].supports_timestamps);
+        assert!(models["my-parakeet"].supports_timestamps);
+        assert!(!models["my-moonshine"].supports_timestamps);
+        assert!(models
+            .values()
+            .all(|model| !model.is_recommended_for_recordings));
+    }
+
+    #[test]
+    fn model_info_without_the_timestamp_fields_reads_as_untimed() {
+        let mut value = serde_json::to_value(&ModelManager::legacy_models()["turbo"]).unwrap();
+        let object = value.as_object_mut().unwrap();
+        object.remove("supports_timestamps");
+        object.remove("is_recommended_for_recordings");
+        let info: ModelInfo = serde_json::from_value(value).unwrap();
+        assert!(!info.supports_timestamps);
+        assert!(!info.is_recommended_for_recordings);
     }
 }

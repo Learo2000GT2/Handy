@@ -297,6 +297,8 @@ mod tests {
             is_custom: false,
             supports_streaming: false,
             supports_language_detection: false,
+            supports_timestamps: false,
+            is_recommended_for_recordings: false,
         }
     }
 

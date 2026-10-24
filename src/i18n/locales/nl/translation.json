@@ -129,6 +129,9 @@
     "custom": "Aangepast",
     "legacy": "Klassiek",
     "streaming": "Streaming",
+    "bestForRecordings": "Beste voor opnames",
+    "timestamps": "Tijdstempels",
+    "noTimestamps": "Geen tijdstempels",
     "active": "Actief",
     "switching": "Wisselen...",
     "noModelsAvailable": "Geen modellen beschikbaar",
@@ -156,7 +159,10 @@
       "languageOnly": "Alleen {{language}}",
       "translation": "Kan vertalen naar het Engels",
       "translate": "Vertalen",
-      "streaming": "Toont live transcriptie tijdens het spreken"
+      "streaming": "Toont live transcriptie tijdens het spreken",
+      "bestForRecordings": "Nauwkeurig, met een tijd voor elke zin. Een goede keuze voor opnames en vergaderingen.",
+      "timestamps": "Geeft een tijd voor elke zin, zodat de transcriptie en de sprekeraanduiding overeenkomen met de opname.",
+      "noTimestamps": "De tijden zijn slechts bij benadering, ongeveer elke 30 seconden."
     }
   },
   "settings": {
@@ -221,6 +227,7 @@
     "models": {
       "title": "Transcriptiemodellen",
       "description": "Selecteer een transcriptiemodel of download extra modellen. Verschillende modellen bieden variërende niveaus van nauwkeurigheid en snelheid.",
+      "recordingsTip": "Kies voor opnames en vergaderingen een model met het label ‘{{badge}}’. Parakeet TDT 0.6B v3 is de beste keuze voor vrijwel alles; Whisper Large v3 Turbo kan meer talen aan.",
       "searchPlaceholder": "Modellen zoeken op naam...",
       "yourModels": "Gedownloade modellen",
       "availableModels": "Beschikbaar voor download",
@@ -633,6 +640,8 @@
         "description": "Opnames kunnen een trager maar nauwkeuriger model gebruiken dan dicteren. Het draait apart en wordt alleen geladen terwijl bestanden worden getranscribeerd, zodat je dicteermodel klaar blijft. Beide modellen moeten in het geheugen passen.",
         "same": "Zelfde als dicteren ({{model}})",
         "sameNoModel": "Zelfde als dicteren",
+        "timestamps": "(tijdstempels)",
+        "noTimestamps": "(geen tijdstempels)",
         "switchWarning": "Dit bestand gebruikt je dicteermodel, dus als je nu van dicteermodel wisselt, stopt het. Kies een ander model voor opnames om ze gescheiden te houden.",
         "onCpu": "Opnames draaien op de processor, omdat er niet genoeg grafisch geheugen is voor beide modellen. Kies een kleiner model voor opnames om de grafische kaart te gebruiken."
       },

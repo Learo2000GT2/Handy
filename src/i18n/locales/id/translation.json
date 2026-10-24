@@ -129,6 +129,9 @@
     "custom": "Kustom",
     "legacy": "Legacy",
     "streaming": "Streaming",
+    "bestForRecordings": "Terbaik untuk rekaman",
+    "timestamps": "Stempel waktu",
+    "noTimestamps": "Tanpa stempel waktu",
     "active": "Aktif",
     "switching": "Beralih...",
     "noModelsAvailable": "Tidak ada model yang tersedia",
@@ -156,7 +159,10 @@
       "languageOnly": "Hanya {{language}}",
       "translation": "Dapat menerjemahkan ke bahasa Inggris",
       "translate": "Terjemahkan",
-      "streaming": "Menampilkan transkripsi langsung saat Anda berbicara"
+      "streaming": "Menampilkan transkripsi langsung saat Anda berbicara",
+      "bestForRecordings": "Akurat, dengan waktu untuk setiap kalimat. Pilihan yang baik untuk rekaman dan rapat.",
+      "timestamps": "Memberikan waktu untuk setiap kalimat, sehingga transkripsi dan label pembicara sesuai dengan rekaman.",
+      "noTimestamps": "Waktunya hanya perkiraan, kira-kira setiap 30 detik."
     }
   },
   "settings": {
@@ -221,6 +227,7 @@
     "models": {
       "title": "Model Transkripsi",
       "description": "Pilih model transkripsi atau unduh model tambahan. Setiap model menawarkan tingkat akurasi dan kecepatan yang berbeda.",
+      "recordingsTip": "Untuk rekaman dan rapat, pilih model bertanda \"{{badge}}\". Parakeet TDT 0.6B v3 adalah pilihan terbaik untuk berbagai keperluan; Whisper Large v3 Turbo mendukung lebih banyak bahasa.",
       "searchPlaceholder": "Cari model berdasarkan nama…",
       "yourModels": "Model yang Diunduh",
       "availableModels": "Tersedia untuk Diunduh",
@@ -633,6 +640,8 @@
         "description": "Rekaman dapat menggunakan model yang lebih lambat tetapi lebih akurat daripada model dikte. Model ini berjalan terpisah dan hanya dimuat saat file ditranskripsikan, sehingga model dikte Anda tetap siap. Kedua model harus muat di memori.",
         "same": "Sama seperti dikte ({{model}})",
         "sameNoModel": "Sama seperti dikte",
+        "timestamps": "(stempel waktu)",
+        "noTimestamps": "(tanpa stempel waktu)",
         "switchWarning": "File ini menggunakan model dikte Anda, jadi mengganti model dikte sekarang akan menghentikannya. Agar keduanya terpisah, pilih model lain untuk rekaman.",
         "onCpu": "Rekaman berjalan di prosesor karena memori grafis tidak cukup untuk kedua model. Pilih model yang lebih kecil untuk rekaman agar kartu grafis dapat digunakan."
       },

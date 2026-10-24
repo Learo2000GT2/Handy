@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { ModelCardStatus } from "@/components/onboarding";
 import { ModelCard } from "@/components/onboarding";
+import { Alert } from "@/components/ui/Alert";
 import { useModelStore } from "@/stores/modelStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import {
@@ -259,6 +260,12 @@ export const ModelsSettings: React.FC = () => {
         </p>
       </div>
 
+      <Alert variant="info">
+        {t("settings.models.recordingsTip", {
+          badge: t("modelSelector.bestForRecordings"),
+        })}
+      </Alert>
+
       {/* Search bar — filter the catalog by name or description */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text/40 pointer-events-none" />
@@ -429,6 +436,7 @@ export const ModelsSettings: React.FC = () => {
               downloadProgress={getDownloadProgress(model.id)}
               downloadSpeed={getDownloadSpeed(model.id)}
               showRecommended={false}
+              showRecordingsInfo={true}
             />
           ))}
         </div>
@@ -451,6 +459,7 @@ export const ModelsSettings: React.FC = () => {
                 downloadProgress={getDownloadProgress(model.id)}
                 downloadSpeed={getDownloadSpeed(model.id)}
                 showRecommended={true}
+                showRecordingsInfo={true}
               />
             ))}
           </div>

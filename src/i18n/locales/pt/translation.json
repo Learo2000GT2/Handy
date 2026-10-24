@@ -128,6 +128,9 @@
   "modelSelector": {
     "custom": "Personalizado",
     "streaming": "Streaming",
+    "bestForRecordings": "Melhor para gravações",
+    "timestamps": "Marcações de tempo",
+    "noTimestamps": "Sem marcações de tempo",
     "active": "Ativo",
     "noModelsAvailable": "Nenhum modelo disponível",
     "verifying": "Verificando {{modelName}}...",
@@ -153,7 +156,10 @@
       "translate": "Traduzir para inglês",
       "singleLanguage": "Suporta apenas este idioma",
       "languageOnly": "Apenas {{language}}",
-      "streaming": "Mostra a transcrição ao vivo enquanto você fala"
+      "streaming": "Mostra a transcrição ao vivo enquanto você fala",
+      "bestForRecordings": "Preciso, com um horário para cada frase. Uma boa escolha para gravações e reuniões.",
+      "timestamps": "Dá um horário para cada frase, assim a transcrição e a identificação de locutores ficam alinhadas com a gravação.",
+      "noTimestamps": "Os tempos são apenas aproximados, mais ou menos a cada 30 segundos."
     },
     "cancel": "Cancelar",
     "cancelDownload": "Cancelar download",
@@ -221,6 +227,7 @@
     "models": {
       "title": "Modelos de Transcrição",
       "description": "Selecione um modelo de transcrição ou baixe modelos adicionais. Diferentes modelos oferecem diferentes níveis de precisão e velocidade.",
+      "recordingsTip": "Para gravações e reuniões, escolha um modelo marcado como \"{{badge}}\". O Parakeet TDT 0.6B v3 é a melhor escolha no geral; o Whisper Large v3 Turbo aceita mais idiomas.",
       "deleteConfirm": "Tem certeza de que deseja excluir {{modelName}}? Você precisará baixá-lo novamente para usá-lo.",
       "deleteActiveConfirm": "{{modelName}} é o seu modelo ativo. Excluí-lo interromperá as transcrições até que você selecione um novo modelo. Tem certeza?",
       "deleteRecordingsConfirm": "{{modelName}} é o seu modelo para gravações. Se você excluí-lo, as gravações usarão seu modelo de ditado. Tem certeza?",
@@ -633,6 +640,8 @@
         "description": "As gravações podem usar um modelo mais lento e mais preciso que o do ditado. Ele funciona separadamente e só é carregado enquanto arquivos são transcritos, então seu modelo de ditado continua pronto. Os dois modelos precisam caber na memória.",
         "same": "O mesmo do ditado ({{model}})",
         "sameNoModel": "O mesmo do ditado",
+        "timestamps": "(marcações de tempo)",
+        "noTimestamps": "(sem marcações de tempo)",
         "switchWarning": "Este arquivo usa seu modelo de ditado, então trocar o modelo de ditado agora vai interrompê-lo. Para mantê-los separados, escolha outro modelo para gravações.",
         "onCpu": "As gravações estão rodando no processador porque não há memória gráfica suficiente para os dois modelos. Escolha um modelo menor para gravações para usar a placa de vídeo."
       },

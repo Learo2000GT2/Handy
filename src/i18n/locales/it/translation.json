@@ -128,6 +128,9 @@
   "modelSelector": {
     "custom": "Personalizzato",
     "streaming": "Streaming",
+    "bestForRecordings": "Ideale per le registrazioni",
+    "timestamps": "Timestamp",
+    "noTimestamps": "Nessun timestamp",
     "active": "Attivo",
     "switching": "Cambio...",
     "noModelsAvailable": "Nessun modello disponibile",
@@ -153,7 +156,10 @@
       "translate": "Traduci in inglese",
       "singleLanguage": "Supporta solo questa lingua",
       "languageOnly": "Solo {{language}}",
-      "streaming": "Mostra la trascrizione in tempo reale mentre parli"
+      "streaming": "Mostra la trascrizione in tempo reale mentre parli",
+      "bestForRecordings": "Preciso, con un orario per ogni frase. Un'ottima scelta per registrazioni e riunioni.",
+      "timestamps": "Indica un orario per ogni frase, così la trascrizione e le etichette dei parlanti corrispondono alla registrazione.",
+      "noTimestamps": "I tempi sono solo approssimativi, circa ogni 30 secondi."
     },
     "cancel": "Annulla",
     "cancelDownload": "Annulla download",
@@ -166,6 +172,7 @@
     "models": {
       "title": "Modelli di Trascrizione",
       "description": "Seleziona un modello di trascrizione o scarica modelli aggiuntivi. Diversi modelli offrono diversi livelli di accuratezza e velocità.",
+      "recordingsTip": "Per registrazioni e riunioni, scegli un modello contrassegnato con «{{badge}}». Parakeet TDT 0.6B v3 è la scelta migliore per ogni uso; Whisper Large v3 Turbo gestisce più lingue.",
       "deleteConfirm": "Sei sicuro di voler eliminare {{modelName}}? Dovrai scaricarlo di nuovo per usarlo.",
       "deleteActiveConfirm": "{{modelName}} è il tuo modello attivo. Eliminarlo interromperà le trascrizioni fino a quando non selezionerai un nuovo modello. Sei sicuro?",
       "deleteRecordingsConfirm": "{{modelName}} è il tuo modello per le registrazioni. Se lo elimini, le registrazioni useranno il modello di dettatura. Sei sicuro?",
@@ -633,6 +640,8 @@
         "description": "Le registrazioni possono usare un modello più lento e più preciso di quello della dettatura. Funziona separatamente e viene caricato solo durante la trascrizione dei file, così il modello di dettatura resta pronto. Entrambi i modelli devono entrare in memoria.",
         "same": "Uguale alla dettatura ({{model}})",
         "sameNoModel": "Uguale alla dettatura",
+        "timestamps": "(timestamp)",
+        "noTimestamps": "(nessun timestamp)",
         "switchWarning": "Questo file usa il modello di dettatura, quindi cambiarlo ora lo interromperà. Per tenerli separati, scegli un modello diverso per le registrazioni.",
         "onCpu": "Le registrazioni vengono eseguite sul processore perché la memoria grafica non basta per entrambi i modelli. Scegli un modello più piccolo per le registrazioni per usare la scheda grafica."
       },

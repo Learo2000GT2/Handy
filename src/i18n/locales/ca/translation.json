@@ -129,6 +129,9 @@
     "custom": "Personalitzat",
     "legacy": "Antic",
     "streaming": "En temps real",
+    "bestForRecordings": "El millor per a enregistraments",
+    "timestamps": "Marques de temps",
+    "noTimestamps": "Sense marques de temps",
     "active": "Actiu",
     "switching": "S'està canviant...",
     "noModelsAvailable": "No hi ha models disponibles",
@@ -156,7 +159,10 @@
       "languageOnly": "Només {{language}}",
       "translation": "Pot traduir a l'anglès",
       "translate": "Tradueix",
-      "streaming": "Mostra la transcripció en temps real mentre parleu"
+      "streaming": "Mostra la transcripció en temps real mentre parleu",
+      "bestForRecordings": "Precís, amb un temps per a cada frase. Una bona opció per a enregistraments i reunions.",
+      "timestamps": "Dona un temps per a cada frase, de manera que la transcripció i les etiquetes de parlants coincideixen amb l'enregistrament.",
+      "noTimestamps": "Els temps només són aproximats, cada 30 segons aproximadament."
     }
   },
   "settings": {
@@ -221,6 +227,7 @@
     "models": {
       "title": "Models de transcripció",
       "description": "Seleccioneu un model de transcripció o baixeu-ne més. Els models ofereixen diferents nivells de precisió i velocitat.",
+      "recordingsTip": "Per a enregistraments i reunions, trieu un model marcat amb «{{badge}}». Parakeet TDT 0.6B v3 és la millor opció en general; Whisper Large v3 Turbo admet més idiomes.",
       "searchPlaceholder": "Cerqueu models pel nom…",
       "yourModels": "Models baixats",
       "availableModels": "Disponibles per baixar",
@@ -633,6 +640,8 @@
         "description": "Els enregistraments poden utilitzar un model més lent i més precís que el del dictat. Funciona per separat i només es carrega mentre es transcriuen fitxers, de manera que el model de dictat continua a punt. Tots dos models han de cabre a la memòria.",
         "same": "El mateix que el dictat ({{model}})",
         "sameNoModel": "El mateix que el dictat",
+        "timestamps": "(marques de temps)",
+        "noTimestamps": "(sense marques de temps)",
         "switchWarning": "Aquest fitxer utilitza el model de dictat, així que si ara canvieu el model de dictat s'aturarà. Per mantenir-los separats, trieu un altre model per als enregistraments.",
         "onCpu": "Els enregistraments s'estan executant al processador perquè no hi ha prou memòria gràfica per als dos models. Trieu un model més petit per als enregistraments per utilitzar la targeta gràfica."
       },

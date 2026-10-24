@@ -821,13 +821,16 @@ assert.equal(recordingsModelId("cohere", "small"), "cohere");
 assert.equal(recordingsModelId(" cohere ", ""), "cohere");
 
 // recordingsModelOptions: "Same as dictation" first, then the downloaded
-// transcribe-cpp models by name; ONNX and missing models are not offered.
+// transcribe-cpp models, the ones recommended for recordings first, each
+// group by name; ONNX and missing models are not offered. Descriptions end in
+// whether the model gives timestamps.
 {
   const model = (
     id: string,
     name: string,
     engineType: ModelInfo["engine_type"],
     isDownloaded: boolean,
+    extra: Partial<ModelInfo> = {},
   ): ModelInfo => ({
     id,
     name,
@@ -849,11 +852,17 @@ assert.equal(recordingsModelId(" cohere ", ""), "cohere");
     is_custom: false,
     supports_streaming: false,
     supports_language_detection: false,
+    ...extra,
   });
   const models = [
     model("zeta", "Zeta GGUF", "TranscribeCpp", true),
-    model("parakeet-tdt-0.6b-v3", "Parakeet V3", "Parakeet", true),
-    model("small", "Whisper Small", "TranscribeCpp", true),
+    model("parakeet-tdt-0.6b-v3", "Parakeet V3", "Parakeet", true, {
+      supports_timestamps: true,
+      is_recommended_for_recordings: true,
+    }),
+    model("small", "Whisper Small", "TranscribeCpp", true, {
+      supports_timestamps: true,
+    }),
     model("alpha", "Alpha GGUF", "TranscribeCpp", true),
     model("medium", "Whisper Medium", "TranscribeCpp", false),
   ];
@@ -871,16 +880,32 @@ assert.equal(recordingsModelId(" cohere ", ""), "cohere");
   );
   assert.equal(options[0].label, "Same as dictation (Parakeet V3)");
   assert.equal(options[0].disabled, undefined);
+  // "Same as dictation" says whether the dictation model gives timestamps.
+  assert.equal(options[0].description, "(timestamps)");
   // Catalog models use their translated name and description.
   assert.equal(options[2].label, "Whisper Small");
-  assert.equal(options[2].description, "Fast and fairly accurate.");
-  assert.equal(options[1].description, "Alpha GGUF description");
+  assert.equal(
+    options[2].description,
+    "Fast and fairly accurate. (timestamps)",
+  );
+  // A model without the field (older backend) counts as untimed.
+  assert.equal(
+    options[1].description,
+    "Alpha GGUF description (no timestamps)",
+  );
   assert.ok(options.every((option) => option.disabled !== true));
 
-  // No dictation model.
+  // No dictation model: nothing to say about timestamps.
+  const noDictation = recordingsModelOptions(models, "", "", en)[0];
+  assert.equal(noDictation.label, "Same as dictation");
+  assert.equal(noDictation.description, undefined);
   assert.equal(
-    recordingsModelOptions(models, "", "", en)[0].label,
-    "Same as dictation",
+    recordingsModelOptions(models, "small", "", en)[0].description,
+    "(timestamps)",
+  );
+  assert.equal(
+    recordingsModelOptions(models, "zeta", "", en)[0].description,
+    "(no timestamps)",
   );
   // The dictation model is offered like any other.
   assert.ok(
@@ -918,6 +943,55 @@ assert.equal(recordingsModelId(" cohere ", ""), "cohere");
   const german = recordingsModelOptions(models, "small", "", de)[0].label;
   assert.notEqual(german, "Same as dictation (Whisper Small)");
   assert.ok(german.includes("Whisper Small"), german);
+  const germanSmall = recordingsModelOptions(models, "small", "", de).find(
+    (option) => option.value === "small",
+  );
+  assert.ok(germanSmall?.description?.endsWith("(Zeitstempel)"));
+
+  // Models recommended for recordings come first, each group by name.
+  const picks = [
+    model("whisper-tiny", "Whisper Tiny", "TranscribeCpp", true, {
+      supports_timestamps: true,
+    }),
+    model("turbo-gguf", "Whisper Large v3 Turbo", "TranscribeCpp", true, {
+      supports_timestamps: true,
+      is_recommended_for_recordings: true,
+    }),
+    model("canary", "Canary 180M Flash", "TranscribeCpp", true),
+    model("v3-gguf", "Parakeet TDT 0.6B v3", "TranscribeCpp", true, {
+      supports_timestamps: true,
+      is_recommended_for_recordings: true,
+    }),
+    // Recommended but not downloaded: not offered.
+    model("large-gguf", "Whisper Large v3", "TranscribeCpp", false, {
+      supports_timestamps: true,
+      is_recommended_for_recordings: true,
+    }),
+    model("alpha", "Alpha GGUF", "TranscribeCpp", true),
+  ];
+  const ordered = recordingsModelOptions(picks, "canary", "", en);
+  assert.deepEqual(
+    ordered.map((option) => option.value),
+    ["", "v3-gguf", "turbo-gguf", "alpha", "canary", "whisper-tiny"],
+  );
+  assert.deepEqual(
+    ordered.map((option) => option.description),
+    [
+      "(no timestamps)",
+      "Parakeet TDT 0.6B v3 description (timestamps)",
+      "Whisper Large v3 Turbo description (timestamps)",
+      "Alpha GGUF description (no timestamps)",
+      "Canary 180M Flash description (no timestamps)",
+      "Whisper Tiny description (timestamps)",
+    ],
+  );
+  // A chosen model that went away still comes last, after every group.
+  const withGone = recordingsModelOptions(picks, "canary", "large-gguf", en);
+  assert.deepEqual(withGone[withGone.length - 1], {
+    value: "large-gguf",
+    label: "Whisper Large v3",
+    disabled: true,
+  });
 }
 
 // speakerName: the given name (trimmed), else the default for that id.

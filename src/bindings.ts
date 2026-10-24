@@ -1928,7 +1928,21 @@ export type MicCheckVerdict =
  * Speech loud enough to distort.
  */
 "too_loud"
-export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; is_directory: boolean; engine_type: EngineType; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
+export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; is_directory: boolean; engine_type: EngineType; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean; 
+/**
+ * Whether the model gives real timestamps (a time for each sentence or
+ * finer) when it transcribes a file. Without them a file transcript is
+ * timed once per chunk, so its times are only approximate.
+ */
+supports_timestamps?: boolean; 
+/**
+ * Whether the model is on the short list recommended for transcribing
+ * recordings and meetings: accurate, and with real timestamps so
+ * transcripts and speaker labels line up with the audio. Catalog models
+ * take it from `catalog::RECOMMENDED_FOR_RECORDINGS`; the legacy table
+ * sets it per entry.
+ */
+is_recommended_for_recordings?: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }
 /**
  * Where a model comes from and how Handy obtains it — the routing discriminant

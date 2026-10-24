@@ -128,6 +128,9 @@
   "modelSelector": {
     "custom": "Tùy chỉnh",
     "streaming": "Truyền trực tiếp",
+    "bestForRecordings": "Tốt nhất cho bản ghi âm",
+    "timestamps": "Dấu thời gian",
+    "noTimestamps": "Không có dấu thời gian",
     "active": "Đang hoạt động",
     "switching": "Đang chuyển...",
     "noModelsAvailable": "Không có mô hình nào",
@@ -153,7 +156,10 @@
       "translate": "Dịch sang tiếng Anh",
       "singleLanguage": "Chỉ hỗ trợ ngôn ngữ này",
       "languageOnly": "Chỉ {{language}}",
-      "streaming": "Hiển thị phiên âm trực tiếp khi bạn nói"
+      "streaming": "Hiển thị phiên âm trực tiếp khi bạn nói",
+      "bestForRecordings": "Chính xác, có thời gian cho từng câu. Lựa chọn tốt cho bản ghi âm và cuộc họp.",
+      "timestamps": "Cho thời gian của từng câu, nhờ đó bản chép lời và nhãn người nói khớp với bản ghi âm.",
+      "noTimestamps": "Thời gian chỉ là ước tính, khoảng 30 giây một lần."
     },
     "cancel": "Hủy",
     "cancelDownload": "Hủy tải xuống",
@@ -166,6 +172,7 @@
     "models": {
       "title": "Mô hình chuyển đổi",
       "description": "Chọn mô hình chuyển đổi hoặc tải thêm mô hình. Các mô hình khác nhau có mức độ chính xác và tốc độ khác nhau.",
+      "recordingsTip": "Với bản ghi âm và cuộc họp, hãy chọn mô hình có nhãn \"{{badge}}\". Parakeet TDT 0.6B v3 là lựa chọn tốt nhất cho hầu hết nhu cầu; Whisper Large v3 Turbo hỗ trợ nhiều ngôn ngữ hơn.",
       "deleteConfirm": "Bạn có chắc chắn muốn xóa {{modelName}}? Bạn sẽ cần tải lại để sử dụng.",
       "deleteActiveConfirm": "{{modelName}} là mô hình đang hoạt động của bạn. Xóa nó sẽ dừng phiên âm cho đến khi bạn chọn một mô hình mới. Bạn có chắc không?",
       "deleteRecordingsConfirm": "{{modelName}} là mô hình cho bản ghi âm của bạn. Nếu xóa nó, bản ghi âm sẽ dùng mô hình nhập bằng giọng nói của bạn. Bạn có chắc không?",
@@ -633,6 +640,8 @@
         "description": "Bản ghi âm có thể dùng một mô hình chậm hơn nhưng chính xác hơn mô hình nhập bằng giọng nói. Mô hình này chạy riêng và chỉ được tải trong lúc phiên âm tệp, nên mô hình nhập bằng giọng nói của bạn luôn sẵn sàng. Cả hai mô hình phải vừa trong bộ nhớ.",
         "same": "Giống nhập bằng giọng nói ({{model}})",
         "sameNoModel": "Giống nhập bằng giọng nói",
+        "timestamps": "(có dấu thời gian)",
+        "noTimestamps": "(không có dấu thời gian)",
         "switchWarning": "Tệp này dùng mô hình nhập bằng giọng nói của bạn, nên đổi mô hình nhập bằng giọng nói lúc này sẽ dừng nó. Để tách riêng hai việc, hãy chọn một mô hình khác cho bản ghi âm.",
         "onCpu": "Bản ghi âm đang chạy trên bộ xử lý vì bộ nhớ đồ họa không đủ cho cả hai mô hình. Hãy chọn một mô hình nhỏ hơn cho bản ghi âm để dùng card đồ họa."
       },

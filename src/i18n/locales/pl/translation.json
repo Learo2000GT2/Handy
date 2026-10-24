@@ -128,6 +128,9 @@
   "modelSelector": {
     "custom": "Własny",
     "streaming": "Streaming",
+    "bestForRecordings": "Najlepszy do nagrań",
+    "timestamps": "Znaczniki czasu",
+    "noTimestamps": "Bez znaczników czasu",
     "active": "Aktywny",
     "switching": "Przełączanie...",
     "noModelsAvailable": "Brak dostępnych modeli",
@@ -153,7 +156,10 @@
       "translate": "Tłumacz na angielski",
       "singleLanguage": "Obsługuje tylko ten język",
       "languageOnly": "Tylko {{language}}",
-      "streaming": "Pokazuje transkrypcję na żywo podczas mówienia"
+      "streaming": "Pokazuje transkrypcję na żywo podczas mówienia",
+      "bestForRecordings": "Dokładny, z czasem dla każdego zdania. Dobry wybór do nagrań i spotkań.",
+      "timestamps": "Podaje czas każdego zdania, dzięki czemu transkrypcja i oznaczenia mówców zgadzają się z nagraniem.",
+      "noTimestamps": "Czasy są tylko przybliżone, mniej więcej co 30 sekund."
     },
     "cancel": "Anuluj",
     "cancelDownload": "Anuluj pobieranie",
@@ -166,6 +172,7 @@
     "models": {
       "title": "Modele transkrypcji",
       "description": "Wybierz model transkrypcji lub pobierz dodatkowe modele. Różne modele oferują różne poziomy dokładności i szybkości.",
+      "recordingsTip": "Do nagrań i spotkań wybierz model oznaczony „{{badge}}”. Parakeet TDT 0.6B v3 to najlepszy wybór do wszystkiego; Whisper Large v3 Turbo obsługuje więcej języków.",
       "deleteConfirm": "Czy na pewno chcesz usunąć {{modelName}}? Będziesz musiał pobrać go ponownie, aby go użyć.",
       "deleteActiveConfirm": "{{modelName}} jest Twoim aktywnym modelem. Usunięcie go zatrzyma transkrypcje, dopóki nie wybierzesz nowego modelu. Czy na pewno chcesz kontynuować?",
       "deleteRecordingsConfirm": "{{modelName}} to Twój model do nagrań. Jeśli go usuniesz, nagrania będą używać modelu do dyktowania. Czy na pewno chcesz kontynuować?",
@@ -633,6 +640,8 @@
         "description": "Nagrania mogą używać wolniejszego, ale dokładniejszego modelu niż dyktowanie. Działa on osobno i jest wczytywany tylko podczas transkrypcji plików, więc model do dyktowania pozostaje gotowy. Oba modele muszą zmieścić się w pamięci.",
         "same": "Taki sam jak do dyktowania ({{model}})",
         "sameNoModel": "Taki sam jak do dyktowania",
+        "timestamps": "(znaczniki czasu)",
+        "noTimestamps": "(bez znaczników czasu)",
         "switchWarning": "Ten plik używa modelu do dyktowania, więc zmiana modelu do dyktowania teraz go zatrzyma. Aby je rozdzielić, wybierz inny model do nagrań.",
         "onCpu": "Nagrania są przetwarzane przez procesor, ponieważ pamięć karty graficznej nie mieści obu modeli. Wybierz mniejszy model do nagrań, aby korzystać z karty graficznej."
       },

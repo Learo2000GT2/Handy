@@ -129,6 +129,9 @@
     "custom": "Brugerdefineret",
     "legacy": "Forældet",
     "streaming": "Streaming",
+    "bestForRecordings": "Bedst til optagelser",
+    "timestamps": "Tidsstempler",
+    "noTimestamps": "Ingen tidsstempler",
     "active": "Aktiv",
     "switching": "Skifter...",
     "noModelsAvailable": "Ingen modeller tilgængelige",
@@ -156,7 +159,10 @@
       "languageOnly": "Kun {{language}}",
       "translation": "Kan oversætte til engelsk",
       "translate": "Oversæt",
-      "streaming": "Viser live transskription, mens du taler"
+      "streaming": "Viser live transskription, mens du taler",
+      "bestForRecordings": "Præcis, med et tidspunkt for hver sætning. Et godt valg til optagelser og møder.",
+      "timestamps": "Giver et tidspunkt for hver sætning, så transskriptionen og talermarkeringen passer til optagelsen.",
+      "noTimestamps": "Tidspunkterne er kun omtrentlige, cirka hvert 30. sekund."
     }
   },
   "settings": {
@@ -221,6 +227,7 @@
     "models": {
       "title": "Transskriptionsmodeller",
       "description": "Vælg en transskriptionsmodel, eller download flere modeller. Forskellige modeller tilbyder varierende niveauer af nøjagtighed og hastighed.",
+      "recordingsTip": "Vælg en model mærket {{badge}} til optagelser og møder. Parakeet TDT 0.6B v3 er det bedste allround-valg; Whisper Large v3 Turbo kan flere sprog.",
       "searchPlaceholder": "Søg efter modeller ved navn…",
       "yourModels": "Downloadede modeller",
       "availableModels": "Tilgængelig til download",
@@ -633,6 +640,8 @@
         "description": "Optagelser kan bruge en langsommere og mere præcis model end diktering. Den kører for sig selv og indlæses kun, mens filer transskriberes, så din dikteringsmodel forbliver klar. Begge modeller skal kunne være i hukommelsen.",
         "same": "Samme som diktering ({{model}})",
         "sameNoModel": "Samme som diktering",
+        "timestamps": "(tidsstempler)",
+        "noTimestamps": "(ingen tidsstempler)",
         "switchWarning": "Denne fil bruger din dikteringsmodel, så hvis du skifter dikteringsmodel nu, stoppes den. Vælg en anden model til optagelser for at holde dem adskilt.",
         "onCpu": "Optagelserne kører på processoren, fordi der ikke er nok grafikhukommelse til begge modeller. Vælg en mindre model til optagelser for at bruge grafikkortet."
       },

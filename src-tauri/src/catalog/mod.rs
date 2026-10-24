@@ -66,9 +66,27 @@ struct CatalogCaps {
     streaming: bool,
     translate: bool,
     lang_detect: bool,
-    // `timestamps` (a string enum) is present in the catalog but has no
-    // `CapabilityProbe` field yet — wire it through when the probe gains one.
+    /// The finest timestamps the model gives: `word`, `token`, `segment` or
+    /// `none`. It has no `CapabilityProbe` field (GGUF headers don't carry
+    /// it), so it reaches the descriptor directly.
+    #[serde(default)]
+    timestamps: Option<String>,
 }
+
+/// The catalog `timestamps` values that mean the model gives real times.
+const TIMED_KINDS: &[&str] = &["word", "token", "segment"];
+
+/// Catalog models recommended for transcribing recordings and meetings, by
+/// repo id: accurate, and with real timestamps so transcripts and speaker
+/// labels line up with the audio. Parakeet TDT 0.6B v3 is the best all-round
+/// choice; the Whisper models cover the most languages.
+pub(crate) const RECOMMENDED_FOR_RECORDINGS: &[&str] = &[
+    "handy-computer/parakeet-tdt-0.6b-v3-gguf",
+    "handy-computer/parakeet-tdt-0.6b-v2-gguf",
+    "handy-computer/parakeet-unified-en-0.6b-gguf",
+    "handy-computer/whisper-large-v3-turbo-gguf",
+    "handy-computer/whisper-large-v3-gguf",
+];
 
 impl From<&CatalogModel> for ModelDescriptor {
     fn from(m: &CatalogModel) -> Self {
@@ -108,6 +126,12 @@ impl From<&CatalogModel> for ModelDescriptor {
             accuracy_score: m.accuracy_score.unwrap_or(0.0) / 100.0,
             recommended_rank: m.recommended_rank,
             recommended: m.recommended,
+            supports_timestamps: m
+                .capabilities
+                .timestamps
+                .as_deref()
+                .is_some_and(|kind| TIMED_KINDS.contains(&kind)),
+            recommended_for_recordings: RECOMMENDED_FOR_RECORDINGS.contains(&m.id.as_str()),
         }
     }
 }
@@ -267,6 +291,40 @@ mod tests {
                 assert!(m.url.starts_with("https://"), "{}: bad url {}", d.id, m.url);
             }
         }
+    }
+
+    #[test]
+    fn every_catalog_model_states_known_timestamps() {
+        for m in ROOT.models.iter() {
+            let kind = m.capabilities.timestamps.as_deref();
+            assert!(
+                matches!(kind, Some("word" | "token" | "segment" | "none")),
+                "{}: unknown timestamps {:?}",
+                m.id,
+                kind
+            );
+        }
+    }
+
+    #[test]
+    fn recordings_recommendations_are_catalog_models_with_timestamps() {
+        for repo in RECOMMENDED_FOR_RECORDINGS {
+            let found: Vec<&ModelDescriptor> = CATALOG
+                .iter()
+                .filter(|d| match &d.source {
+                    ModelSource::HuggingFace { repo_id, .. } => repo_id == repo,
+                    _ => false,
+                })
+                .collect();
+            assert_eq!(found.len(), 1, "{repo} must be in the catalog once");
+            assert!(found[0].supports_timestamps, "{repo} must give timestamps");
+            assert!(found[0].recommended_for_recordings, "{repo}");
+        }
+        let picked = CATALOG
+            .iter()
+            .filter(|d| d.recommended_for_recordings)
+            .count();
+        assert_eq!(picked, RECOMMENDED_FOR_RECORDINGS.len());
     }
 
     #[test]

@@ -128,6 +128,9 @@
   "modelSelector": {
     "custom": "Anpassad",
     "streaming": "Streaming",
+    "bestForRecordings": "Bäst för inspelningar",
+    "timestamps": "Tidsstämplar",
+    "noTimestamps": "Inga tidsstämplar",
     "active": "Aktiv",
     "switching": "Byter...",
     "noModelsAvailable": "Inga modeller tillgängliga",
@@ -155,7 +158,10 @@
       "languageOnly": "Endast {{language}}",
       "translation": "Kan översätta till engelska",
       "translate": "Översätt till engelska",
-      "streaming": "Visar transkription i realtid medan du talar"
+      "streaming": "Visar transkription i realtid medan du talar",
+      "bestForRecordings": "Exakt, med en tid för varje mening. Ett bra val för inspelningar och möten.",
+      "timestamps": "Ger en tid för varje mening, så att transkriptionen och talarmarkeringarna stämmer med inspelningen.",
+      "noTimestamps": "Tiderna är bara ungefärliga, ungefär var 30:e sekund."
     },
     "legacy": "Äldre"
   },
@@ -221,6 +227,7 @@
     "models": {
       "title": "Transkriptionsmodeller",
       "description": "Välj en transkriptionsmodell eller ladda ner ytterligare modeller. Olika modeller erbjuder varierande nivåer av noggrannhet och hastighet.",
+      "recordingsTip": "Välj en modell märkt ”{{badge}}” för inspelningar och möten. Parakeet TDT 0.6B v3 är det bästa allround-valet; Whisper Large v3 Turbo klarar fler språk.",
       "yourModels": "Nedladdade modeller",
       "availableModels": "Tillgängliga att ladda ner",
       "deleteConfirm": "Är du säker på att du vill ta bort {{modelName}}? Du måste ladda ner den igen för att använda den.",
@@ -633,6 +640,8 @@
         "description": "Inspelningar kan använda en långsammare men mer exakt modell än diktering. Den körs separat och läses bara in medan filer transkriberas, så att din dikteringsmodell förblir redo. Båda modellerna måste få plats i minnet.",
         "same": "Samma som diktering ({{model}})",
         "sameNoModel": "Samma som diktering",
+        "timestamps": "(tidsstämplar)",
+        "noTimestamps": "(inga tidsstämplar)",
         "switchWarning": "Den här filen använder din dikteringsmodell, så om du byter dikteringsmodell nu avbryts den. Välj en annan modell för inspelningar för att hålla isär dem.",
         "onCpu": "Inspelningarna körs på processorn eftersom grafikminnet inte räcker till båda modellerna. Välj en mindre modell för inspelningar för att använda grafikkortet."
       },

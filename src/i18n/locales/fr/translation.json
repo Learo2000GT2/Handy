@@ -128,6 +128,9 @@
   "modelSelector": {
     "custom": "Personnalisé",
     "streaming": "Streaming",
+    "bestForRecordings": "Idéal pour les enregistrements",
+    "timestamps": "Horodatage",
+    "noTimestamps": "Sans horodatage",
     "active": "Actif",
     "switching": "Changement...",
     "noModelsAvailable": "Aucun modèle disponible",
@@ -153,7 +156,10 @@
       "translate": "Traduire en anglais",
       "singleLanguage": "Prend en charge uniquement cette langue",
       "languageOnly": "{{language}} uniquement",
-      "streaming": "Affiche la transcription en direct pendant que vous parlez"
+      "streaming": "Affiche la transcription en direct pendant que vous parlez",
+      "bestForRecordings": "Précis, avec un horaire pour chaque phrase. Un bon choix pour les enregistrements et les réunions.",
+      "timestamps": "Donne un horaire pour chaque phrase, pour que la transcription et les intervenants correspondent à l'enregistrement.",
+      "noTimestamps": "Les temps ne sont qu'approximatifs, environ toutes les 30 secondes."
     },
     "cancel": "Annuler",
     "cancelDownload": "Annuler le téléchargement",
@@ -166,6 +172,7 @@
     "models": {
       "title": "Modèles de Transcription",
       "description": "Sélectionnez un modèle de transcription ou téléchargez des modèles supplémentaires. Différents modèles offrent différents niveaux de précision et de vitesse.",
+      "recordingsTip": "Pour les enregistrements et les réunions, choisissez un modèle marqué « {{badge}} ». Parakeet TDT 0.6B v3 est le meilleur choix polyvalent ; Whisper Large v3 Turbo gère davantage de langues.",
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer {{modelName}} ? Vous devrez le télécharger à nouveau pour l'utiliser.",
       "deleteActiveConfirm": "{{modelName}} est votre modèle actif. Le supprimer arrêtera les transcriptions jusqu'à ce que vous sélectionniez un nouveau modèle. Êtes-vous sûr ?",
       "deleteRecordingsConfirm": "{{modelName}} est votre modèle pour les enregistrements. Si vous le supprimez, les enregistrements utiliseront votre modèle de dictée. Êtes-vous sûr ?",
@@ -633,6 +640,8 @@
         "description": "Les enregistrements peuvent utiliser un modèle plus lent et plus précis que celui de la dictée. Il fonctionne séparément et n'est chargé que pendant la transcription de fichiers, ce qui garde votre modèle de dictée prêt. Les deux modèles doivent tenir en mémoire.",
         "same": "Identique à la dictée ({{model}})",
         "sameNoModel": "Identique à la dictée",
+        "timestamps": "(horodatage)",
+        "noTimestamps": "(sans horodatage)",
         "switchWarning": "Ce fichier utilise votre modèle de dictée : changer de modèle de dictée maintenant l'arrêtera. Pour les séparer, choisissez un autre modèle pour les enregistrements.",
         "onCpu": "Les enregistrements sont traités par le processeur, car la mémoire graphique ne suffit pas pour les deux modèles. Choisissez un modèle plus petit pour les enregistrements afin d'utiliser la carte graphique."
       },

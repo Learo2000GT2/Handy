@@ -128,6 +128,9 @@
   "modelSelector": {
     "custom": "Vlastní",
     "streaming": "Streaming",
+    "bestForRecordings": "Nejlepší pro nahrávky",
+    "timestamps": "Časové značky",
+    "noTimestamps": "Bez časových značek",
     "active": "Aktivní",
     "noModelsAvailable": "Nejsou dostupné žádné modely",
     "verifying": "Ověřování {{modelName}}...",
@@ -153,7 +156,10 @@
       "translate": "Přeložit do angličtiny",
       "singleLanguage": "Podporuje pouze tento jazyk",
       "languageOnly": "Pouze {{language}}",
-      "streaming": "Zobrazuje přepis živě, jak mluvíte"
+      "streaming": "Zobrazuje přepis živě, jak mluvíte",
+      "bestForRecordings": "Přesný, s časem u každé věty. Dobrá volba pro nahrávky a schůzky.",
+      "timestamps": "Udává čas u každé věty, takže přepis i označení mluvčích odpovídají nahrávce.",
+      "noTimestamps": "Časy jsou jen přibližné, zhruba po 30 sekundách."
     },
     "cancel": "Zrušit",
     "cancelDownload": "Zrušit stahování",
@@ -166,6 +172,7 @@
     "models": {
       "title": "Modely přepisu",
       "description": "Vyberte model přepisu nebo stáhněte další modely. Různé modely nabízejí různé úrovně přesnosti a rychlosti.",
+      "recordingsTip": "Pro nahrávky a schůzky vyberte model označený „{{badge}}“. Parakeet TDT 0.6B v3 je nejlepší univerzální volba; Whisper Large v3 Turbo zvládá více jazyků.",
       "deleteConfirm": "Opravdu chcete smazat {{modelName}}? Pro opětovné použití jej budete muset znovu stáhnout.",
       "deleteActiveConfirm": "{{modelName}} je váš aktivní model. Jeho smazáním se zastaví přepisy, dokud nevyberete nový model. Opravdu chcete pokračovat?",
       "deleteRecordingsConfirm": "{{modelName}} je váš model pro nahrávky. Pokud ho smažete, nahrávky budou používat model pro diktování. Opravdu chcete pokračovat?",
@@ -633,6 +640,8 @@
         "description": "Nahrávky mohou používat pomalejší, ale přesnější model než diktování. Běží samostatně a načítá se jen během přepisu souborů, takže model pro diktování zůstává připravený. Oba modely se musí vejít do paměti.",
         "same": "Stejný jako pro diktování ({{model}})",
         "sameNoModel": "Stejný jako pro diktování",
+        "timestamps": "(časové značky)",
+        "noTimestamps": "(bez časových značek)",
         "switchWarning": "Tento soubor používá model pro diktování, takže změna modelu pro diktování ho teď zastaví. Chcete-li je oddělit, vyberte pro nahrávky jiný model.",
         "onCpu": "Nahrávky se zpracovávají na procesoru, protože grafická paměť nestačí pro oba modely. Chcete-li využít grafickou kartu, vyberte pro nahrávky menší model."
       },

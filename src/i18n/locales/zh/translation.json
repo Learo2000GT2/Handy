@@ -128,6 +128,9 @@
   "modelSelector": {
     "custom": "自定义",
     "streaming": "流式",
+    "bestForRecordings": "最适合录音",
+    "timestamps": "时间戳",
+    "noTimestamps": "无时间戳",
     "active": "活跃",
     "switching": "切换中...",
     "noModelsAvailable": "没有可用的模型",
@@ -153,7 +156,10 @@
       "translate": "翻译为英语",
       "singleLanguage": "仅支持此语言",
       "languageOnly": "仅 {{language}}",
-      "streaming": "在您说话时实时显示转录"
+      "streaming": "在您说话时实时显示转录",
+      "bestForRecordings": "准确，并为每句话标注时间。适合录音和会议。",
+      "timestamps": "为每句话标注时间，让转录和说话人标注与录音对齐。",
+      "noTimestamps": "时间仅为近似值，大约每 30 秒一个。"
     },
     "cancel": "取消",
     "cancelDownload": "取消下载",
@@ -166,6 +172,7 @@
     "models": {
       "title": "转录模型",
       "description": "选择转录模型或下载其他模型。不同模型提供不同的准确度和速度。",
+      "recordingsTip": "录音和会议请选择标有“{{badge}}”的模型。Parakeet TDT 0.6B v3 是综合表现最好的选择；Whisper Large v3 Turbo 支持更多语言。",
       "deleteConfirm": "确定要删除 {{modelName}} 吗？您需要重新下载才能使用。",
       "deleteActiveConfirm": "{{modelName}} 是您当前使用的模型。删除后将停止转录，直到您选择新的模型。确定要删除吗？",
       "deleteRecordingsConfirm": "{{modelName}} 是您的录音模型。删除后，录音将使用您的听写模型。确定要删除吗？",
@@ -633,6 +640,8 @@
         "description": "录音可以使用比听写更慢但更准确的模型。它独立运行，仅在转录文件时加载，因此您的听写模型始终保持就绪。两个模型都需要能装入内存。",
         "same": "与听写相同（{{model}}）",
         "sameNoModel": "与听写相同",
+        "timestamps": "（有时间戳）",
+        "noTimestamps": "（无时间戳）",
         "switchWarning": "此文件使用您的听写模型，因此现在更换听写模型会使其停止。若要将两者分开，请为录音选择其他模型。",
         "onCpu": "由于显存不足以同时容纳两个模型，录音正在处理器上运行。若要使用显卡，请为录音选择较小的模型。"
       },

@@ -128,6 +128,9 @@
   "modelSelector": {
     "custom": "Özel",
     "streaming": "Akış",
+    "bestForRecordings": "Kayıtlar için en iyisi",
+    "timestamps": "Zaman damgası",
+    "noTimestamps": "Zaman damgası yok",
     "active": "Aktif",
     "noModelsAvailable": "Kullanılabilir model yok",
     "verifying": "{{modelName}} doğrulanıyor...",
@@ -153,7 +156,10 @@
       "translate": "İngilizce'ye çevir",
       "singleLanguage": "Yalnızca bu dili destekler",
       "languageOnly": "Yalnızca {{language}}",
-      "streaming": "Konuşurken canlı transkripsiyon gösterir"
+      "streaming": "Konuşurken canlı transkripsiyon gösterir",
+      "bestForRecordings": "Doğru sonuç verir, her cümleye bir zaman ekler. Kayıtlar ve toplantılar için iyi bir seçim.",
+      "timestamps": "Her cümle için bir zaman verir, böylece transkript ve konuşmacı etiketleri kayıtla örtüşür.",
+      "noTimestamps": "Zamanlar yalnızca yaklaşıktır, yaklaşık her 30 saniyede bir."
     },
     "cancel": "İptal",
     "cancelDownload": "İndirmeyi iptal et",
@@ -166,6 +172,7 @@
     "models": {
       "title": "Transkripsiyon Modelleri",
       "description": "Bir transkripsiyon modeli seçin veya ek modeller indirin. Farklı modeller değişen doğruluk ve hız seviyeleri sunar.",
+      "recordingsTip": "Kayıtlar ve toplantılar için \"{{badge}}\" işaretli bir model seçin. Parakeet TDT 0.6B v3 her açıdan en iyi seçimdir; Whisper Large v3 Turbo daha fazla dili destekler.",
       "deleteConfirm": "{{modelName}} modelini silmek istediğinizden emin misiniz? Kullanmak için tekrar indirmeniz gerekecek.",
       "deleteActiveConfirm": "{{modelName}} aktif modelinizdir. Silmek, yeni bir model seçene kadar transkripsiyonları durduracaktır. Emin misiniz?",
       "deleteRecordingsConfirm": "{{modelName}} kayıtlar için seçtiğiniz modeldir. Silerseniz kayıtlar sesle yazma modelinizi kullanır. Emin misiniz?",
@@ -633,6 +640,8 @@
         "description": "Kayıtlar, sesle yazmadan daha yavaş ama daha doğru bir model kullanabilir. Bu model ayrı çalışır ve yalnızca dosyalar transkribe edilirken yüklenir; böylece sesle yazma modeliniz hazır kalır. İki modelin de belleğe sığması gerekir.",
         "same": "Sesle yazmayla aynı ({{model}})",
         "sameNoModel": "Sesle yazmayla aynı",
+        "timestamps": "(zaman damgalı)",
+        "noTimestamps": "(zaman damgasız)",
         "switchWarning": "Bu dosya sesle yazma modelinizi kullanıyor; bu yüzden sesle yazma modelini şimdi değiştirmek onu durdurur. İkisini ayrı tutmak için kayıtlar için farklı bir model seçin.",
         "onCpu": "Grafik belleği iki model için yetmediğinden kayıtlar işlemcide çalışıyor. Ekran kartını kullanmak için kayıtlar için daha küçük bir model seçin."
       },

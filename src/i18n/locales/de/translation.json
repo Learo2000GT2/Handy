@@ -128,6 +128,9 @@
   "modelSelector": {
     "custom": "Benutzerdefiniert",
     "streaming": "Streaming",
+    "bestForRecordings": "Am besten für Aufnahmen",
+    "timestamps": "Zeitstempel",
+    "noTimestamps": "Keine Zeitstempel",
     "active": "Aktiv",
     "switching": "Wechseln...",
     "noModelsAvailable": "Keine Modelle verfügbar",
@@ -153,7 +156,10 @@
       "translate": "Ins Englische übersetzen",
       "singleLanguage": "Unterstützt nur diese Sprache",
       "languageOnly": "Nur {{language}}",
-      "streaming": "Zeigt die Transkription live während des Sprechens an"
+      "streaming": "Zeigt die Transkription live während des Sprechens an",
+      "bestForRecordings": "Genau, mit einer Zeitangabe für jeden Satz. Eine gute Wahl für Aufnahmen und Besprechungen.",
+      "timestamps": "Liefert eine Zeitangabe für jeden Satz, damit Transkription und Sprecherkennzeichnung zur Aufnahme passen.",
+      "noTimestamps": "Die Zeitangaben sind nur ungefähr, etwa alle 30 Sekunden."
     },
     "cancel": "Abbrechen",
     "cancelDownload": "Download abbrechen",
@@ -166,6 +172,7 @@
     "models": {
       "title": "Transkriptionsmodelle",
       "description": "Wähle ein Transkriptionsmodell aus oder lade zusätzliche Modelle herunter. Verschiedene Modelle bieten unterschiedliche Genauigkeits- und Geschwindigkeitsstufen.",
+      "recordingsTip": "Wähle für Aufnahmen und Besprechungen ein Modell mit der Markierung „{{badge}}“. Parakeet TDT 0.6B v3 ist die beste Wahl für fast alles; Whisper Large v3 Turbo beherrscht mehr Sprachen.",
       "deleteConfirm": "Bist du sicher, dass du {{modelName}} löschen möchtest? Du musst es erneut herunterladen, um es zu verwenden.",
       "deleteActiveConfirm": "{{modelName}} ist dein aktives Modell. Das Löschen stoppt Transkriptionen, bis du ein neues Modell auswählst. Bist du sicher?",
       "deleteRecordingsConfirm": "{{modelName}} ist dein Modell für Aufnahmen. Wenn du es löschst, verwenden Aufnahmen dein Diktiermodell. Bist du sicher?",
@@ -633,6 +640,8 @@
         "description": "Aufnahmen können ein langsameres, genaueres Modell als das Diktieren verwenden. Es läuft separat und wird nur geladen, während Dateien transkribiert werden, sodass dein Diktiermodell bereit bleibt. Beide Modelle müssen in den Speicher passen.",
         "same": "Wie beim Diktieren ({{model}})",
         "sameNoModel": "Wie beim Diktieren",
+        "timestamps": "(Zeitstempel)",
+        "noTimestamps": "(keine Zeitstempel)",
         "switchWarning": "Diese Datei verwendet dein Diktiermodell. Wenn du das Diktiermodell jetzt wechselst, wird sie abgebrochen. Um beides zu trennen, wähle ein anderes Modell für Aufnahmen.",
         "onCpu": "Aufnahmen laufen auf dem Prozessor, weil der Grafikspeicher nicht für beide Modelle reicht. Wähle ein kleineres Modell für Aufnahmen, um die Grafikkarte zu nutzen."
       },

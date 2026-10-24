@@ -219,11 +219,19 @@ export interface RecordingsModelOption {
   disabled?: boolean;
 }
 
+/** "(timestamps)" or "(no timestamps)": whether `model` times each sentence. */
+const timestampsNote = (model: ModelInfo, t: TFunction): string =>
+  model.supports_timestamps === true
+    ? t("settings.transcribeFiles.recordingsModel.timestamps")
+    : t("settings.transcribeFiles.recordingsModel.noTimestamps");
+
 /**
  * Choices for the model for recordings: "Same as dictation" (value ""),
- * then the downloaded transcribe-cpp models by name (the only ones the
- * recordings engine runs). A chosen model that is no longer among them stays
- * listed, disabled, so the picker still names it.
+ * then the downloaded transcribe-cpp models (the only ones the recordings
+ * engine runs): the ones recommended for recordings first, each group by
+ * name. Every description ends in whether the model gives timestamps. A
+ * chosen model that is no longer among them stays listed, disabled, so the
+ * picker still names it.
  */
 export const recordingsModelOptions = (
   models: ModelInfo[],
@@ -232,24 +240,40 @@ export const recordingsModelOptions = (
   t: TFunction,
 ): RecordingsModelOption[] => {
   const dictation = models.find((model) => model.id === dictationModelId);
-  const same: RecordingsModelOption = {
-    value: "",
-    label: dictation
-      ? t("settings.transcribeFiles.recordingsModel.same", {
+  const same: RecordingsModelOption = dictation
+    ? {
+        value: "",
+        label: t("settings.transcribeFiles.recordingsModel.same", {
           model: getTranslatedModelName(dictation, t),
-        })
-      : t("settings.transcribeFiles.recordingsModel.sameNoModel"),
-  };
+        }),
+        description: timestampsNote(dictation, t),
+      }
+    : {
+        value: "",
+        label: t("settings.transcribeFiles.recordingsModel.sameNoModel"),
+      };
+  const recordingsRank = (model: ModelInfo): number =>
+    model.is_recommended_for_recordings === true ? 0 : 1;
   const usable = models
     .filter(
       (model) => model.is_downloaded && model.engine_type === "TranscribeCpp",
     )
-    .map((model) => ({
+    .map((model) => ({ model, label: getTranslatedModelName(model, t) }))
+    .sort(
+      (a, b) =>
+        recordingsRank(a.model) - recordingsRank(b.model) ||
+        a.label.localeCompare(b.label),
+    )
+    .map(({ model, label }) => ({
       value: model.id,
-      label: getTranslatedModelName(model, t),
-      description: getTranslatedModelDescription(model, t),
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+      label,
+      description: [
+        getTranslatedModelDescription(model, t),
+        timestampsNote(model, t),
+      ]
+        .filter((part) => part !== "")
+        .join(" "),
+    }));
   const options: RecordingsModelOption[] = [same, ...usable];
   const selected = selectedId.trim();
   if (selected !== "" && !usable.some((option) => option.value === selected)) {

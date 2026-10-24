@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next";
 import {
   AudioLines,
   Check,
+  Clock,
   Download,
   Globe,
   HardDrive,
   Languages,
   Loader2,
+  TimerOff,
   Trash2,
 } from "lucide-react";
 import type { ModelInfo } from "@/bindings";
@@ -75,6 +77,8 @@ interface ModelCardProps {
   downloadProgress?: number;
   downloadSpeed?: number; // MB/s
   showRecommended?: boolean;
+  /** Show whether the model gives timestamps and is best for recordings. */
+  showRecordingsInfo?: boolean;
 }
 
 const ModelCard: React.FC<ModelCardProps> = ({
@@ -90,6 +94,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
   downloadProgress,
   downloadSpeed,
   showRecommended = true,
+  showRecordingsInfo = false,
 }) => {
   const { t } = useTranslation();
   const debugMode = useSettingsStore(
@@ -172,6 +177,23 @@ const ModelCard: React.FC<ModelCardProps> = ({
             </h3>
             {showRecommended && model.is_recommended && (
               <Badge variant="primary">{t("onboarding.recommended")}</Badge>
+            )}
+            {showRecordingsInfo && model.is_recommended_for_recordings && (
+              <Badge
+                variant="success"
+                title={t("modelSelector.capabilities.bestForRecordings")}
+              >
+                {t("modelSelector.bestForRecordings")}
+              </Badge>
+            )}
+            {showRecordingsInfo && model.supports_timestamps && (
+              <Badge
+                variant="secondary"
+                title={t("modelSelector.capabilities.timestamps")}
+              >
+                <Clock className="w-3 h-3 mr-1" />
+                {t("modelSelector.timestamps")}
+              </Badge>
             )}
             {status === "active" && (
               <Badge variant="primary">
@@ -259,6 +281,15 @@ const ModelCard: React.FC<ModelCardProps> = ({
           >
             <AudioLines className="w-3.5 h-3.5" />
             <span>{t("modelSelector.streaming")}</span>
+          </div>
+        )}
+        {showRecordingsInfo && !model.supports_timestamps && (
+          <div
+            className="flex items-center gap-1 text-xs text-text/40"
+            title={t("modelSelector.capabilities.noTimestamps")}
+          >
+            <TimerOff className="w-3.5 h-3.5" />
+            <span>{t("modelSelector.noTimestamps")}</span>
           </div>
         )}
         {showModelSize && (

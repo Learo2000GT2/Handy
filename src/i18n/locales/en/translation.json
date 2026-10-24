@@ -129,6 +129,9 @@
     "custom": "Custom",
     "legacy": "Legacy",
     "streaming": "Streaming",
+    "bestForRecordings": "Best for recordings",
+    "timestamps": "Timestamps",
+    "noTimestamps": "No timestamps",
     "active": "Active",
     "switching": "Switching...",
     "noModelsAvailable": "No models available",
@@ -156,7 +159,10 @@
       "languageOnly": "{{language}} only",
       "translation": "Can translate to English",
       "translate": "Translate",
-      "streaming": "Shows live transcription as you speak"
+      "streaming": "Shows live transcription as you speak",
+      "bestForRecordings": "Accurate, with a time for each sentence. A good choice for recordings and meetings.",
+      "timestamps": "Gives a time for each sentence, so transcripts and speaker labels line up with the recording.",
+      "noTimestamps": "Times are only approximate, about every 30 seconds."
     }
   },
   "settings": {
@@ -221,6 +227,7 @@
     "models": {
       "title": "Transcription Models",
       "description": "Select a transcription model or download additional models. Different models offer varying levels of accuracy and speed.",
+      "recordingsTip": "For recordings and meetings, choose a model marked {{badge}}. Parakeet TDT 0.6B v3 is the best all-round choice; Whisper Large v3 Turbo handles more languages.",
       "searchPlaceholder": "Search models by name…",
       "yourModels": "Downloaded Models",
       "availableModels": "Available to Download",
@@ -633,6 +640,8 @@
         "description": "Recordings can use a slower, more accurate model than dictation. It runs on its own and is loaded only while files are transcribed, so your dictation model stays ready. Both models need to fit in memory.",
         "same": "Same as dictation ({{model}})",
         "sameNoModel": "Same as dictation",
+        "timestamps": "(timestamps)",
+        "noTimestamps": "(no timestamps)",
         "switchWarning": "This file uses your dictation model, so changing the dictation model now stops it. To keep them apart, choose a different model for recordings.",
         "onCpu": "Recordings are running on the processor because there isn't enough graphics memory for both models. Choose a smaller model for recordings to use the graphics card."
       },
