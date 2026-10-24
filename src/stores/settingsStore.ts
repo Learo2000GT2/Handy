@@ -7,6 +7,7 @@ import type {
   ChineseScript,
   FileTranscriptionEngine,
   LemonadeSettings,
+  PostProcessProblem,
   TranscribeAcceleratorSetting,
   OrtAcceleratorSetting,
   ShortcutActivation,
@@ -25,6 +26,8 @@ interface SettingsStore {
   outputDevices: AudioDevice[];
   customSounds: { start: boolean; stop: boolean };
   postProcessModelOptions: Record<string, string[]>;
+  /** Why the last model list fetch for a provider failed; null once fixed. */
+  postProcessModelProblems: Record<string, PostProcessProblem | null>;
   // null until loadUpdateChecksLocked() resolves
   updateChecksLocked: boolean | null;
 
@@ -53,10 +56,11 @@ interface SettingsStore {
     providerId: string,
     value: string,
   ) => Promise<void>;
+  /** Resolves false when the address was refused. */
   updatePostProcessBaseUrl: (
     providerId: string,
     baseUrl: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   updatePostProcessApiKey: (
     providerId: string,
     apiKey: string,
@@ -64,6 +68,10 @@ interface SettingsStore {
   updatePostProcessModel: (providerId: string, model: string) => Promise<void>;
   fetchPostProcessModels: (providerId: string) => Promise<string[]>;
   setPostProcessModelOptions: (providerId: string, models: string[]) => void;
+  setPostProcessModelProblem: (
+    providerId: string,
+    problem: PostProcessProblem | null,
+  ) => void;
 
   // Internal state setters
   setSettings: (settings: Settings | null) => void;
@@ -165,6 +173,8 @@ const settingUpdaters: {
   history_limit: (value) => commands.updateHistoryLimit(value as number),
   post_process_enabled: (value) =>
     commands.changePostProcessEnabledSetting(value as boolean),
+  post_process_every_dictation: (value) =>
+    commands.changePostProcessEveryDictationSetting(value as boolean),
   post_process_selected_prompt_id: (value) =>
     commands.setPostProcessSelectedPrompt(value as string),
   mute_while_recording: (value) =>
@@ -248,6 +258,7 @@ export const useSettingsStore = create<SettingsStore>()(
     outputDevices: [],
     customSounds: { start: false, stop: false },
     postProcessModelOptions: {},
+    postProcessModelProblems: {},
     updateChecksLocked: null,
 
     // Internal setters
@@ -500,6 +511,7 @@ export const useSettingsStore = create<SettingsStore>()(
       // Clear cached model options for the new provider so the dropdown
       // doesn't show stale models from a previous fetch or base_url.
       setPostProcessModelOptions(providerId, []);
+      get().setPostProcessModelProblem(providerId, null);
 
       try {
         await commands.setPostProcessProvider(providerId);
@@ -562,7 +574,7 @@ export const useSettingsStore = create<SettingsStore>()(
         );
         if (urlResult.status === "error") {
           console.error("Failed to persist base URL:", urlResult.error);
-          return;
+          return false;
         }
 
         // Reset the stored model since the previous value is almost certainly
@@ -574,7 +586,7 @@ export const useSettingsStore = create<SettingsStore>()(
         );
         if (modelResult.status === "error") {
           console.error("Failed to reset model setting:", modelResult.error);
-          return;
+          return true;
         }
 
         // Clear cached model options only after both backend writes succeed.
@@ -583,12 +595,18 @@ export const useSettingsStore = create<SettingsStore>()(
             ...state.postProcessModelOptions,
             [providerId]: [],
           },
+          postProcessModelProblems: {
+            ...state.postProcessModelProblems,
+            [providerId]: null,
+          },
         }));
 
         // Single refresh after both backend writes.
         await refreshSettings();
+        return true;
       } catch (error) {
         console.error("Failed to update post-process base URL:", error);
+        return false;
       } finally {
         setUpdating(updateKey, false);
       }
@@ -601,6 +619,10 @@ export const useSettingsStore = create<SettingsStore>()(
           ...state.postProcessModelOptions,
           [providerId]: [],
         },
+        postProcessModelProblems: {
+          ...state.postProcessModelProblems,
+          [providerId]: null,
+        },
       }));
       return get().updatePostProcessSetting("api_key", providerId, apiKey);
     },
@@ -611,7 +633,11 @@ export const useSettingsStore = create<SettingsStore>()(
 
     fetchPostProcessModels: async (providerId) => {
       const updateKey = `post_process_models_fetch:${providerId}`;
-      const { setUpdating, setPostProcessModelOptions } = get();
+      const {
+        setUpdating,
+        setPostProcessModelOptions,
+        setPostProcessModelProblem,
+      } = get();
 
       setUpdating(updateKey, true);
 
@@ -620,9 +646,11 @@ export const useSettingsStore = create<SettingsStore>()(
         const result = await commands.fetchPostProcessModels(providerId);
         if (result.status === "ok") {
           setPostProcessModelOptions(providerId, result.data);
+          setPostProcessModelProblem(providerId, null);
           return result.data;
         } else {
           console.error("Failed to fetch models:", result.error);
+          setPostProcessModelProblem(providerId, result.error);
           return [];
         }
       } catch (error) {
@@ -639,6 +667,14 @@ export const useSettingsStore = create<SettingsStore>()(
         postProcessModelOptions: {
           ...state.postProcessModelOptions,
           [providerId]: models,
+        },
+      })),
+
+    setPostProcessModelProblem: (providerId, problem) =>
+      set((state) => ({
+        postProcessModelProblems: {
+          ...state.postProcessModelProblems,
+          [providerId]: problem,
         },
       })),
 

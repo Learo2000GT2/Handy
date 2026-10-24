@@ -2,6 +2,7 @@
 use crate::apple_intelligence;
 use crate::audio_feedback::{play_feedback_sound, play_feedback_sound_blocking, SoundType};
 use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error, VadPolicy};
+use crate::llm_client::LlmError;
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::history::HistoryManager;
 use crate::managers::model::ModelManager;
@@ -87,10 +88,59 @@ fn strip_think_block(s: &str) -> &str {
     s
 }
 
+/// Where a prompt template puts the transcript.
+const OUTPUT_PLACEHOLDER: &str = "${output}";
+
 /// Build a system prompt from the user's prompt template.
 /// Removes `${output}` placeholder since the transcription is sent as the user message.
 fn build_system_prompt(prompt_template: &str) -> String {
-    prompt_template.replace("${output}", "").trim().to_string()
+    prompt_template
+        .replace(OUTPUT_PLACEHOLDER, "")
+        .trim()
+        .to_string()
+}
+
+/// The transcript as the user message of a prompt without `${output}`.
+fn wrap_transcript(transcription: &str) -> String {
+    format!("<transcript>\n{}\n</transcript>", transcription)
+}
+
+/// The messages of one post-processing request.
+#[derive(Debug, PartialEq, Eq)]
+struct PostProcessMessages {
+    system: Option<String>,
+    user: String,
+}
+
+/// The messages for `prompt_template` and `transcription`. A template with
+/// `${output}` is sent as before: with structured output it is the system
+/// message (without the placeholder) and the bare transcript the user
+/// message; otherwise the template, with the transcript in place of the
+/// placeholder, is the only message. A template without `${output}` is the
+/// system message, and the transcript, between `<transcript>` tags, the
+/// user message, so it is never sent without the transcript.
+fn build_messages(
+    prompt_template: &str,
+    transcription: &str,
+    structured_output: bool,
+) -> PostProcessMessages {
+    if !prompt_template.contains(OUTPUT_PLACEHOLDER) {
+        return PostProcessMessages {
+            system: Some(prompt_template.trim().to_string()),
+            user: wrap_transcript(transcription),
+        };
+    }
+    if structured_output {
+        PostProcessMessages {
+            system: Some(build_system_prompt(prompt_template)),
+            user: transcription.to_string(),
+        }
+    } else {
+        PostProcessMessages {
+            system: None,
+            user: prompt_template.replace(OUTPUT_PLACEHOLDER, transcription),
+        }
+    }
 }
 
 /// Returns `true` when a transcription has no meaningful content to
@@ -126,17 +176,77 @@ fn should_use_streaming_overlay(style: OverlayStyle, is_streaming: bool) -> bool
     style == OverlayStyle::Live && is_streaming
 }
 
+/// Why post-processing gave no text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PostProcessFailure {
+    /// Nothing was transcribed.
+    BlankTranscription,
+    /// No provider is selected, or the selected one is gone.
+    NoProvider,
+    /// The provider has no model chosen.
+    NoModel,
+    /// No prompt is selected, or the selected one is gone.
+    NoPrompt,
+    /// The selected prompt is empty.
+    EmptyPrompt,
+    /// Apple Intelligence is selected but can't run on this device.
+    AppleIntelligenceUnavailable,
+    /// Apple Intelligence failed (its message).
+    #[cfg_attr(
+        not(all(target_os = "macos", target_arch = "aarch64")),
+        allow(dead_code)
+    )]
+    AppleIntelligence(String),
+    /// The provider answered without any text.
+    NoContent,
+    /// The request to the provider failed.
+    Request(LlmError),
+}
+
+/// Whether dictations made with the normal shortcut are post-processed too
+/// ("Clean up every dictation", which needs post-processing turned on).
+fn post_processes_every_dictation(settings: &AppSettings) -> bool {
+    settings.post_process_enabled && settings.post_process_every_dictation
+}
+
 async fn post_process_transcription(settings: &AppSettings, transcription: &str) -> Option<String> {
+    match run_post_process(settings, transcription).await {
+        Ok(text) => Some(text),
+        Err(failure) => {
+            match &failure {
+                PostProcessFailure::NoContent => error!("LLM API response has no content"),
+                PostProcessFailure::Request(e) => error!(
+                    "LLM post-processing failed for provider '{}': {}. Falling back to original transcription.",
+                    settings.post_process_provider_id, e
+                ),
+                PostProcessFailure::AppleIntelligence(e) => {
+                    error!("Apple Intelligence post-processing failed: {}", e)
+                }
+                // Skips are logged where they are found.
+                _ => {}
+            }
+            None
+        }
+    }
+}
+
+/// Post-processes `transcription` with the selected provider, model and
+/// prompt. Every post-processed dictation and the Post Processing page's
+/// Test button take this path.
+pub(crate) async fn run_post_process(
+    settings: &AppSettings,
+    transcription: &str,
+) -> Result<String, PostProcessFailure> {
     if is_blank_transcription(transcription) {
         debug!("Post-processing skipped because the transcription is empty");
-        return None;
+        return Err(PostProcessFailure::BlankTranscription);
     }
 
     let provider = match settings.active_post_process_provider().cloned() {
         Some(provider) => provider,
         None => {
             debug!("Post-processing enabled but no provider is selected");
-            return None;
+            return Err(PostProcessFailure::NoProvider);
         }
     };
 
@@ -151,14 +261,14 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
             "Post-processing skipped because provider '{}' has no model configured",
             provider.id
         );
-        return None;
+        return Err(PostProcessFailure::NoModel);
     }
 
     let selected_prompt_id = match &settings.post_process_selected_prompt_id {
         Some(id) => id.clone(),
         None => {
             debug!("Post-processing skipped because no prompt is selected");
-            return None;
+            return Err(PostProcessFailure::NoPrompt);
         }
     };
 
@@ -173,13 +283,13 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
                 "Post-processing skipped because prompt '{}' was not found",
                 selected_prompt_id
             );
-            return None;
+            return Err(PostProcessFailure::NoPrompt);
         }
     };
 
     if prompt.trim().is_empty() {
         debug!("Post-processing skipped because the selected prompt is empty");
-        return None;
+        return Err(PostProcessFailure::EmptyPrompt);
     }
 
     debug!(
@@ -201,8 +311,9 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
     if provider.supports_structured_output {
         debug!("Using structured outputs for provider '{}'", provider.id);
 
-        let system_prompt = build_system_prompt(&prompt);
-        let user_content = transcription.to_string();
+        let messages = build_messages(&prompt, transcription, true);
+        let system_prompt = messages.system.unwrap_or_default();
+        let user_content = messages.user;
 
         // Handle Apple Intelligence separately since it uses native Swift APIs
         if provider.id == APPLE_INTELLIGENCE_PROVIDER_ID {
@@ -212,7 +323,7 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
                     debug!(
                         "Apple Intelligence selected but not currently available on this device"
                     );
-                    return None;
+                    return Err(PostProcessFailure::AppleIntelligenceUnavailable);
                 }
 
                 let token_limit = model.trim().parse::<i32>().unwrap_or(0);
@@ -224,27 +335,24 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
                     Ok(result) => {
                         if result.trim().is_empty() {
                             debug!("Apple Intelligence returned an empty response");
-                            None
+                            Err(PostProcessFailure::NoContent)
                         } else {
                             let result = strip_invisible_chars(&result);
                             debug!(
                                 "Apple Intelligence post-processing succeeded. Output length: {} chars",
                                 result.len()
                             );
-                            Some(result)
+                            Ok(result)
                         }
                     }
-                    Err(err) => {
-                        error!("Apple Intelligence post-processing failed: {}", err);
-                        None
-                    }
+                    Err(err) => Err(PostProcessFailure::AppleIntelligence(err)),
                 };
             }
 
             #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
             {
                 debug!("Apple Intelligence provider selected on unsupported platform");
-                return None;
+                return Err(PostProcessFailure::AppleIntelligenceUnavailable);
             }
         }
 
@@ -286,10 +394,10 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
                                 provider.id,
                                 result.len()
                             );
-                            return Some(result);
+                            return Ok(result);
                         } else {
                             error!("Structured output response missing 'transcription' field");
-                            return Some(strip_invisible_chars(content));
+                            return Ok(strip_invisible_chars(content));
                         }
                     }
                     Err(e) => {
@@ -297,13 +405,12 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
                             "Failed to parse structured output JSON: {}. Returning raw content.",
                             e
                         );
-                        return Some(strip_invisible_chars(content));
+                        return Ok(strip_invisible_chars(content));
                     }
                 }
             }
             Ok(None) => {
-                error!("LLM API response has no content");
-                return None;
+                return Err(PostProcessFailure::NoContent);
             }
             Err(e) => {
                 warn!(
@@ -315,15 +422,21 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
         }
     }
 
-    // Legacy mode: Replace ${output} variable in the prompt with the actual text
-    let processed_prompt = prompt.replace("${output}", transcription);
-    debug!("Processed prompt length: {} chars", processed_prompt.len());
+    // Legacy mode: the transcript in place of ${output}, or after a prompt
+    // without it (see build_messages)
+    let messages = build_messages(&prompt, transcription, false);
+    debug!(
+        "Processed prompt length: {} chars",
+        messages.system.as_ref().map_or(0, String::len) + messages.user.len()
+    );
 
-    match crate::llm_client::send_chat_completion(
+    match crate::llm_client::send_chat_completion_with_schema(
         &provider,
         api_key,
         &model,
-        processed_prompt,
+        messages.user,
+        messages.system,
+        None,
         disable_reasoning,
     )
     .await
@@ -335,20 +448,10 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
                 provider.id,
                 content.len()
             );
-            Some(content)
+            Ok(content)
         }
-        Ok(None) => {
-            error!("LLM API response has no content");
-            None
-        }
-        Err(e) => {
-            error!(
-                "LLM post-processing failed for provider '{}': {}. Falling back to original transcription.",
-                provider.id,
-                e
-            );
-            None
-        }
+        Ok(None) => Err(PostProcessFailure::NoContent),
+        Err(e) => Err(PostProcessFailure::Request(e)),
     }
 }
 
@@ -600,7 +703,8 @@ impl ShortcutAction for TranscribeAction {
         // the larger panel, but it still switches from listening to a working
         // spinner while the stream finalizes. Non-streaming paths use the
         // compact transcribing pill (None no-ops in show_*).
-        let style = get_settings(app).overlay_style;
+        let settings = get_settings(app);
+        let style = settings.overlay_style;
         // Capture this before finalizing the stream so every later working state
         // targets the same overlay that was shown for this transcription.
         let use_streaming_overlay = should_use_streaming_overlay(style, tm.is_streaming());
@@ -617,7 +721,9 @@ impl ShortcutAction for TranscribeAction {
         play_feedback_sound(app, SoundType::Stop);
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
-        let post_process = self.post_process;
+                                                 // The normal shortcut post-processes too when "Clean up every
+                                                 // dictation" is on; a failure still pastes the raw transcript.
+        let post_process = self.post_process || post_processes_every_dictation(&settings);
         let cancel_generation = rm.cancel_generation();
         // File transcription jobs stay paused from here until the pipeline
         // below has finished (the guard releases the hold).
@@ -935,8 +1041,9 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
 #[cfg(test)]
 mod tests {
     use super::{
-        complete_unless_cancelled, is_blank_transcription, should_use_streaming_overlay,
-        strip_think_block,
+        build_messages, complete_unless_cancelled, is_blank_transcription,
+        post_processes_every_dictation, should_use_streaming_overlay, strip_think_block,
+        PostProcessMessages,
     };
     use crate::settings::OverlayStyle;
     use std::future;
@@ -1020,6 +1127,82 @@ mod tests {
             strip_think_block("<think>never closed"),
             "<think>never closed"
         );
+    }
+
+    #[test]
+    fn prompt_with_output_marker_is_sent_as_before() {
+        let prompt = "Fix this:\n${output}\nThanks.";
+        // Legacy: the transcript in place of the marker, as the only message.
+        assert_eq!(
+            build_messages(prompt, "um hello", false),
+            PostProcessMessages {
+                system: None,
+                user: "Fix this:\num hello\nThanks.".to_string(),
+            }
+        );
+        // Structured: the prompt without the marker, then the bare transcript.
+        assert_eq!(
+            build_messages(prompt, "um hello", true),
+            PostProcessMessages {
+                system: Some("Fix this:\n\nThanks.".to_string()),
+                user: "um hello".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn prompt_without_output_marker_still_gets_the_transcript() {
+        let prompt = "  You clean up transcripts given between <transcript> tags.\n";
+        let expected = PostProcessMessages {
+            system: Some("You clean up transcripts given between <transcript> tags.".to_string()),
+            user: "<transcript>\num so send it friday\n</transcript>".to_string(),
+        };
+        assert_eq!(
+            build_messages(prompt, "um so send it friday", false),
+            expected
+        );
+        assert_eq!(
+            build_messages(prompt, "um so send it friday", true),
+            expected
+        );
+    }
+
+    #[test]
+    fn built_in_prompts_get_the_transcript() {
+        for prompt in crate::settings::get_default_settings().post_process_prompts {
+            for structured in [false, true] {
+                let messages = build_messages(&prompt.prompt, "TRANSCRIPT-TEXT", structured);
+                assert!(
+                    messages.user.contains("TRANSCRIPT-TEXT"),
+                    "{} (structured: {structured})",
+                    prompt.id
+                );
+                assert!(!messages.user.contains("${output}"), "{}", prompt.id);
+                assert!(
+                    !messages
+                        .system
+                        .is_some_and(|system| system.contains("${output}")),
+                    "{}",
+                    prompt.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_dictation_needs_post_processing_turned_on() {
+        let mut settings = crate::settings::get_default_settings();
+        assert!(!settings.post_process_every_dictation);
+        assert!(!post_processes_every_dictation(&settings));
+
+        settings.post_process_every_dictation = true;
+        assert!(!post_processes_every_dictation(&settings));
+
+        settings.post_process_enabled = true;
+        assert!(post_processes_every_dictation(&settings));
+
+        settings.post_process_every_dictation = false;
+        assert!(!post_processes_every_dictation(&settings));
     }
 
     #[test]

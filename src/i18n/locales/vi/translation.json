@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Cách hoạt động",
+        "intro": "Xử lý sau gửi nội dung bạn đọc chính tả tới một mô hình AI, mô hình này làm gọn văn bản trước khi Handy dán vào.",
+        "shortcut": "Tính năng chạy khi bạn đọc chính tả bằng phím tắt xử lý sau ({{shortcut}}), không phải bằng phím tắt thông thường ({{normal}}) — phím này dán nguyên văn những gì bạn nói.",
+        "shortcutEvery": "Tính năng chạy ở mọi lần đọc chính tả: với phím tắt xử lý sau ({{shortcut}}) và với phím tắt thông thường ({{normal}}).",
+        "notSet": "chưa đặt",
+        "stepProvider": "Chọn một nhà cung cấp. Với Lemonade trên máy tính này, hãy chọn Lemonade Server.",
+        "stepModel": "Chọn một mô hình. Nút làm mới sẽ tải các mô hình của máy chủ.",
+        "stepPrompt": "Chọn một prompt, hoặc tự tạo prompt của bạn.",
+        "stepTest": "Nhấn Kiểm tra ở cuối trang này để thử.",
+        "fallback": "Nếu làm gọn thất bại, Handy sẽ dán nguyên văn những gì bạn nói.",
+        "everyDictation": {
+          "label": "Làm gọn mọi lần đọc chính tả",
+          "description": "Làm gọn cả những lần đọc chính tả bằng phím tắt thông thường, không chỉ những lần dùng phím tắt xử lý sau."
+        }
+      },
       "hotkey": {
         "title": "Phím tắt"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "URL cơ sở",
-          "description": "URL cơ sở API cho nhà cung cấp đã chọn. Chỉ có thể chỉnh sửa nhà cung cấp tùy chỉnh.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Địa chỉ API tương thích OpenAI của máy chủ, ví dụ http://localhost:11434/v1.",
+          "descriptionLemonade": "Địa chỉ Lemonade Server của bạn, thường là http://localhost:13305/api/v1. Các phiên bản Lemonade cũ hơn dùng cổng 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Nhập địa chỉ như http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "Khóa API",
           "description": "Khóa API cho nhà cung cấp đã chọn.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Chỉ cần khi máy chủ của bạn yêu cầu.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Tùy chọn"
         },
         "model": {
           "title": "Mô hình",
           "descriptionCustom": "Cung cấp định danh mô hình được yêu cầu bởi điểm cuối tùy chỉnh của bạn.",
           "descriptionDefault": "Chọn một mô hình được cung cấp bởi nhà cung cấp đã chọn.",
+          "descriptionLemonade": "Một mô hình trò chuyện trên Lemonade Server của bạn. Các mô hình giọng nói, embedding và hình ảnh không được liệt kê.",
           "placeholderWithOptions": "Tìm kiếm hoặc chọn một mô hình",
           "placeholderNoOptions": "Nhập tên mô hình",
-          "refreshModels": "Làm mới mô hình"
+          "refreshModels": "Làm mới mô hình",
+          "use": "Dùng “{{model}}”",
+          "loadError": "Không thể tải các mô hình. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "Hướng dẫn Prompt",
         "promptInstructionsPlaceholder": "Viết hướng dẫn để chạy sau khi chuyển đổi. Ví dụ: Cải thiện ngữ pháp và độ rõ ràng cho văn bản sau: ${output}",
         "promptTip": "Mẹo: Sử dụng <code>${output}</code> để chèn văn bản đã chuyển đổi vào prompt của bạn.",
+        "promptTipNoMarker": "Nếu không có ${output}, Handy sẽ gửi bản chép lời sau prompt của bạn, giữa các thẻ {{tag}}.",
         "updatePrompt": "Cập nhật Prompt",
         "deletePrompt": "Xóa Prompt",
         "createPrompt": "Tạo Prompt",
         "cancel": "Hủy",
         "selectToEdit": "Chọn một prompt ở trên để xem và chỉnh sửa chi tiết.",
         "createFirst": "Nhấn 'Tạo Prompt mới' ở trên để tạo prompt xử lý sau đầu tiên của bạn."
+      },
+      "test": {
+        "title": "Thử ngay",
+        "label": "Đoạn đọc chính tả mẫu",
+        "description": "Làm gọn văn bản này bằng nhà cung cấp, mô hình và prompt đã lưu được chọn ở trên, giống như cách làm gọn một lần đọc chính tả.",
+        "sample": "ờ thì bạn có thể ừm gửi cho tôi báo cáo trước thứ sáu không",
+        "button": "Kiểm tra",
+        "testing": "Đang kiểm tra…",
+        "result": "Kết quả ({{seconds}} giây):",
+        "emptyResult": "Mô hình trả lời mà không có văn bản. Với prompt làm gọn, điều này nghĩa là nó không tìm thấy gì đáng giữ lại.",
+        "failed": "Không thể chạy kiểm tra: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Hãy nhập văn bản để kiểm tra.",
+        "noProvider": "Hãy chọn một nhà cung cấp ở trên.",
+        "noModel": "Hãy chọn một mô hình cho {{provider}} ở trên. Nút làm mới cạnh mục Mô hình sẽ tải các mô hình của máy chủ.",
+        "noPrompt": "Hãy chọn một prompt ở dưới.",
+        "emptyPrompt": "Prompt đã chọn đang trống. Hãy viết hướng dẫn cho nó rồi nhấn Cập nhật Prompt.",
+        "missingApiKey": "{{provider}} cần khóa API. Hãy nhập vào ô Khóa API ở trên.",
+        "invalidApiKey": "Khóa API chứa ký tự không thể gửi đi. Hãy nhập lại.",
+        "invalidAddress": "{{address}} không phải địa chỉ máy chủ mà Handy dùng được. Địa chỉ cần có dạng http://localhost:13305/api/v1.",
+        "unreachable": "Không thể kết nối tới máy chủ tại {{address}}. Hãy đảm bảo máy chủ đang chạy và địa chỉ đúng.",
+        "timeout": "Máy chủ tại {{address}} không trả lời kịp. Nếu máy chủ vẫn đang tải mô hình, hãy thử lại sau một phút.",
+        "unauthorized": "Máy chủ tại {{address}} không chấp nhận khóa API (lỗi {{status}}). Hãy kiểm tra ô Khóa API.",
+        "modelNotFound": "Máy chủ tại {{address}} không có mô hình “{{model}}”. Hãy chọn mô hình khác ở trên.",
+        "notFound": "Không có gì trả lời tại {{address}} (lỗi 404). Hãy kiểm tra địa chỉ.",
+        "serverError": "Máy chủ tại {{address}} trả lời bằng một lỗi (lỗi {{status}}).",
+        "serverErrorNoStatus": "{{provider}} trả lời bằng một lỗi.",
+        "noAnswer": "{{provider}} trả lời mà không có văn bản. Hãy thử mô hình khác.",
+        "badAnswer": "{{provider}} gửi một câu trả lời mà Handy không đọc được.",
+        "noChatModels": "{{provider}} tại {{address}} không có mô hình trò chuyện nào. Hãy tải một mô hình trong Lemonade rồi nhấn nút làm mới.",
+        "otherModels": "Các mô hình trên máy chủ không thể làm gọn văn bản: {{models}}",
+        "internal": "Đã xảy ra lỗi bên trong Handy.",
+        "detail": "Chi tiết: {{detail}}"
       }
     },
     "transcribeFiles": {

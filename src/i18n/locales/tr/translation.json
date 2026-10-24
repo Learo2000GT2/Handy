@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Nasıl çalışır",
+        "intro": "Son işlem, dikte ettiklerinizi bir yapay zekâ modeline gönderir; model metni Handy yapıştırmadan önce düzeltir.",
+        "shortcut": "Son işlem, son işlem kısayoluyla ({{shortcut}}) dikte ettiğinizde çalışır; söylediklerinizi olduğu gibi yapıştıran normal kısayolunuzla ({{normal}}) çalışmaz.",
+        "shortcutEvery": "Son işlem her diktede çalışır: hem son işlem kısayoluyla ({{shortcut}}) hem de normal kısayolunuzla ({{normal}}).",
+        "notSet": "ayarlanmadı",
+        "stepProvider": "Bir sağlayıcı seçin. Bu bilgisayardaki Lemonade için Lemonade Server'ı seçin.",
+        "stepModel": "Bir model seçin. Yenile düğmesi sunucunun modellerini yükler.",
+        "stepPrompt": "Bir prompt seçin veya kendinizinkini oluşturun.",
+        "stepTest": "Denemek için bu sayfanın altındaki Test Et'e basın.",
+        "fallback": "Düzeltme başarısız olursa Handy söylediklerinizi olduğu gibi yapıştırır.",
+        "everyDictation": {
+          "label": "Her dikteyi düzelt",
+          "description": "Yalnızca son işlem kısayoluyla yapılanları değil, normal kısayolunuzla yapılan dikteleri de düzeltir."
+        }
+      },
       "hotkey": {
         "title": "Kısayol Tuşu"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "Temel URL",
-          "description": "Seçili sağlayıcı için API temel URL'si. Yalnızca özel sağlayıcı düzenlenebilir.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Sunucunuzun OpenAI uyumlu API adresi, örneğin http://localhost:11434/v1.",
+          "descriptionLemonade": "Lemonade Server'ınızın adresi; genellikle http://localhost:13305/api/v1. Eski Lemonade sürümleri 8000 numaralı bağlantı noktasını kullanıyordu.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "http://localhost:13305/api/v1 gibi bir adres girin."
         },
         "apiKey": {
           "title": "API Anahtarı",
           "description": "Seçili sağlayıcı için API anahtarı.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Yalnızca sunucunuz isterse gerekir.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "İsteğe bağlı"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Özel uç noktanızın beklediği model tanımlayıcısını girin.",
           "descriptionDefault": "Seçili sağlayıcının sunduğu bir modeli seçin.",
+          "descriptionLemonade": "Lemonade Server'ınızdaki bir sohbet modeli. Konuşma, gömme ve görüntü modelleri listelenmez.",
           "placeholderWithOptions": "Model ara veya seç",
           "placeholderNoOptions": "Model adı yazın",
-          "refreshModels": "Modelleri Yenile"
+          "refreshModels": "Modelleri Yenile",
+          "use": "“{{model}}” kullan",
+          "loadError": "Modeller yüklenemedi. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "Prompt Talimatları",
         "promptInstructionsPlaceholder": "Transkripsiyondan sonra çalıştırılacak talimatları yazın. Örnek: Aşağıdaki metnin dilbilgisini ve açıklığını iyileştir: ${output}",
         "promptTip": "İpucu: Transkribe edilen metni promptunuza eklemek için <code>${output}</code> kullanın.",
+        "promptTipNoMarker": "${output} olmadan Handy, dökümü prompt'unuzdan sonra {{tag}} etiketleri arasında gönderir.",
         "updatePrompt": "Promptu Güncelle",
         "deletePrompt": "Promptu Sil",
         "createPrompt": "Prompt Oluştur",
         "cancel": "İptal",
         "selectToEdit": "Ayrıntılarını görüntülemek ve düzenlemek için yukarıdan bir prompt seçin.",
         "createFirst": "İlk son işlem promptunuzu oluşturmak için yukarıdaki “Yeni Prompt Oluştur” seçeneğine tıklayın."
+      },
+      "test": {
+        "title": "Deneyin",
+        "label": "Örnek dikte",
+        "description": "Bu metni, yukarıda seçilen sağlayıcı, model ve kayıtlı prompt ile bir dikte nasıl düzeltiliyorsa öyle düzeltir.",
+        "sample": "ıı şey bana raporu ee cumaya kadar gönderebilir misin",
+        "button": "Test Et",
+        "testing": "Test ediliyor…",
+        "result": "Sonuç ({{seconds}} sn):",
+        "emptyResult": "Model metin olmadan yanıt verdi. Bir düzeltme prompt'unda bu, saklamaya değer bir şey bulamadığı anlamına gelir.",
+        "failed": "Test çalıştırılamadı: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Test etmek için bir metin yazın.",
+        "noProvider": "Yukarıdan bir sağlayıcı seçin.",
+        "noModel": "Yukarıdan {{provider}} için bir model seçin. Model alanının yanındaki yenile düğmesi sunucunun modellerini yükler.",
+        "noPrompt": "Aşağıdan bir prompt seçin.",
+        "emptyPrompt": "Seçili prompt boş. Talimatlarını yazın, ardından Promptu Güncelle'ye basın.",
+        "missingApiKey": "{{provider}} bir API anahtarı gerektiriyor. Yukarıdaki API Anahtarı alanına girin.",
+        "invalidApiKey": "API anahtarı gönderilemeyen karakterler içeriyor. Yeniden girin.",
+        "invalidAddress": "{{address}}, Handy'nin kullanabileceği bir sunucu adresi değil. http://localhost:13305/api/v1 gibi görünmelidir.",
+        "unreachable": "{{address}} adresindeki sunucuya ulaşılamıyor. Çalıştığından ve adresin doğru olduğundan emin olun.",
+        "timeout": "{{address}} adresindeki sunucu zamanında yanıt vermedi. Model hâlâ yükleniyorsa bir dakika sonra yeniden deneyin.",
+        "unauthorized": "{{address}} adresindeki sunucu API anahtarını kabul etmedi (hata {{status}}). API Anahtarı alanını kontrol edin.",
+        "modelNotFound": "{{address}} adresindeki sunucuda “{{model}}” modeli yok. Yukarıdan başka bir model seçin.",
+        "notFound": "{{address}} adresinde hiçbir şey yanıt vermedi (hata 404). Adresi kontrol edin.",
+        "serverError": "{{address}} adresindeki sunucu bir hatayla yanıt verdi (hata {{status}}).",
+        "serverErrorNoStatus": "{{provider}} bir hatayla yanıt verdi.",
+        "noAnswer": "{{provider}} metin olmadan yanıt verdi. Başka bir model deneyin.",
+        "badAnswer": "{{provider}}, Handy'nin okuyamadığı bir yanıt gönderdi.",
+        "noChatModels": "{{address}} adresindeki {{provider}} üzerinde sohbet modeli yok. Lemonade'de bir tane indirin, ardından yenile düğmesine basın.",
+        "otherModels": "Sunucuda metin düzeltemeyen modeller: {{models}}",
+        "internal": "Handy içinde bir şeyler ters gitti.",
+        "detail": "Ayrıntılar: {{detail}}"
       }
     },
     "transcribeFiles": {

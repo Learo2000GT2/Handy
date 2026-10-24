@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "작동 방식",
+        "intro": "후처리는 받아쓴 내용을 AI 모델에 보내고, Handy가 붙여넣기 전에 모델이 내용을 다듬습니다.",
+        "shortcut": "후처리는 후처리 단축키({{shortcut}})로 받아쓸 때 실행됩니다. 일반 단축키({{normal}})로는 실행되지 않으며, 말한 그대로 붙여넣습니다.",
+        "shortcutEvery": "후처리는 모든 받아쓰기에서 실행됩니다. 후처리 단축키({{shortcut}})와 일반 단축키({{normal}}) 모두 해당됩니다.",
+        "notSet": "설정 안 됨",
+        "stepProvider": "제공자를 선택합니다. 이 컴퓨터의 Lemonade를 쓰려면 Lemonade Server를 선택하세요.",
+        "stepModel": "모델을 선택합니다. 새로고침 버튼을 누르면 서버의 모델을 불러옵니다.",
+        "stepPrompt": "프롬프트를 선택하거나 직접 만듭니다.",
+        "stepTest": "이 페이지 아래쪽의 테스트를 눌러 확인해 보세요.",
+        "fallback": "다듬기에 실패하면 Handy는 말한 그대로 붙여넣습니다.",
+        "everyDictation": {
+          "label": "모든 받아쓰기 다듬기",
+          "description": "후처리 단축키뿐 아니라 일반 단축키로 받아쓴 내용도 다듬습니다."
+        }
+      },
       "hotkey": {
         "title": "단축키"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "기본 URL",
-          "description": "선택한 제공자의 API 기본 URL입니다. 사용자 정의 제공자만 편집할 수 있습니다.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "서버의 OpenAI 호환 API 주소입니다. 예: http://localhost:11434/v1",
+          "descriptionLemonade": "Lemonade Server의 주소입니다. 보통 http://localhost:13305/api/v1입니다. 이전 버전의 Lemonade는 포트 8000을 사용했습니다.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "http://localhost:13305/api/v1과 같은 주소를 입력하세요."
         },
         "apiKey": {
           "title": "API 키",
           "description": "선택한 제공자의 API 키입니다.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "서버에서 요구하는 경우에만 필요합니다.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "선택 사항"
         },
         "model": {
           "title": "모델",
           "descriptionCustom": "사용자 정의 엔드포인트에서 예상하는 모델 식별자를 제공하세요.",
           "descriptionDefault": "선택한 제공자가 제공하는 모델을 선택하세요.",
+          "descriptionLemonade": "Lemonade Server의 채팅 모델입니다. 음성, 임베딩, 이미지 모델은 목록에 표시되지 않습니다.",
           "placeholderWithOptions": "모델 검색 또는 선택",
           "placeholderNoOptions": "모델 이름 입력",
-          "refreshModels": "모델 새로고침"
+          "refreshModels": "모델 새로고침",
+          "use": "“{{model}}” 사용",
+          "loadError": "모델을 불러오지 못했습니다. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "프롬프트 지시사항",
         "promptInstructionsPlaceholder": "텍스트 변환 후 실행할 지시사항을 작성하세요. 예: 다음 텍스트의 문법과 명확성을 개선하세요: ${output}",
         "promptTip": "팁: 프롬프트에서 변환된 텍스트를 삽입하려면 <code>${output}</code>을 사용하세요.",
+        "promptTipNoMarker": "${output}이 없으면 Handy는 프롬프트 뒤에 전사본을 {{tag}} 태그로 감싸서 보냅니다.",
         "updatePrompt": "프롬프트 업데이트",
         "deletePrompt": "프롬프트 삭제",
         "createPrompt": "프롬프트 만들기",
         "cancel": "취소",
         "selectToEdit": "세부 정보를 보고 편집하려면 위에서 프롬프트를 선택하세요.",
         "createFirst": "첫 번째 후처리 프롬프트를 만들려면 위의 '새 프롬프트 만들기'를 클릭하세요."
+      },
+      "test": {
+        "title": "직접 해 보기",
+        "label": "예시 받아쓰기",
+        "description": "위에서 선택한 제공자, 모델, 저장된 프롬프트로 이 텍스트를 받아쓰기와 같은 방식으로 다듬습니다.",
+        "sample": "음 그러니까 금요일까지 어 보고서 좀 보내 줄 수 있어",
+        "button": "테스트",
+        "testing": "테스트 중…",
+        "result": "결과({{seconds}}초):",
+        "emptyResult": "모델이 텍스트 없이 응답했습니다. 다듬기 프롬프트에서는 남길 만한 내용이 없었다는 뜻입니다.",
+        "failed": "테스트를 실행하지 못했습니다: {{error}}"
+      },
+      "problems": {
+        "emptyText": "테스트할 텍스트를 입력하세요.",
+        "noProvider": "위에서 제공자를 선택하세요.",
+        "noModel": "위에서 {{provider}}의 모델을 선택하세요. 모델 옆의 새로고침 버튼을 누르면 서버의 모델을 불러옵니다.",
+        "noPrompt": "아래에서 프롬프트를 선택하세요.",
+        "emptyPrompt": "선택한 프롬프트가 비어 있습니다. 지침을 작성한 뒤 프롬프트 업데이트를 누르세요.",
+        "missingApiKey": "{{provider}}에는 API 키가 필요합니다. 위의 API 키 칸에 입력하세요.",
+        "invalidApiKey": "API 키에 보낼 수 없는 문자가 들어 있습니다. 다시 입력하세요.",
+        "invalidAddress": "{{address}}은(는) Handy가 사용할 수 있는 서버 주소가 아닙니다. http://localhost:13305/api/v1과 같은 형식이어야 합니다.",
+        "unreachable": "{{address}}의 서버에 연결할 수 없습니다. 서버가 실행 중이고 주소가 올바른지 확인하세요.",
+        "timeout": "{{address}}의 서버가 제시간에 응답하지 않았습니다. 아직 모델을 불러오는 중이라면 1분 뒤에 다시 시도하세요.",
+        "unauthorized": "{{address}}의 서버가 API 키를 받아들이지 않았습니다(오류 {{status}}). API 키 칸을 확인하세요.",
+        "modelNotFound": "{{address}}의 서버에 “{{model}}” 모델이 없습니다. 위에서 다른 모델을 선택하세요.",
+        "notFound": "{{address}}에서 아무것도 응답하지 않았습니다(오류 404). 주소를 확인하세요.",
+        "serverError": "{{address}}의 서버가 오류로 응답했습니다(오류 {{status}}).",
+        "serverErrorNoStatus": "{{provider}}이(가) 오류로 응답했습니다.",
+        "noAnswer": "{{provider}}이(가) 텍스트 없이 응답했습니다. 다른 모델을 사용해 보세요.",
+        "badAnswer": "{{provider}}이(가) Handy가 읽을 수 없는 응답을 보냈습니다.",
+        "noChatModels": "{{address}}의 {{provider}}에 채팅 모델이 없습니다. Lemonade에서 모델을 내려받은 뒤 새로고침 버튼을 누르세요.",
+        "otherModels": "텍스트를 다듬을 수 없는 서버의 모델: {{models}}",
+        "internal": "Handy 내부에서 문제가 발생했습니다.",
+        "detail": "세부 정보: {{detail}}"
       }
     },
     "transcribeFiles": {

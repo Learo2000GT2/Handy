@@ -1,11 +1,99 @@
-use crate::settings::PostProcessProvider;
+use crate::file_transcription::lemonade;
+use crate::settings::{PostProcessProvider, LEMONADE_PROVIDER_ID};
 use log::{debug, error, info};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, REFERER, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::error::Error as StdError;
+use std::fmt;
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
+
+/// Longest wait for a provider's model list.
+const MODEL_LIST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Why a request to a post-processing provider failed. Display gives the
+/// English detail, as logged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LlmError {
+    /// The provider's address can't be used.
+    InvalidAddress(String),
+    /// The API key can't be sent: it holds characters a header can't.
+    InvalidApiKey(String),
+    /// The request couldn't be prepared.
+    Setup(String),
+    /// The server can't be reached (refused, unknown host, broke off).
+    Unreachable(String),
+    /// The server didn't answer in time.
+    Timeout(String),
+    /// The server answered with an error status; `body` is an excerpt.
+    Status { status: u16, body: String },
+    /// A success answer that couldn't be read.
+    BadResponse(String),
+}
+
+impl fmt::Display for LlmError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidAddress(detail)
+            | Self::InvalidApiKey(detail)
+            | Self::Setup(detail)
+            | Self::Unreachable(detail)
+            | Self::Timeout(detail)
+            | Self::BadResponse(detail) => f.write_str(detail),
+            Self::Status { status, body } => {
+                let status = reqwest::StatusCode::from_u16(*status)
+                    .map(|code| code.to_string())
+                    .unwrap_or_else(|_| status.to_string());
+                write!(f, "API request failed with status {}: {}", status, body)
+            }
+        }
+    }
+}
+
+impl std::error::Error for LlmError {}
+
+/// The models a provider lists.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModelList {
+    /// The models that can post-process: all of them, except that a Lemonade
+    /// Server's speech, embedding, image and similar models are left out.
+    pub chat: Vec<String>,
+    /// The listed models left out of `chat`.
+    pub other: Vec<String>,
+}
+
+/// The API base requests go to, without a trailing "/". A Lemonade address
+/// may be typed with or without its API prefix ("http://localhost:13305"
+/// means ".../api/v1", which every Lemonade release serves). As in
+/// [`lemonade::LemonadeClient`], a password in a Lemonade address is dropped
+/// when an API key is sent instead.
+fn api_base(provider: &PostProcessProvider, api_key: &str) -> Result<String, LlmError> {
+    if provider.id != LEMONADE_PROVIDER_ID {
+        return Ok(provider.base_url.trim().trim_end_matches('/').to_string());
+    }
+    let (root, prefix) = lemonade::normalize_base_url(&provider.base_url)
+        .map_err(|e| LlmError::InvalidAddress(e.to_string()))?;
+    let root = if api_key.trim().is_empty() {
+        root
+    } else {
+        lemonade::redact_url(&root)
+    };
+    Ok(format!(
+        "{}{}",
+        root,
+        prefix.unwrap_or(lemonade::API_PREFIX)
+    ))
+}
+
+/// The provider's API address as shown to the user and logged: without any
+/// password in it.
+pub fn display_address(provider: &PostProcessProvider) -> String {
+    let address = api_base(provider, "")
+        .unwrap_or_else(|_| provider.base_url.trim().trim_end_matches('/').to_string());
+    lemonade::redact_url(&address)
+}
 
 #[derive(Debug, Serialize)]
 struct ChatMessage {
@@ -172,13 +260,21 @@ fn build_headers(provider: &PostProcessProvider, api_key: &str) -> Result<Header
     Ok(headers)
 }
 
-/// Create an HTTP client with provider-specific headers
-fn create_client(provider: &PostProcessProvider, api_key: &str) -> Result<reqwest::Client, String> {
-    let headers = build_headers(provider, api_key)?;
-    reqwest::Client::builder()
-        .default_headers(headers)
+/// Create an HTTP client with provider-specific headers. A server on this
+/// computer (`base` is loopback) is never reached through a system proxy.
+fn create_client(
+    provider: &PostProcessProvider,
+    api_key: &str,
+    base: &str,
+) -> Result<reqwest::Client, LlmError> {
+    let headers = build_headers(provider, api_key).map_err(LlmError::InvalidApiKey)?;
+    let mut builder = reqwest::Client::builder().default_headers(headers);
+    if lemonade::is_loopback_url(base) {
+        builder = builder.no_proxy();
+    }
+    builder
         .build()
-        .map_err(|e| report_reqwest_error("Failed to build HTTP client", &e))
+        .map_err(|e| LlmError::Setup(report_reqwest_error("Failed to build HTTP client", &e)))
 }
 
 /// Format a bounded error source chain.
@@ -262,6 +358,31 @@ fn sanitized_url_for_log(url: &str) -> String {
         .unwrap_or_else(|_| "<invalid URL>".to_string())
 }
 
+/// A failed request as an [`LlmError`] (and logged, see
+/// [`report_reqwest_error`]).
+fn request_error(context: &str, error: &reqwest::Error) -> LlmError {
+    let details = report_reqwest_error(context, error);
+    if error.is_builder() {
+        LlmError::InvalidAddress(details)
+    } else if error.is_timeout() {
+        LlmError::Timeout(details)
+    } else if error.is_decode() || error.is_body() {
+        LlmError::BadResponse(details)
+    } else {
+        LlmError::Unreachable(details)
+    }
+}
+
+/// The error for a non-2xx answer, with an excerpt of its body.
+async fn status_error(response: reqwest::Response, context: &str) -> LlmError {
+    let status = response.status().as_u16();
+    let body = match response.bytes().await {
+        Ok(body) => lemonade::body_excerpt(&body),
+        Err(e) => report_reqwest_error(context, &e),
+    };
+    LlmError::Status { status, body }
+}
+
 fn report_reqwest_error(context: &str, error: &reqwest::Error) -> String {
     let kinds = reqwest_error_kinds(error);
     let url = error
@@ -294,29 +415,10 @@ fn report_reqwest_error(context: &str, error: &reqwest::Error) -> String {
     details
 }
 
-/// Send a chat completion request to an OpenAI-compatible API
+/// Send a chat completion request to an OpenAI-compatible API, with
+/// structured output support.
 /// Returns Ok(Some(content)) on success, Ok(None) if response has no content,
 /// or Err on actual errors (HTTP, parsing, etc.)
-pub async fn send_chat_completion(
-    provider: &PostProcessProvider,
-    api_key: String,
-    model: &str,
-    prompt: String,
-    disable_reasoning: bool,
-) -> Result<Option<String>, String> {
-    send_chat_completion_with_schema(
-        provider,
-        api_key,
-        model,
-        prompt,
-        None,
-        None,
-        disable_reasoning,
-    )
-    .await
-}
-
-/// Send a chat completion request with structured output support.
 /// When json_schema is provided, uses structured outputs mode.
 /// system_prompt is used as the system message when provided.
 ///
@@ -334,8 +436,9 @@ pub async fn send_chat_completion_with_schema(
     system_prompt: Option<String>,
     json_schema: Option<Value>,
     disable_reasoning: bool,
-) -> Result<Option<String>, String> {
-    let base_url = provider.base_url.trim_end_matches('/');
+) -> Result<Option<String>, LlmError> {
+    let base_url = api_base(provider, &api_key)?;
+    let base_url = base_url.as_str();
     let url = format!("{}/chat/completions", base_url);
 
     debug!(
@@ -343,7 +446,7 @@ pub async fn send_chat_completion_with_schema(
         sanitized_url_for_log(&url)
     );
 
-    let client = create_client(provider, &api_key)?;
+    let client = create_client(provider, &api_key, base_url)?;
 
     // Build messages vector
     let mut messages = Vec::new();
@@ -392,7 +495,7 @@ pub async fn send_chat_completion_with_schema(
         .json(&request_body)
         .send()
         .await
-        .map_err(|e| report_reqwest_error("HTTP request failed", &e))?;
+        .map_err(|e| request_error("HTTP request failed", &e))?;
     let mut status = response.status();
     debug!(
         "Chat completion response received with status {} over {:?} from {}",
@@ -421,7 +524,7 @@ pub async fn send_chat_completion_with_schema(
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| report_reqwest_error("HTTP retry failed", &e))?;
+            .map_err(|e| request_error("HTTP retry failed", &e))?;
         status = response.status();
         debug!(
             "Chat completion retry response received with status {} over {:?} from {}",
@@ -440,20 +543,13 @@ pub async fn send_chat_completion_with_schema(
     }
 
     if !status.is_success() {
-        let error_text = response
-            .text()
-            .await
-            .unwrap_or_else(|e| report_reqwest_error("Failed to read API error response", &e));
-        return Err(format!(
-            "API request failed with status {}: {}",
-            status, error_text
-        ));
+        return Err(status_error(response, "Failed to read API error response").await);
     }
 
     let completion: ChatCompletionResponse = response
         .json()
         .await
-        .map_err(|e| report_reqwest_error("Failed to parse API response", &e))?;
+        .map_err(|e| request_error("Failed to parse API response", &e))?;
 
     Ok(completion
         .choices
@@ -462,23 +558,25 @@ pub async fn send_chat_completion_with_schema(
 }
 
 /// Fetch available models from an OpenAI-compatible API
-/// Returns a list of model IDs
+/// Returns the model IDs; for a Lemonade Server, only its chat models are in
+/// `chat` (see [`lemonade::LemonadeModel::is_chat`]).
 pub async fn fetch_models(
     provider: &PostProcessProvider,
     api_key: String,
-) -> Result<Vec<String>, String> {
-    let base_url = provider.base_url.trim_end_matches('/');
+) -> Result<ModelList, LlmError> {
+    let base_url = api_base(provider, &api_key)?;
     let url = format!("{}/models", base_url);
 
     debug!("Fetching models from: {}", sanitized_url_for_log(&url));
 
-    let client = create_client(provider, &api_key)?;
+    let client = create_client(provider, &api_key, &base_url)?;
 
     let response = client
         .get(&url)
+        .timeout(MODEL_LIST_TIMEOUT)
         .send()
         .await
-        .map_err(|e| report_reqwest_error("Failed to fetch models", &e))?;
+        .map_err(|e| request_error("Failed to fetch models", &e))?;
 
     let status = response.status();
     debug!(
@@ -488,21 +586,40 @@ pub async fn fetch_models(
         sanitized_url(response.url())
     );
     if !status.is_success() {
-        let error_text = response
-            .text()
-            .await
-            .unwrap_or_else(|e| report_reqwest_error("Failed to read model list error", &e));
-        return Err(format!(
-            "Model list request failed ({}): {}",
-            status, error_text
-        ));
+        return Err(status_error(response, "Failed to read model list error").await);
     }
 
     let parsed: serde_json::Value = response
         .json()
         .await
-        .map_err(|e| report_reqwest_error("Failed to parse model list response", &e))?;
+        .map_err(|e| request_error("Failed to parse model list response", &e))?;
 
+    if provider.id == LEMONADE_PROVIDER_ID {
+        return lemonade_model_list(&parsed);
+    }
+
+    Ok(ModelList {
+        chat: model_ids(&parsed),
+        other: Vec::new(),
+    })
+}
+
+/// A Lemonade Server's models, chat models apart, in server order.
+fn lemonade_model_list(parsed: &Value) -> Result<ModelList, LlmError> {
+    let models = lemonade::models_from_value(parsed).ok_or_else(|| {
+        LlmError::BadResponse("The model list answer holds no list of models".to_string())
+    })?;
+    let (chat, other): (Vec<_>, Vec<_>) = models
+        .into_iter()
+        .partition(lemonade::LemonadeModel::is_chat);
+    Ok(ModelList {
+        chat: chat.into_iter().map(|model| model.id).collect(),
+        other: other.into_iter().map(|model| model.id).collect(),
+    })
+}
+
+/// The model ids of an OpenAI-style model list.
+fn model_ids(parsed: &Value) -> Vec<String> {
     let mut models = Vec::new();
 
     // Handle OpenAI format: { data: [ { id: "..." }, ... ] }
@@ -524,7 +641,7 @@ pub async fn fetch_models(
         }
     }
 
-    Ok(models)
+    models
 }
 
 #[cfg(test)]
@@ -660,6 +777,113 @@ mod tests {
         assert!(details.contains(&format!("url: {base_url}/private")));
         assert!(!details.contains("SECRET_QUERY_TOKEN"));
         assert!(!details.contains("#private"));
+    }
+
+    #[test]
+    fn lemonade_address_is_used_with_or_without_its_api_prefix() {
+        let lemonade = |base_url: &str| provider(LEMONADE_PROVIDER_ID, base_url);
+        for (typed, base) in [
+            ("http://localhost:13305", "http://localhost:13305/api/v1"),
+            ("http://localhost:13305/", "http://localhost:13305/api/v1"),
+            (
+                "http://localhost:13305/api/v1/",
+                "http://localhost:13305/api/v1",
+            ),
+            (" http://lemon.lan:8000/v1 ", "http://lemon.lan:8000/v1"),
+        ] {
+            assert_eq!(api_base(&lemonade(typed), "").unwrap(), base, "{typed}");
+            assert_eq!(display_address(&lemonade(typed)), base, "{typed}");
+        }
+        assert!(matches!(
+            api_base(&lemonade("localhost:13305"), ""),
+            Err(LlmError::InvalidAddress(_))
+        ));
+
+        // A password in the address is sent unless a key is, and never shown.
+        let secret = lemonade("http://alice:s3cretpw@lemon.lan:13305");
+        assert_eq!(
+            api_base(&secret, "").unwrap(),
+            "http://alice:s3cretpw@lemon.lan:13305/api/v1"
+        );
+        assert_eq!(
+            api_base(&secret, "key").unwrap(),
+            "http://lemon.lan:13305/api/v1"
+        );
+        assert_eq!(display_address(&secret), "http://lemon.lan:13305/api/v1");
+        let error = api_base(&lemonade("http://alice:s3cretpw@lemon.lan/?x=1"), "").unwrap_err();
+        assert!(!error.to_string().contains("s3cretpw"), "{error}");
+
+        // Other providers use their address as it is.
+        assert_eq!(
+            api_base(&provider("custom", "http://localhost:11434/v1/"), "").unwrap(),
+            "http://localhost:11434/v1"
+        );
+        assert_eq!(
+            display_address(&provider("custom", "https://bob:pw@llm.example/v1")),
+            "https://llm.example/v1"
+        );
+    }
+
+    #[test]
+    fn lemonade_model_lists_keep_chat_models_apart() {
+        let parsed: Value =
+            serde_json::from_str(crate::file_transcription::lemonade::tests::MIXED_MODELS).unwrap();
+        let list = lemonade_model_list(&parsed).unwrap();
+        assert_eq!(
+            list.chat,
+            [
+                "Qwen3-4B-Instruct-2507-GGUF",
+                "Gemma-3-4b-it-GGUF",
+                "Qwen2.5-Omni-3B-GGUF",
+                "Llama-3.2-1B-Instruct-Hybrid"
+            ]
+        );
+        assert_eq!(list.other.len(), 6);
+        assert!(list.other.contains(&"Whisper-Large-v3-Turbo".to_string()));
+        assert!(matches!(
+            lemonade_model_list(&serde_json::json!({"error": "x"})),
+            Err(LlmError::BadResponse(_))
+        ));
+        // Other providers list every model.
+        assert_eq!(model_ids(&parsed).len(), 10);
+    }
+
+    #[test]
+    fn model_list_request_lists_downloaded_models_without_a_key() {
+        use crate::file_transcription::lemonade::tests::{json, MockServer, MIXED_MODELS};
+        let server = MockServer::start(vec![json(200, MIXED_MODELS)]);
+        let list = tauri::async_runtime::block_on(fetch_models(
+            &provider(LEMONADE_PROVIDER_ID, &server.url()),
+            String::new(),
+        ))
+        .unwrap();
+        assert_eq!(list.chat.len(), 4);
+        let requests = server.requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].method, "GET");
+        assert_eq!(requests[0].path, "/api/v1/models");
+        assert!(requests[0].header("authorization").is_none());
+    }
+
+    #[test]
+    fn error_answers_keep_their_status_and_an_excerpt() {
+        use crate::file_transcription::lemonade::tests::{json, MockServer};
+        let body = format!("{{\"error\":\"{}\"}}", "x".repeat(1000));
+        let server = MockServer::start(vec![json(500, &body)]);
+        let error = tauri::async_runtime::block_on(fetch_models(
+            &provider("custom", &server.url()),
+            String::new(),
+        ))
+        .unwrap_err();
+        let LlmError::Status { status, body } = &error else {
+            panic!("{error:?}");
+        };
+        assert_eq!(*status, 500);
+        assert!(body.starts_with("{\"error\":\"xxx"));
+        assert!(body.chars().count() <= 301);
+        assert!(error
+            .to_string()
+            .starts_with("API request failed with status 500"));
     }
 
     #[test]

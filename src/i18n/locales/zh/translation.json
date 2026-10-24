@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "工作原理",
+        "intro": "后处理会把你口述的内容发送给 AI 模型，由模型整理后再由 Handy 粘贴。",
+        "shortcut": "使用后处理快捷键（{{shortcut}}）口述时才会进行后处理；普通快捷键（{{normal}}）会按原话粘贴。",
+        "shortcutEvery": "每次口述都会进行后处理：无论使用后处理快捷键（{{shortcut}}）还是普通快捷键（{{normal}}）。",
+        "notSet": "未设置",
+        "stepProvider": "选择提供商。如果使用这台电脑上的 Lemonade，请选择 Lemonade Server。",
+        "stepModel": "选择模型。点击刷新按钮可加载服务器上的模型。",
+        "stepPrompt": "选择一个提示词，或创建你自己的提示词。",
+        "stepTest": "点击本页底部的“测试”来试一试。",
+        "fallback": "如果整理失败，Handy 会按原话粘贴。",
+        "everyDictation": {
+          "label": "整理每一次口述",
+          "description": "不仅整理使用后处理快捷键的口述，也整理使用普通快捷键的口述。"
+        }
+      },
       "hotkey": {
         "title": "快捷键"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "基础 URL",
-          "description": "所选提供商的 API 基础 URL。仅自定义提供商可编辑。",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "你的服务器上兼容 OpenAI 的 API 地址，例如 http://localhost:11434/v1。",
+          "descriptionLemonade": "你的 Lemonade Server 地址，通常为 http://localhost:13305/api/v1。旧版 Lemonade 使用端口 8000。",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "请输入类似 http://localhost:13305/api/v1 的地址。"
         },
         "apiKey": {
           "title": "API 密钥",
           "description": "所选提供商的 API 密钥。",
-          "placeholder": "sk-..."
+          "descriptionOptional": "仅当你的服务器要求时才需要。",
+          "placeholder": "sk-...",
+          "placeholderOptional": "可选"
         },
         "model": {
           "title": "模型",
           "descriptionCustom": "提供自定义端点期望的模型标识符。",
           "descriptionDefault": "选择所选提供商提供的模型。",
+          "descriptionLemonade": "你的 Lemonade Server 上的聊天模型。语音、嵌入和图像模型不会列出。",
           "placeholderWithOptions": "搜索或选择模型",
           "placeholderNoOptions": "输入模型名称",
-          "refreshModels": "刷新模型"
+          "refreshModels": "刷新模型",
+          "use": "使用“{{model}}”",
+          "loadError": "无法加载模型。{{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "提示词指令",
         "promptInstructionsPlaceholder": "编写转录后要执行的指令。示例：改进以下文本的语法和清晰度: ${output}",
         "promptTip": "提示：使用 <code>${output}</code> 将转录文本插入到您的提示词中。",
+        "promptTipNoMarker": "如果没有 ${output}，Handy 会把转录文本放在你的提示词之后，并用 {{tag}} 标签括起来发送。",
         "updatePrompt": "更新提示词",
         "deletePrompt": "删除提示词",
         "createPrompt": "创建提示词",
         "cancel": "取消",
         "selectToEdit": "选择上方的提示词以查看和编辑其详细信息。",
         "createFirst": "点击上方的「创建新提示词」来创建您的第一个后处理提示词。"
+      },
+      "test": {
+        "title": "试一试",
+        "label": "示例口述",
+        "description": "使用上方选择的提供商、模型和已保存的提示词整理这段文字，方式与整理口述相同。",
+        "sample": "嗯那个你能不能呃周五之前把报告发给我",
+        "button": "测试",
+        "testing": "正在测试…",
+        "result": "结果（{{seconds}} 秒）：",
+        "emptyResult": "模型返回了空文本。对于整理类提示词，这表示它没有找到值得保留的内容。",
+        "failed": "无法运行测试：{{error}}"
+      },
+      "problems": {
+        "emptyText": "请输入要测试的文字。",
+        "noProvider": "请在上方选择提供商。",
+        "noModel": "请在上方为 {{provider}} 选择模型。点击“模型”旁的刷新按钮可加载服务器上的模型。",
+        "noPrompt": "请在下方选择提示词。",
+        "emptyPrompt": "所选提示词为空。请写好指令，然后点击“更新提示词”。",
+        "missingApiKey": "{{provider}} 需要 API 密钥。请在上方的“API 密钥”栏中输入。",
+        "invalidApiKey": "API 密钥包含无法发送的字符。请重新输入。",
+        "invalidAddress": "{{address}} 不是 Handy 可用的服务器地址。地址应类似 http://localhost:13305/api/v1。",
+        "unreachable": "无法连接到位于 {{address}} 的服务器。请确认它正在运行且地址正确。",
+        "timeout": "位于 {{address}} 的服务器没有及时响应。如果它仍在加载模型，请一分钟后再试。",
+        "unauthorized": "位于 {{address}} 的服务器不接受该 API 密钥（错误 {{status}}）。请检查“API 密钥”栏。",
+        "modelNotFound": "位于 {{address}} 的服务器上没有模型“{{model}}”。请在上方选择其他模型。",
+        "notFound": "{{address}} 没有任何响应（错误 404）。请检查地址。",
+        "serverError": "位于 {{address}} 的服务器返回了错误（错误 {{status}}）。",
+        "serverErrorNoStatus": "{{provider}} 返回了错误。",
+        "noAnswer": "{{provider}} 返回了空文本。请换一个模型试试。",
+        "badAnswer": "{{provider}} 返回了 Handy 无法读取的响应。",
+        "noChatModels": "位于 {{address}} 的 {{provider}} 上没有聊天模型。请在 Lemonade 中下载一个，然后点击刷新按钮。",
+        "otherModels": "服务器上无法整理文字的模型：{{models}}",
+        "internal": "Handy 内部出了问题。",
+        "detail": "详细信息：{{detail}}"
       }
     },
     "transcribeFiles": {

@@ -4,6 +4,7 @@ pub mod history;
 pub mod lemonade;
 pub mod meetings;
 pub mod models;
+pub mod post_processing;
 pub mod pronunciation;
 pub mod speakers;
 pub mod transcription;

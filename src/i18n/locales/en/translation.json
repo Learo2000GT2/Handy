@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "How It Works",
+        "intro": "Post-processing sends what you dictate to an AI model, which cleans it up before Handy pastes it.",
+        "shortcut": "It runs when you dictate with the post-processing shortcut ({{shortcut}}), not with your normal shortcut ({{normal}}), which pastes your words as spoken.",
+        "shortcutEvery": "It runs on every dictation: with the post-processing shortcut ({{shortcut}}) and with your normal shortcut ({{normal}}).",
+        "notSet": "not set",
+        "stepProvider": "Choose a provider. For Lemonade on this computer, choose Lemonade Server.",
+        "stepModel": "Choose a model. The refresh button loads the server's models.",
+        "stepPrompt": "Choose a prompt, or create your own.",
+        "stepTest": "Press Test at the bottom of this page to try it out.",
+        "fallback": "If the cleanup fails, Handy pastes your words as spoken.",
+        "everyDictation": {
+          "label": "Clean up every dictation",
+          "description": "Also clean up dictations made with your normal shortcut, not only those made with the post-processing shortcut."
+        }
+      },
       "hotkey": {
         "title": "Hotkey"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "Base URL",
-          "description": "API base URL for the selected provider. Only the custom provider can be edited.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "The address of your server's OpenAI-compatible API, for example http://localhost:11434/v1.",
+          "descriptionLemonade": "The address of your Lemonade Server, usually http://localhost:13305/api/v1. Older Lemonade versions used port 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Enter an address like http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "API Key",
           "description": "API key for the selected provider.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Only needed if your server asks for one.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Optional"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Provide the model identifier expected by your custom endpoint.",
           "descriptionDefault": "Choose a model exposed by the selected provider.",
+          "descriptionLemonade": "A chat model on your Lemonade Server. Speech, embedding and image models aren't listed.",
           "placeholderWithOptions": "Search or select a model",
           "placeholderNoOptions": "Type a model name",
-          "refreshModels": "Refresh models"
+          "refreshModels": "Refresh models",
+          "use": "Use “{{model}}”",
+          "loadError": "Couldn't load the models. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "Prompt Instructions",
         "promptInstructionsPlaceholder": "Write the instructions to run after transcription. Example: Improve grammar and clarity for the following text: ${output}",
         "promptTip": "Tip: Use <code>${output}</code> to insert the transcribed text in your prompt.",
+        "promptTipNoMarker": "Without ${output}, Handy sends the transcript after your prompt, between {{tag}} tags.",
         "updatePrompt": "Update Prompt",
         "deletePrompt": "Delete Prompt",
         "createPrompt": "Create Prompt",
         "cancel": "Cancel",
         "selectToEdit": "Select a prompt above to view and edit its details.",
         "createFirst": "Click 'Create New Prompt' above to create your first post-processing prompt."
+      },
+      "test": {
+        "title": "Try It",
+        "label": "Sample dictation",
+        "description": "Cleans up this text with the provider, model and saved prompt chosen above, the same way a dictation is cleaned up.",
+        "sample": "um so can you uh send me the report by friday",
+        "button": "Test",
+        "testing": "Testing…",
+        "result": "Result ({{seconds}} s):",
+        "emptyResult": "The model answered with no text. With a cleanup prompt, this means it found nothing worth keeping.",
+        "failed": "Couldn't run the test: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Type some text to test with.",
+        "noProvider": "Choose a provider above.",
+        "noModel": "Choose a model for {{provider}} above. The refresh button next to Model loads the server's models.",
+        "noPrompt": "Choose a prompt below.",
+        "emptyPrompt": "The selected prompt is empty. Write its instructions, then press Update Prompt.",
+        "missingApiKey": "{{provider}} needs an API key. Enter it in the API Key field above.",
+        "invalidApiKey": "The API key contains characters that can't be sent. Enter it again.",
+        "invalidAddress": "{{address}} isn't a server address Handy can use. It should look like http://localhost:13305/api/v1.",
+        "unreachable": "Can't reach the server at {{address}}. Make sure it's running and the address is right.",
+        "timeout": "The server at {{address}} didn't answer in time. If it's still loading the model, try again in a minute.",
+        "unauthorized": "The server at {{address}} didn't accept the API key (error {{status}}). Check the API Key field.",
+        "modelNotFound": "The server at {{address}} doesn't have the model “{{model}}”. Choose another model above.",
+        "notFound": "Nothing answered at {{address}} (error 404). Check the address.",
+        "serverError": "The server at {{address}} answered with an error (error {{status}}).",
+        "serverErrorNoStatus": "{{provider}} answered with an error.",
+        "noAnswer": "{{provider}} answered without any text. Try another model.",
+        "badAnswer": "{{provider}} sent an answer Handy couldn't read.",
+        "noChatModels": "{{provider}} at {{address}} has no chat models. Download one in Lemonade, then press the refresh button.",
+        "otherModels": "Models on the server that can't clean up text: {{models}}",
+        "internal": "Something went wrong inside Handy.",
+        "detail": "Details: {{detail}}"
       }
     },
     "transcribeFiles": {

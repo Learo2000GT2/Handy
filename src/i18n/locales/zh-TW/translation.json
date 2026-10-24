@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "運作方式",
+        "intro": "後處理會把你口述的內容傳送給 AI 模型，由模型整理後再由 Handy 貼上。",
+        "shortcut": "使用後處理快捷鍵（{{shortcut}}）口述時才會進行後處理；一般快捷鍵（{{normal}}）會照原話貼上。",
+        "shortcutEvery": "每次口述都會進行後處理：無論使用後處理快捷鍵（{{shortcut}}）或一般快捷鍵（{{normal}}）。",
+        "notSet": "未設定",
+        "stepProvider": "選擇供應商。若要使用這台電腦上的 Lemonade，請選擇 Lemonade Server。",
+        "stepModel": "選擇模型。按下重新整理按鈕可載入伺服器上的模型。",
+        "stepPrompt": "選擇一個提示詞，或建立你自己的提示詞。",
+        "stepTest": "按下本頁底部的「測試」來試試看。",
+        "fallback": "如果整理失敗，Handy 會照原話貼上。",
+        "everyDictation": {
+          "label": "整理每一次口述",
+          "description": "不只整理使用後處理快捷鍵的口述，也整理使用一般快捷鍵的口述。"
+        }
+      },
       "hotkey": {
         "title": "快捷鍵"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "基礎網址",
-          "description": "所選供應商的 API 基礎網址，僅自訂供應商可編輯",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "你的伺服器上相容 OpenAI 的 API 網址，例如 http://localhost:11434/v1。",
+          "descriptionLemonade": "你的 Lemonade Server 網址，通常為 http://localhost:13305/api/v1。舊版 Lemonade 使用連接埠 8000。",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "請輸入類似 http://localhost:13305/api/v1 的網址。"
         },
         "apiKey": {
           "title": "API 金鑰",
           "description": "所選供應商的 API 金鑰",
-          "placeholder": "sk-..."
+          "descriptionOptional": "只有在你的伺服器要求時才需要。",
+          "placeholder": "sk-...",
+          "placeholderOptional": "選填"
         },
         "model": {
           "title": "模型",
           "descriptionCustom": "輸入自訂端點所需的模型 ID",
           "descriptionDefault": "從所選供應商的可用模型中選擇",
+          "descriptionLemonade": "你的 Lemonade Server 上的聊天模型。語音、嵌入和影像模型不會列出。",
           "placeholderWithOptions": "搜尋或選擇模型",
           "placeholderNoOptions": "輸入模型名稱",
-          "refreshModels": "重新整理模型"
+          "refreshModels": "重新整理模型",
+          "use": "使用「{{model}}」",
+          "loadError": "無法載入模型。{{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "提示詞指令",
         "promptInstructionsPlaceholder": "撰寫轉錄後要執行的指令。範例：改善以下文字的語法和清晰度: ${output}",
         "promptTip": "提示：使用 <code>${output}</code> 將轉錄文字插入到您的提示詞中",
+        "promptTipNoMarker": "如果沒有 ${output}，Handy 會把逐字稿放在你的提示詞之後，並以 {{tag}} 標籤包住後傳送。",
         "updatePrompt": "更新提示詞",
         "deletePrompt": "刪除提示詞",
         "createPrompt": "建立提示詞",
         "cancel": "取消",
         "selectToEdit": "選擇上方的提示詞以檢視和編輯其詳細資訊",
         "createFirst": "點選上方的「建立新提示詞」來建立您的第一個後處理提示詞"
+      },
+      "test": {
+        "title": "試試看",
+        "label": "範例口述",
+        "description": "使用上方選擇的供應商、模型和已儲存的提示詞整理這段文字，方式與整理口述相同。",
+        "sample": "嗯那個你可以呃星期五之前把報告寄給我嗎",
+        "button": "測試",
+        "testing": "測試中…",
+        "result": "結果（{{seconds}} 秒）：",
+        "emptyResult": "模型傳回了空白文字。對於整理用的提示詞，這表示它沒有找到值得保留的內容。",
+        "failed": "無法執行測試：{{error}}"
+      },
+      "problems": {
+        "emptyText": "請輸入要測試的文字。",
+        "noProvider": "請在上方選擇供應商。",
+        "noModel": "請在上方為 {{provider}} 選擇模型。按下「模型」旁的重新整理按鈕可載入伺服器上的模型。",
+        "noPrompt": "請在下方選擇提示詞。",
+        "emptyPrompt": "所選提示詞是空的。請寫好指示，然後按下「更新提示詞」。",
+        "missingApiKey": "{{provider}} 需要 API 金鑰。請在上方的「API 金鑰」欄位中輸入。",
+        "invalidApiKey": "API 金鑰包含無法傳送的字元。請重新輸入。",
+        "invalidAddress": "{{address}} 不是 Handy 可用的伺服器網址。網址應類似 http://localhost:13305/api/v1。",
+        "unreachable": "無法連線到位於 {{address}} 的伺服器。請確認它正在執行且網址正確。",
+        "timeout": "位於 {{address}} 的伺服器沒有及時回應。如果它仍在載入模型，請一分鐘後再試。",
+        "unauthorized": "位於 {{address}} 的伺服器不接受此 API 金鑰（錯誤 {{status}}）。請檢查「API 金鑰」欄位。",
+        "modelNotFound": "位於 {{address}} 的伺服器上沒有模型「{{model}}」。請在上方選擇其他模型。",
+        "notFound": "{{address}} 沒有任何回應（錯誤 404）。請檢查網址。",
+        "serverError": "位於 {{address}} 的伺服器傳回了錯誤（錯誤 {{status}}）。",
+        "serverErrorNoStatus": "{{provider}} 傳回了錯誤。",
+        "noAnswer": "{{provider}} 傳回了空白文字。請換個模型試試。",
+        "badAnswer": "{{provider}} 傳回了 Handy 無法讀取的回應。",
+        "noChatModels": "位於 {{address}} 的 {{provider}} 上沒有聊天模型。請在 Lemonade 中下載一個，然後按下重新整理按鈕。",
+        "otherModels": "伺服器上無法整理文字的模型：{{models}}",
+        "internal": "Handy 內部發生問題。",
+        "detail": "詳細資訊：{{detail}}"
       }
     },
     "transcribeFiles": {

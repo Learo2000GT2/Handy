@@ -1,6 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSettings } from "../../../hooks/useSettings";
-import { commands, type PostProcessProvider } from "@/bindings";
+import {
+  commands,
+  type PostProcessProblem,
+  type PostProcessProvider,
+} from "@/bindings";
+import { isValidServerUrl } from "@/lib/utils/transcript";
 import type { ModelOption } from "./types";
 import type { DropdownOption } from "../../ui/Dropdown";
 
@@ -9,11 +14,17 @@ type PostProcessProviderState = {
   selectedProviderId: string;
   selectedProvider: PostProcessProvider | undefined;
   isCustomProvider: boolean;
+  isLemonadeProvider: boolean;
+  /** The provider is a server the user runs: its address can be edited and
+   * an API key is optional. */
+  canEditBaseUrl: boolean;
   isAppleProvider: boolean;
   appleIntelligenceUnavailable: boolean;
   baseUrl: string;
   handleBaseUrlChange: (value: string) => void;
   isBaseUrlUpdating: boolean;
+  /** The last address typed for Lemonade couldn't be used. */
+  baseUrlInvalid: boolean;
   apiKey: string;
   handleApiKeyChange: (value: string) => void;
   isApiKeyUpdating: boolean;
@@ -22,6 +33,8 @@ type PostProcessProviderState = {
   modelOptions: ModelOption[];
   isModelUpdating: boolean;
   isFetchingModels: boolean;
+  /** Why the model list couldn't be loaded, if it couldn't. */
+  modelProblem: PostProcessProblem | null;
   handleProviderSelect: (providerId: string) => void;
   handleModelSelect: (value: string) => void;
   handleModelCreate: (value: string) => void;
@@ -29,6 +42,7 @@ type PostProcessProviderState = {
 };
 
 const APPLE_PROVIDER_ID = "apple_intelligence";
+export const LEMONADE_PROVIDER_ID = "lemonade";
 
 export const usePostProcessProviderState = (): PostProcessProviderState => {
   const {
@@ -40,6 +54,7 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
     updatePostProcessModel,
     fetchPostProcessModels,
     postProcessModelOptions,
+    postProcessModelProblems,
   } = useSettings();
 
   // Settings are guaranteed to have providers after migration
@@ -57,8 +72,13 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
   }, [providers, selectedProviderId]);
 
   const isAppleProvider = selectedProvider?.id === APPLE_PROVIDER_ID;
+  const canEditBaseUrl = selectedProvider?.allow_base_url_edit ?? false;
   const [appleIntelligenceUnavailable, setAppleIntelligenceUnavailable] =
     useState(false);
+  const [baseUrlInvalid, setBaseUrlInvalid] = useState(false);
+  // The provider whose models were last loaded without a click on refresh,
+  // so a provider is loaded once, by its selection or by the page showing it.
+  const autoFetchedRef = useRef<string | null>(null);
 
   // Use settings directly as single source of truth
   const baseUrl = selectedProvider?.base_url ?? "";
@@ -76,8 +96,10 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
     async (providerId: string) => {
       // Clear error state on any selection attempt (allows dismissing the error)
       setAppleIntelligenceUnavailable(false);
+      setBaseUrlInvalid(false);
 
       if (providerId === selectedProviderId) return;
+      autoFetchedRef.current = providerId;
 
       // Check Apple Intelligence availability before selecting
       if (providerId === APPLE_PROVIDER_ID) {
@@ -102,7 +124,8 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
         const hasBaseUrl = (provider?.base_url ?? "").trim() !== "";
         const hasApiKey = apiKey.trim() !== "";
 
-        if (provider?.id === "custom" ? hasBaseUrl : hasApiKey) {
+        // A server the user runs may need no API key.
+        if (provider?.allow_base_url_edit ? hasBaseUrl : hasApiKey) {
           void fetchPostProcessModels(providerId);
         }
       }
@@ -118,15 +141,35 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
 
   const handleBaseUrlChange = useCallback(
     (value: string) => {
-      if (!selectedProvider || selectedProvider.id !== "custom") {
+      if (!selectedProvider || !selectedProvider.allow_base_url_edit) {
         return;
       }
       const trimmed = value.trim();
+      const isLemonade = selectedProvider.id === LEMONADE_PROVIDER_ID;
+      // The backend refuses a Lemonade address it can't build requests from.
+      if (isLemonade && !isValidServerUrl(trimmed)) {
+        setBaseUrlInvalid(true);
+        return;
+      }
+      setBaseUrlInvalid(false);
       if (trimmed && trimmed !== baseUrl) {
-        void updatePostProcessBaseUrl(selectedProvider.id, trimmed);
+        const providerId = selectedProvider.id;
+        void updatePostProcessBaseUrl(providerId, trimmed).then((saved) => {
+          if (!saved) {
+            setBaseUrlInvalid(isLemonade);
+          } else if (isLemonade) {
+            // Show the new server's models straight away.
+            void fetchPostProcessModels(providerId);
+          }
+        });
       }
     },
-    [selectedProvider, baseUrl, updatePostProcessBaseUrl],
+    [
+      selectedProvider,
+      baseUrl,
+      updatePostProcessBaseUrl,
+      fetchPostProcessModels,
+    ],
   );
 
   const handleApiKeyChange = useCallback(
@@ -206,19 +249,40 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
   );
 
   const isCustomProvider = selectedProvider?.id === "custom";
+  const isLemonadeProvider = selectedProvider?.id === LEMONADE_PROVIDER_ID;
+  const modelProblem = postProcessModelProblems[selectedProviderId] ?? null;
 
-  // No automatic fetching - user must click refresh button
+  // A Lemonade Server needs no API key, so its models are loaded once when
+  // the page shows it; other providers wait for the refresh button.
+  useEffect(() => {
+    if (!isLemonadeProvider || autoFetchedRef.current === selectedProviderId) {
+      return;
+    }
+    autoFetchedRef.current = selectedProviderId;
+    if (availableModelsRaw.length === 0 && !isFetchingModels) {
+      void fetchPostProcessModels(selectedProviderId);
+    }
+  }, [
+    isLemonadeProvider,
+    selectedProviderId,
+    availableModelsRaw.length,
+    isFetchingModels,
+    fetchPostProcessModels,
+  ]);
 
   return {
     providerOptions,
     selectedProviderId,
     selectedProvider,
     isCustomProvider,
+    isLemonadeProvider,
+    canEditBaseUrl,
     isAppleProvider,
     appleIntelligenceUnavailable,
     baseUrl,
     handleBaseUrlChange,
     isBaseUrlUpdating,
+    baseUrlInvalid,
     apiKey,
     handleApiKeyChange,
     isApiKeyUpdating,
@@ -227,6 +291,7 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
     modelOptions,
     isModelUpdating,
     isFetchingModels,
+    modelProblem,
     handleProviderSelect,
     handleModelSelect,
     handleModelCreate,

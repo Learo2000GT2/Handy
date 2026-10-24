@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "しくみ",
+        "intro": "後処理では、ディクテーションした内容を AI モデルに送り、Handy が貼り付ける前に整えます。",
+        "shortcut": "後処理は、後処理用のショートカット（{{shortcut}}）でディクテーションしたときに実行されます。通常のショートカット（{{normal}}）では実行されず、話したとおりの言葉が貼り付けられます。",
+        "shortcutEvery": "後処理はすべてのディクテーションで実行されます。後処理用のショートカット（{{shortcut}}）でも、通常のショートカット（{{normal}}）でも実行されます。",
+        "notSet": "未設定",
+        "stepProvider": "プロバイダーを選びます。このコンピューターの Lemonade を使う場合は Lemonade Server を選びます。",
+        "stepModel": "モデルを選びます。更新ボタンでサーバーのモデルを読み込めます。",
+        "stepPrompt": "プロンプトを選ぶか、独自のプロンプトを作成します。",
+        "stepTest": "このページの下部にある「テスト」を押して試します。",
+        "fallback": "整形に失敗した場合、Handy は話したとおりの言葉を貼り付けます。",
+        "everyDictation": {
+          "label": "すべてのディクテーションを整える",
+          "description": "後処理用のショートカットだけでなく、通常のショートカットでのディクテーションも整えます。"
+        }
+      },
       "hotkey": {
         "title": "ショートカット"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "ベース URL",
-          "description": "選択したプロバイダーの API ベース URL。カスタムプロバイダーのみ編集可能。",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "サーバーの OpenAI 互換 API のアドレス。例: http://localhost:11434/v1",
+          "descriptionLemonade": "Lemonade Server のアドレス。通常は http://localhost:13305/api/v1 です。古いバージョンの Lemonade ではポート 8000 が使われていました。",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "http://localhost:13305/api/v1 のようなアドレスを入力してください。"
         },
         "apiKey": {
           "title": "API キー",
           "description": "選択したプロバイダーの API キー。",
-          "placeholder": "sk-…"
+          "descriptionOptional": "サーバーが求める場合にのみ必要です。",
+          "placeholder": "sk-…",
+          "placeholderOptional": "任意"
         },
         "model": {
           "title": "モデル",
           "descriptionCustom": "カスタムエンドポイントが期待するモデル識別子を指定。",
           "descriptionDefault": "選択したプロバイダーが提供するモデルを選択。",
+          "descriptionLemonade": "Lemonade Server 上のチャットモデル。音声、埋め込み、画像のモデルは一覧に表示されません。",
           "placeholderWithOptions": "モデルを検索または選択",
           "placeholderNoOptions": "モデル名を入力",
-          "refreshModels": "モデルを更新"
+          "refreshModels": "モデルを更新",
+          "use": "「{{model}}」を使用",
+          "loadError": "モデルを読み込めませんでした。{{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "プロンプトの指示",
         "promptInstructionsPlaceholder": "文字起こし後に実行する指示を記述します。例: 以下のテキストの文法と明瞭さを改善してください: ${output}",
         "promptTip": "ヒント: <code>${output}</code> を使用して、文字起こしテキストをプロンプトに挿入します。",
+        "promptTipNoMarker": "${output} がない場合、Handy はプロンプトの後に文字起こしを {{tag}} タグで囲んで送ります。",
         "updatePrompt": "プロンプトを更新",
         "deletePrompt": "プロンプトを削除",
         "createPrompt": "プロンプトを作成",
         "cancel": "キャンセル",
         "selectToEdit": "上からプロンプトを選択して、詳細を表示・編集します。",
         "createFirst": "上の「新しいプロンプトを作成」をクリックして、最初の後処理プロンプトを作成してください。"
+      },
+      "test": {
+        "title": "試してみる",
+        "label": "サンプルのディクテーション",
+        "description": "上で選んだプロバイダー、モデル、保存済みのプロンプトで、このテキストをディクテーションと同じ方法で整えます。",
+        "sample": "えーと金曜日までにあのーレポートを送ってもらえますか",
+        "button": "テスト",
+        "testing": "テスト中…",
+        "result": "結果（{{seconds}} 秒）:",
+        "emptyResult": "モデルはテキストなしで応答しました。整形用のプロンプトでは、残す価値のあるものが見つからなかったという意味です。",
+        "failed": "テストを実行できませんでした: {{error}}"
+      },
+      "problems": {
+        "emptyText": "テストするテキストを入力してください。",
+        "noProvider": "上でプロバイダーを選んでください。",
+        "noModel": "上で {{provider}} のモデルを選んでください。「モデル」の横にある更新ボタンでサーバーのモデルを読み込めます。",
+        "noPrompt": "下でプロンプトを選んでください。",
+        "emptyPrompt": "選択したプロンプトが空です。指示を書いてから「プロンプトを更新」を押してください。",
+        "missingApiKey": "{{provider}} には API キーが必要です。上の「API キー」欄に入力してください。",
+        "invalidApiKey": "API キーに送信できない文字が含まれています。もう一度入力してください。",
+        "invalidAddress": "{{address}} は Handy が使えるサーバーのアドレスではありません。http://localhost:13305/api/v1 のような形式にしてください。",
+        "unreachable": "{{address}} のサーバーに接続できません。起動していること、アドレスが正しいことを確認してください。",
+        "timeout": "{{address}} のサーバーが時間内に応答しませんでした。まだモデルを読み込んでいる場合は、1 分後にもう一度お試しください。",
+        "unauthorized": "{{address}} のサーバーが API キーを受け付けませんでした（エラー {{status}}）。「API キー」欄を確認してください。",
+        "modelNotFound": "{{address}} のサーバーにはモデル「{{model}}」がありません。上で別のモデルを選んでください。",
+        "notFound": "{{address}} では何も応答しませんでした（エラー 404）。アドレスを確認してください。",
+        "serverError": "{{address}} のサーバーがエラーを返しました（エラー {{status}}）。",
+        "serverErrorNoStatus": "{{provider}} がエラーを返しました。",
+        "noAnswer": "{{provider}} はテキストなしで応答しました。別のモデルをお試しください。",
+        "badAnswer": "{{provider}} から Handy が読み取れない応答が届きました。",
+        "noChatModels": "{{address}} の {{provider}} にはチャットモデルがありません。Lemonade でダウンロードしてから、更新ボタンを押してください。",
+        "otherModels": "テキストを整えられないサーバー上のモデル: {{models}}",
+        "internal": "Handy の内部で問題が発生しました。",
+        "detail": "詳細: {{detail}}"
       }
     },
     "transcribeFiles": {

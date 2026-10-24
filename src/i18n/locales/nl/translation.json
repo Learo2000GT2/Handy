@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Zo werkt het",
+        "intro": "Naverwerking stuurt wat je dicteert naar een AI-model, dat het opschoont voordat Handy het plakt.",
+        "shortcut": "Het werkt als je dicteert met de sneltoets voor naverwerking ({{shortcut}}), niet met je normale sneltoets ({{normal}}), die je woorden plakt zoals je ze zei.",
+        "shortcutEvery": "Het werkt bij elk dictaat: met de sneltoets voor naverwerking ({{shortcut}}) en met je normale sneltoets ({{normal}}).",
+        "notSet": "niet ingesteld",
+        "stepProvider": "Kies een provider. Kies voor Lemonade op deze computer Lemonade Server.",
+        "stepModel": "Kies een model. De verversknop laadt de modellen van de server.",
+        "stepPrompt": "Kies een prompt of maak er zelf een.",
+        "stepTest": "Druk onderaan deze pagina op Testen om het uit te proberen.",
+        "fallback": "Als het opschonen mislukt, plakt Handy je woorden zoals je ze zei.",
+        "everyDictation": {
+          "label": "Elk dictaat opschonen",
+          "description": "Schoon ook dictaten met je normale sneltoets op, niet alleen die met de sneltoets voor naverwerking."
+        }
+      },
       "hotkey": {
         "title": "Sneltoets"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "Basis-URL",
-          "description": "API-basis-URL voor de geselecteerde provider. Alleen de aangepaste provider kan worden bewerkt.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Het adres van de OpenAI-compatibele API van je server, bijvoorbeeld http://localhost:11434/v1.",
+          "descriptionLemonade": "Het adres van je Lemonade Server, meestal http://localhost:13305/api/v1. Oudere versies van Lemonade gebruikten poort 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Voer een adres in zoals http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "API-sleutel",
           "description": "API-sleutel voor de geselecteerde provider.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Alleen nodig als je server erom vraagt.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Optioneel"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Geef de model-ID op die door je aangepaste eindpunt wordt verwacht.",
           "descriptionDefault": "Kies een model dat door de geselecteerde provider wordt aangeboden.",
+          "descriptionLemonade": "Een chatmodel op je Lemonade Server. Spraak-, embedding- en beeldmodellen worden niet getoond.",
           "placeholderWithOptions": "Zoek of selecteer een model",
           "placeholderNoOptions": "Typ een modelnaam",
-          "refreshModels": "Modellen verversen"
+          "refreshModels": "Modellen verversen",
+          "use": "„{{model}}” gebruiken",
+          "loadError": "De modellen konden niet worden geladen. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "Prompt-instructies",
         "promptInstructionsPlaceholder": "Schrijf de instructies die na de transcriptie moeten worden uitgevoerd. Voorbeeld: Verbeter de grammatica en helderheid van de volgende tekst: ${output}",
         "promptTip": "Tip: Gebruik <code>${output}</code> om de getranscribeerde tekst in je prompt in te voegen.",
+        "promptTipNoMarker": "Zonder ${output} stuurt Handy de transcriptie na je prompt, tussen {{tag}}-tags.",
         "updatePrompt": "Prompt bijwerken",
         "deletePrompt": "Prompt verwijderen",
         "createPrompt": "Prompt maken",
         "cancel": "Annuleren",
         "selectToEdit": "Selecteer hierboven een prompt om de details te bekijken en te bewerken.",
         "createFirst": "Klik hierboven op 'Nieuwe prompt maken' om je eerste naverwerkingsprompt aan te maken."
+      },
+      "test": {
+        "title": "Uitproberen",
+        "label": "Voorbeelddictaat",
+        "description": "Schoont deze tekst op met de provider, het model en de opgeslagen prompt die hierboven zijn gekozen, op dezelfde manier als een dictaat.",
+        "sample": "eh dus kun je me uh het rapport voor vrijdag sturen",
+        "button": "Testen",
+        "testing": "Bezig met testen…",
+        "result": "Resultaat ({{seconds}} s):",
+        "emptyResult": "Het model antwoordde zonder tekst. Met een opschoonprompt betekent dat dat het niets vond dat het bewaren waard was.",
+        "failed": "De test kon niet worden uitgevoerd: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Typ wat tekst om mee te testen.",
+        "noProvider": "Kies hierboven een provider.",
+        "noModel": "Kies hierboven een model voor {{provider}}. De verversknop naast Model laadt de modellen van de server.",
+        "noPrompt": "Kies hieronder een prompt.",
+        "emptyPrompt": "De gekozen prompt is leeg. Schrijf de instructies en druk dan op Prompt bijwerken.",
+        "missingApiKey": "{{provider}} heeft een API-sleutel nodig. Voer die hierboven in bij API-sleutel.",
+        "invalidApiKey": "De API-sleutel bevat tekens die niet kunnen worden verzonden. Voer hem opnieuw in.",
+        "invalidAddress": "{{address}} is geen serveradres dat Handy kan gebruiken. Het moet eruitzien als http://localhost:13305/api/v1.",
+        "unreachable": "De server op {{address}} is niet bereikbaar. Controleer of hij draait en of het adres klopt.",
+        "timeout": "De server op {{address}} antwoordde niet op tijd. Als hij het model nog laadt, probeer het dan over een minuut opnieuw.",
+        "unauthorized": "De server op {{address}} accepteerde de API-sleutel niet (fout {{status}}). Controleer het veld API-sleutel.",
+        "modelNotFound": "De server op {{address}} heeft het model „{{model}}” niet. Kies hierboven een ander model.",
+        "notFound": "Er antwoordde niets op {{address}} (fout 404). Controleer het adres.",
+        "serverError": "De server op {{address}} antwoordde met een fout (fout {{status}}).",
+        "serverErrorNoStatus": "{{provider}} antwoordde met een fout.",
+        "noAnswer": "{{provider}} antwoordde zonder tekst. Probeer een ander model.",
+        "badAnswer": "{{provider}} stuurde een antwoord dat Handy niet kon lezen.",
+        "noChatModels": "{{provider}} op {{address}} heeft geen chatmodellen. Download er een in Lemonade en druk dan op de verversknop.",
+        "otherModels": "Modellen op de server die geen tekst kunnen opschonen: {{models}}",
+        "internal": "Er ging iets mis in Handy.",
+        "detail": "Details: {{detail}}"
       }
     },
     "transcribeFiles": {

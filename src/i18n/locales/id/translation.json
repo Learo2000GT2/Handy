@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Cara kerjanya",
+        "intro": "Pascaproses mengirim apa yang Anda diktekan ke model AI, yang merapikannya sebelum Handy menempelkannya.",
+        "shortcut": "Pascaproses berjalan saat Anda mendikte dengan pintasan pascaproses ({{shortcut}}), bukan dengan pintasan biasa ({{normal}}), yang menempelkan kata-kata Anda apa adanya.",
+        "shortcutEvery": "Pascaproses berjalan di setiap dikte: dengan pintasan pascaproses ({{shortcut}}) dan dengan pintasan biasa ({{normal}}).",
+        "notSet": "belum diatur",
+        "stepProvider": "Pilih penyedia. Untuk Lemonade di komputer ini, pilih Lemonade Server.",
+        "stepModel": "Pilih model. Tombol segarkan memuat model dari server.",
+        "stepPrompt": "Pilih prompt, atau buat sendiri.",
+        "stepTest": "Tekan Uji di bagian bawah halaman ini untuk mencobanya.",
+        "fallback": "Jika perapian gagal, Handy menempelkan kata-kata Anda apa adanya.",
+        "everyDictation": {
+          "label": "Rapikan setiap dikte",
+          "description": "Rapikan juga dikte yang dibuat dengan pintasan biasa, tidak hanya yang dibuat dengan pintasan pascaproses."
+        }
+      },
       "hotkey": {
         "title": "Pintasan"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "URL Dasar",
-          "description": "URL dasar API untuk penyedia yang dipilih. Hanya penyedia kustom yang dapat diedit.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Alamat API server Anda yang kompatibel dengan OpenAI, misalnya http://localhost:11434/v1.",
+          "descriptionLemonade": "Alamat Lemonade Server Anda, biasanya http://localhost:13305/api/v1. Versi Lemonade yang lebih lama menggunakan port 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Masukkan alamat seperti http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "Kunci API",
           "description": "Kunci API untuk penyedia yang dipilih.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Hanya diperlukan jika server Anda memintanya.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Opsional"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Masukkan pengenal model yang diharapkan oleh endpoint kustom Anda.",
           "descriptionDefault": "Pilih model yang disediakan oleh penyedia yang dipilih.",
+          "descriptionLemonade": "Model obrolan di Lemonade Server Anda. Model suara, embedding, dan gambar tidak ditampilkan.",
           "placeholderWithOptions": "Cari atau pilih model",
           "placeholderNoOptions": "Ketik nama model",
-          "refreshModels": "Segarkan model"
+          "refreshModels": "Segarkan model",
+          "use": "Gunakan “{{model}}”",
+          "loadError": "Model tidak dapat dimuat. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "Instruksi Prompt",
         "promptInstructionsPlaceholder": "Tulis instruksi yang dijalankan setelah transkripsi. Contoh: Perbaiki tata bahasa dan kejelasan teks berikut: ${output}",
         "promptTip": "Tips: Gunakan <code>${output}</code> untuk menyisipkan teks hasil transkripsi ke prompt Anda.",
+        "promptTipNoMarker": "Tanpa ${output}, Handy mengirim transkrip setelah prompt Anda, di antara tag {{tag}}.",
         "updatePrompt": "Perbarui Prompt",
         "deletePrompt": "Hapus Prompt",
         "createPrompt": "Buat Prompt",
         "cancel": "Batal",
         "selectToEdit": "Pilih prompt di atas untuk melihat dan mengedit detailnya.",
         "createFirst": "Klik 'Buat Prompt Baru' di atas untuk membuat prompt pascaproses pertama Anda."
+      },
+      "test": {
+        "title": "Coba",
+        "label": "Contoh dikte",
+        "description": "Merapikan teks ini dengan penyedia, model, dan prompt tersimpan yang dipilih di atas, dengan cara yang sama seperti dikte dirapikan.",
+        "sample": "eh jadi bisa nggak kamu em kirim laporannya hari jumat",
+        "button": "Uji",
+        "testing": "Menguji…",
+        "result": "Hasil ({{seconds}} dtk):",
+        "emptyResult": "Model menjawab tanpa teks. Dengan prompt perapian, artinya model tidak menemukan apa pun yang layak disimpan.",
+        "failed": "Uji tidak dapat dijalankan: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Ketik teks untuk diuji.",
+        "noProvider": "Pilih penyedia di atas.",
+        "noModel": "Pilih model untuk {{provider}} di atas. Tombol segarkan di samping Model memuat model dari server.",
+        "noPrompt": "Pilih prompt di bawah.",
+        "emptyPrompt": "Prompt yang dipilih kosong. Tulis instruksinya, lalu tekan Perbarui Prompt.",
+        "missingApiKey": "{{provider}} memerlukan kunci API. Masukkan di kolom Kunci API di atas.",
+        "invalidApiKey": "Kunci API berisi karakter yang tidak dapat dikirim. Masukkan lagi.",
+        "invalidAddress": "{{address}} bukan alamat server yang dapat digunakan Handy. Alamatnya seharusnya seperti http://localhost:13305/api/v1.",
+        "unreachable": "Tidak dapat menjangkau server di {{address}}. Pastikan server sedang berjalan dan alamatnya benar.",
+        "timeout": "Server di {{address}} tidak menjawab tepat waktu. Jika server masih memuat model, coba lagi dalam satu menit.",
+        "unauthorized": "Server di {{address}} tidak menerima kunci API (galat {{status}}). Periksa kolom Kunci API.",
+        "modelNotFound": "Server di {{address}} tidak memiliki model “{{model}}”. Pilih model lain di atas.",
+        "notFound": "Tidak ada yang menjawab di {{address}} (galat 404). Periksa alamatnya.",
+        "serverError": "Server di {{address}} menjawab dengan galat (galat {{status}}).",
+        "serverErrorNoStatus": "{{provider}} menjawab dengan galat.",
+        "noAnswer": "{{provider}} menjawab tanpa teks. Coba model lain.",
+        "badAnswer": "{{provider}} mengirim jawaban yang tidak dapat dibaca Handy.",
+        "noChatModels": "{{provider}} di {{address}} tidak memiliki model obrolan. Unduh satu di Lemonade, lalu tekan tombol segarkan.",
+        "otherModels": "Model di server yang tidak dapat merapikan teks: {{models}}",
+        "internal": "Terjadi masalah di dalam Handy.",
+        "detail": "Detail: {{detail}}"
       }
     },
     "transcribeFiles": {

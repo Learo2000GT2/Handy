@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Jak to funguje",
+        "intro": "Následné zpracování pošle to, co nadiktujete, modelu AI, který text upraví dřív, než ho Handy vloží.",
+        "shortcut": "Spustí se, když diktujete se zkratkou pro následné zpracování ({{shortcut}}), ne s běžnou zkratkou ({{normal}}), která vloží vaše slova tak, jak zazněla.",
+        "shortcutEvery": "Spustí se při každém diktování: se zkratkou pro následné zpracování ({{shortcut}}) i s běžnou zkratkou ({{normal}}).",
+        "notSet": "nenastaveno",
+        "stepProvider": "Vyberte poskytovatele. Pro Lemonade na tomto počítači zvolte Lemonade Server.",
+        "stepModel": "Vyberte model. Tlačítko pro obnovení načte modely ze serveru.",
+        "stepPrompt": "Vyberte prompt, nebo si vytvořte vlastní.",
+        "stepTest": "Vyzkoušejte to tlačítkem „Otestovat“ dole na této stránce.",
+        "fallback": "Pokud úprava selže, Handy vloží vaše slova tak, jak zazněla.",
+        "everyDictation": {
+          "label": "Upravovat každé diktování",
+          "description": "Upravovat i diktování s běžnou zkratkou, nejen to se zkratkou pro následné zpracování."
+        }
+      },
       "hotkey": {
         "title": "Klávesová zkratka"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "Základní URL",
-          "description": "Základní URL API pro vybraného poskytovatele. Upravitelné je pouze u vlastního poskytovatele.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Adresa API vašeho serveru kompatibilního s OpenAI, například http://localhost:11434/v1.",
+          "descriptionLemonade": "Adresa vašeho Lemonade Serveru, obvykle http://localhost:13305/api/v1. Starší verze Lemonade používaly port 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Zadejte adresu jako http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "API klíč",
           "description": "API klíč pro vybraného poskytovatele.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Potřeba jen tehdy, když ho váš server vyžaduje.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Volitelné"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Zadejte identifikátor modelu očekávaný vaším vlastním endpointem.",
           "descriptionDefault": "Vyberte model dostupný u vybraného poskytovatele.",
+          "descriptionLemonade": "Chatovací model na vašem Lemonade Serveru. Modely pro řeč, embeddingy a obrázky se v seznamu nezobrazují.",
           "placeholderWithOptions": "Vyhledejte nebo vyberte model",
           "placeholderNoOptions": "Zadejte název modelu",
-          "refreshModels": "Obnovit modely"
+          "refreshModels": "Obnovit modely",
+          "use": "Použít „{{model}}“",
+          "loadError": "Modely se nepodařilo načíst. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "Instrukce promptu",
         "promptInstructionsPlaceholder": "Napište instrukce, které se mají spustit po přepisu. Příklad: Zlepšete gramatiku a srozumitelnost následujícího textu: ${output}",
         "promptTip": "Tip: Použijte <code>${output}</code> pro vložení přepsaného textu do promptu.",
+        "promptTipNoMarker": "Bez ${output} pošle Handy přepis za váš prompt, mezi značkami {{tag}}.",
         "updatePrompt": "Aktualizovat prompt",
         "deletePrompt": "Smazat prompt",
         "createPrompt": "Vytvořit prompt",
         "cancel": "Zrušit",
         "selectToEdit": "Vyberte výše prompt, abyste zobrazili a upravili jeho podrobnosti.",
         "createFirst": "Klikněte nahoře na 'Vytvořit nový prompt' a vytvořte svůj první prompt pro následné zpracování."
+      },
+      "test": {
+        "title": "Vyzkoušejte",
+        "label": "Ukázkové diktování",
+        "description": "Upraví tento text pomocí poskytovatele, modelu a uloženého promptu vybraných výše, stejně jako se upravuje diktování.",
+        "sample": "ehm takže mohl bys mi ehm poslat tu zprávu do pátku",
+        "button": "Otestovat",
+        "testing": "Testuji…",
+        "result": "Výsledek ({{seconds}} s):",
+        "emptyResult": "Model odpověděl bez textu. U promptu pro úpravu to znamená, že nenašel nic, co by stálo za zachování.",
+        "failed": "Test se nepodařilo spustit: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Napište text, se kterým chcete testovat.",
+        "noProvider": "Vyberte poskytovatele výše.",
+        "noModel": "Vyberte model pro {{provider}} výše. Tlačítko pro obnovení vedle pole Model načte modely ze serveru.",
+        "noPrompt": "Vyberte prompt níže.",
+        "emptyPrompt": "Vybraný prompt je prázdný. Napište jeho pokyny a stiskněte „Aktualizovat prompt“.",
+        "missingApiKey": "{{provider}} potřebuje API klíč. Zadejte ho do pole „API klíč“ výše.",
+        "invalidApiKey": "API klíč obsahuje znaky, které nelze odeslat. Zadejte ho znovu.",
+        "invalidAddress": "{{address}} není adresa serveru, kterou Handy může použít. Měla by vypadat jako http://localhost:13305/api/v1.",
+        "unreachable": "Server na adrese {{address}} není dostupný. Ujistěte se, že běží a že je adresa správná.",
+        "timeout": "Server na adrese {{address}} neodpověděl včas. Pokud ještě načítá model, zkuste to znovu za minutu.",
+        "unauthorized": "Server na adrese {{address}} nepřijal API klíč (chyba {{status}}). Zkontrolujte pole „API klíč“.",
+        "modelNotFound": "Server na adrese {{address}} nemá model „{{model}}“. Vyberte výše jiný model.",
+        "notFound": "Na adrese {{address}} nic neodpovídá (chyba 404). Zkontrolujte adresu.",
+        "serverError": "Server na adrese {{address}} odpověděl chybou (chyba {{status}}).",
+        "serverErrorNoStatus": "{{provider}} odpověděl chybou.",
+        "noAnswer": "{{provider}} odpověděl bez textu. Zkuste jiný model.",
+        "badAnswer": "{{provider}} poslal odpověď, kterou Handy nedokázal přečíst.",
+        "noChatModels": "{{provider}} na adrese {{address}} nemá žádné chatovací modely. Stáhněte si nějaký v Lemonade a stiskněte tlačítko pro obnovení.",
+        "otherModels": "Modely na serveru, které neumí upravit text: {{models}}",
+        "internal": "V Handy se něco pokazilo.",
+        "detail": "Podrobnosti: {{detail}}"
       }
     },
     "transcribeFiles": {

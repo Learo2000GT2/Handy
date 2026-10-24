@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Come funziona",
+        "intro": "La post-elaborazione invia ciò che detti a un modello di IA, che lo ripulisce prima che Handy lo incolli.",
+        "shortcut": "Si attiva quando detti con la scorciatoia di post-elaborazione ({{shortcut}}), non con la scorciatoia normale ({{normal}}), che incolla le tue parole così come le hai dette.",
+        "shortcutEvery": "Si attiva a ogni dettatura: con la scorciatoia di post-elaborazione ({{shortcut}}) e con la scorciatoia normale ({{normal}}).",
+        "notSet": "non impostata",
+        "stepProvider": "Scegli un provider. Per Lemonade su questo computer, scegli Lemonade Server.",
+        "stepModel": "Scegli un modello. Il pulsante di aggiornamento carica i modelli del server.",
+        "stepPrompt": "Scegli un prompt o creane uno tuo.",
+        "stepTest": "Premi «Prova» in fondo a questa pagina per provarla.",
+        "fallback": "Se la pulizia non riesce, Handy incolla le tue parole così come le hai dette.",
+        "everyDictation": {
+          "label": "Ripulisci ogni dettatura",
+          "description": "Ripulisci anche le dettature fatte con la scorciatoia normale, non solo quelle fatte con la scorciatoia di post-elaborazione."
+        }
+      },
       "hotkey": {
         "title": "Tasto di scelta rapida"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "URL Base",
-          "description": "URL di base per l'API del provider selezionato. Solo per i provider personalizzati.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "L'indirizzo dell'API compatibile con OpenAI del tuo server, per esempio http://localhost:11434/v1.",
+          "descriptionLemonade": "L'indirizzo del tuo Lemonade Server, di solito http://localhost:13305/api/v1. Le versioni precedenti di Lemonade usavano la porta 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Inserisci un indirizzo come http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "Chiave API",
           "description": "Chiave API per il provider selezionato.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Serve solo se il tuo server la richiede.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Facoltativa"
         },
         "model": {
           "title": "Modello",
           "descriptionCustom": "Fornisci l'identificatore del modello previsto dal tuo endpoint personalizzato.",
           "descriptionDefault": "Scegli un modello reso disponibile dal provider selezionato.",
+          "descriptionLemonade": "Un modello di chat sul tuo Lemonade Server. I modelli vocali, di embedding e di immagini non sono elencati.",
           "placeholderWithOptions": "Cerca o scegli un modello",
           "placeholderNoOptions": "Digita il nome di un modello",
-          "refreshModels": "Aggiorna modelli"
+          "refreshModels": "Aggiorna modelli",
+          "use": "Usa «{{model}}»",
+          "loadError": "Impossibile caricare i modelli. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "Istruzioni del Prompt",
         "promptInstructionsPlaceholder": "Scrivi le istruzioni da eseguire dopo la trascrizione. Esempio: Migliora la grammatica e la chiarezza per il seguente testo: ${output}",
         "promptTip": "Suggerimento: Usa <code>${output}</code> per inserire il testo trascritto nel tuo prompt.",
+        "promptTipNoMarker": "Senza ${output}, Handy invia la trascrizione dopo il prompt, tra tag {{tag}}.",
         "updatePrompt": "Aggiorna Prompt",
         "deletePrompt": "Elimina Prompt",
         "createPrompt": "Crea Prompt",
         "cancel": "Annulla",
         "selectToEdit": "Scegli un prompt qui sopra per visualizzare o modificare i dettagli.",
         "createFirst": "Clicca 'Crea un nuovo prompt' qui sopra per creare il tuo primo prompt di post-elaborazione."
+      },
+      "test": {
+        "title": "Provala",
+        "label": "Dettatura di esempio",
+        "description": "Ripulisce questo testo con il provider, il modello e il prompt salvato scelti sopra, nello stesso modo in cui viene ripulita una dettatura.",
+        "sample": "ehm allora mi puoi ehm mandare il report entro venerdì",
+        "button": "Prova",
+        "testing": "Prova in corso…",
+        "result": "Risultato ({{seconds}} s):",
+        "emptyResult": "Il modello ha risposto senza testo. Con un prompt di pulizia, significa che non ha trovato nulla che valesse la pena tenere.",
+        "failed": "Impossibile eseguire la prova: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Scrivi un testo da provare.",
+        "noProvider": "Scegli un provider qui sopra.",
+        "noModel": "Scegli un modello per {{provider}} qui sopra. Il pulsante di aggiornamento accanto a «Modello» carica i modelli del server.",
+        "noPrompt": "Scegli un prompt qui sotto.",
+        "emptyPrompt": "Il prompt selezionato è vuoto. Scrivi le sue istruzioni, poi premi «Aggiorna Prompt».",
+        "missingApiKey": "{{provider}} richiede una chiave API. Inseriscila nel campo «Chiave API» qui sopra.",
+        "invalidApiKey": "La chiave API contiene caratteri che non si possono inviare. Inseriscila di nuovo.",
+        "invalidAddress": "{{address}} non è un indirizzo di server che Handy può usare. Dovrebbe essere simile a http://localhost:13305/api/v1.",
+        "unreachable": "Impossibile raggiungere il server all'indirizzo {{address}}. Assicurati che sia in esecuzione e che l'indirizzo sia corretto.",
+        "timeout": "Il server all'indirizzo {{address}} non ha risposto in tempo. Se sta ancora caricando il modello, riprova tra un minuto.",
+        "unauthorized": "Il server all'indirizzo {{address}} non ha accettato la chiave API (errore {{status}}). Controlla il campo «Chiave API».",
+        "modelNotFound": "Il server all'indirizzo {{address}} non ha il modello «{{model}}». Scegli un altro modello qui sopra.",
+        "notFound": "Non ha risposto nulla all'indirizzo {{address}} (errore 404). Controlla l'indirizzo.",
+        "serverError": "Il server all'indirizzo {{address}} ha risposto con un errore (errore {{status}}).",
+        "serverErrorNoStatus": "{{provider}} ha risposto con un errore.",
+        "noAnswer": "{{provider}} ha risposto senza testo. Prova un altro modello.",
+        "badAnswer": "{{provider}} ha inviato una risposta che Handy non è riuscito a leggere.",
+        "noChatModels": "{{provider}} all'indirizzo {{address}} non ha modelli di chat. Scaricane uno in Lemonade, poi premi il pulsante di aggiornamento.",
+        "otherModels": "Modelli sul server che non possono ripulire il testo: {{models}}",
+        "internal": "Qualcosa è andato storto in Handy.",
+        "detail": "Dettagli: {{detail}}"
       }
     },
     "transcribeFiles": {

@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Sådan virker det",
+        "intro": "Efterbehandling sender det, du dikterer, til en AI-model, som renser det, før Handy indsætter det.",
+        "shortcut": "Den kører, når du dikterer med genvejen til efterbehandling ({{shortcut}}), ikke med din normale genvej ({{normal}}), som indsætter dine ord, som de blev sagt.",
+        "shortcutEvery": "Den kører ved hver diktering: med genvejen til efterbehandling ({{shortcut}}) og med din normale genvej ({{normal}}).",
+        "notSet": "ikke angivet",
+        "stepProvider": "Vælg en udbyder. Til Lemonade på denne computer skal du vælge Lemonade Server.",
+        "stepModel": "Vælg en model. Opdateringsknappen henter serverens modeller.",
+        "stepPrompt": "Vælg en prompt, eller opret din egen.",
+        "stepTest": "Tryk på Test nederst på siden for at prøve det.",
+        "fallback": "Hvis rensningen mislykkes, indsætter Handy dine ord, som de blev sagt.",
+        "everyDictation": {
+          "label": "Rens hver diktering",
+          "description": "Rens også dikteringer, der er lavet med din normale genvej, ikke kun dem med genvejen til efterbehandling."
+        }
+      },
       "hotkey": {
         "title": "Genvejstast"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "Basis-URL",
-          "description": "API-basis-URL for den valgte udbyder. Kun den brugerdefinerede udbyder kan redigeres.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Adressen på din servers OpenAI-kompatible API, for eksempel http://localhost:11434/v1.",
+          "descriptionLemonade": "Adressen på din Lemonade Server, normalt http://localhost:13305/api/v1. Ældre Lemonade-versioner brugte port 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Angiv en adresse som http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "API-nøgle",
           "description": "API-nøgle til den valgte udbyder.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Kun nødvendig, hvis din server beder om en.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Valgfri"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Angiv den modelidentifikator, som det brugerdefinerede endpoint forventer.",
           "descriptionDefault": "Vælg en model, der udbydes af den valgte udbyder.",
+          "descriptionLemonade": "En chatmodel på din Lemonade Server. Tale-, embedding- og billedmodeller vises ikke.",
           "placeholderWithOptions": "Søg eller vælg en model",
           "placeholderNoOptions": "Skriv et modelnavn",
-          "refreshModels": "Opdater modeller"
+          "refreshModels": "Opdater modeller",
+          "use": "Brug »{{model}}«",
+          "loadError": "Modellerne kunne ikke hentes. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "Promptinstruktioner",
         "promptInstructionsPlaceholder": "Skriv de instruktioner, der skal køres efter transskription. Eksempel: Forbedr grammatik og klarhed for følgende tekst: ${output}",
         "promptTip": "Tip: Brug <code>${output}</code> til at indsætte den transskriberede tekst i din prompt.",
+        "promptTipNoMarker": "Uden ${output} sender Handy transskriptionen efter din prompt, mellem {{tag}}-tags.",
         "updatePrompt": "Opdater prompt",
         "deletePrompt": "Slet prompt",
         "createPrompt": "Opret prompt",
         "cancel": "Annuller",
         "selectToEdit": "Vælg en prompt ovenfor for at se og redigere dens detaljer.",
         "createFirst": "Klik på 'Opret ny prompt' ovenfor for at oprette din første efterbehandlingsprompt."
+      },
+      "test": {
+        "title": "Prøv det",
+        "label": "Eksempel på diktering",
+        "description": "Renser denne tekst med den udbyder, model og gemte prompt, der er valgt ovenfor, på samme måde som en diktering renses.",
+        "sample": "øh så kan du øhm sende mig rapporten på fredag",
+        "button": "Test",
+        "testing": "Tester…",
+        "result": "Resultat ({{seconds}} s):",
+        "emptyResult": "Modellen svarede uden tekst. Med en rensningsprompt betyder det, at den ikke fandt noget, der var værd at beholde.",
+        "failed": "Testen kunne ikke køres: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Skriv noget tekst at teste med.",
+        "noProvider": "Vælg en udbyder ovenfor.",
+        "noModel": "Vælg en model til {{provider}} ovenfor. Opdateringsknappen ved siden af Model henter serverens modeller.",
+        "noPrompt": "Vælg en prompt nedenfor.",
+        "emptyPrompt": "Den valgte prompt er tom. Skriv dens instruktioner, og tryk derefter på Opdater prompt.",
+        "missingApiKey": "{{provider}} kræver en API-nøgle. Angiv den i feltet API-nøgle ovenfor.",
+        "invalidApiKey": "API-nøglen indeholder tegn, der ikke kan sendes. Angiv den igen.",
+        "invalidAddress": "{{address}} er ikke en serveradresse, Handy kan bruge. Den skal ligne http://localhost:13305/api/v1.",
+        "unreachable": "Kan ikke få forbindelse til serveren på {{address}}. Kontrollér, at den kører, og at adressen er rigtig.",
+        "timeout": "Serveren på {{address}} svarede ikke i tide. Hvis den stadig indlæser modellen, så prøv igen om et minut.",
+        "unauthorized": "Serveren på {{address}} accepterede ikke API-nøglen (fejl {{status}}). Kontrollér feltet API-nøgle.",
+        "modelNotFound": "Serveren på {{address}} har ikke modellen »{{model}}«. Vælg en anden model ovenfor.",
+        "notFound": "Intet svarede på {{address}} (fejl 404). Kontrollér adressen.",
+        "serverError": "Serveren på {{address}} svarede med en fejl (fejl {{status}}).",
+        "serverErrorNoStatus": "{{provider}} svarede med en fejl.",
+        "noAnswer": "{{provider}} svarede uden tekst. Prøv en anden model.",
+        "badAnswer": "{{provider}} sendte et svar, som Handy ikke kunne læse.",
+        "noChatModels": "{{provider}} på {{address}} har ingen chatmodeller. Download en i Lemonade, og tryk derefter på opdateringsknappen.",
+        "otherModels": "Modeller på serveren, der ikke kan rense tekst: {{models}}",
+        "internal": "Noget gik galt i Handy.",
+        "detail": "Detaljer: {{detail}}"
       }
     },
     "transcribeFiles": {

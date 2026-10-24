@@ -35,7 +35,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub const LEMONADE_MODEL_PREFIX: &str = "lemonade:";
 
 /// The API prefix older Lemonade releases serve, and newer ones still accept.
-const API_PREFIX: &str = "/api/v1";
+pub const API_PREFIX: &str = "/api/v1";
 /// The OpenAI-style prefix, tried when the server has no `/api/v1`.
 const OPENAI_PREFIX: &str = "/v1";
 /// How often a blocking call checks its cancel flag.
@@ -57,6 +57,38 @@ const MODEL_MISSING_PHRASES: &[&str] = &[
     "not available",
     "no model",
     "not supported",
+];
+/// Lemonade labels of models that don't chat: speech to text, text to
+/// speech and other sound, embeddings, reranking, images, classification.
+const NON_CHAT_LABELS: &[&str] = &[
+    "transcription",
+    "realtime-transcription",
+    "tts",
+    "speech",
+    "audio",
+    "audio-generation",
+    "voice-design",
+    "embeddings",
+    "embedding",
+    "reranking",
+    "image",
+    "edit",
+    "upscaling",
+    "3d",
+    "classification",
+];
+/// Lemonade recipes (backends) that run no chat model.
+const NON_CHAT_RECIPES: &[&str] = &[
+    "whispercpp",
+    "moonshine",
+    "kokoro",
+    "openmoss",
+    "acestep",
+    "thinksound",
+    "sd-cpp",
+    "thenoise",
+    "trellis",
+    "onnxruntime",
 ];
 
 /// The model's display name for a Lemonade job's model id
@@ -120,6 +152,27 @@ impl LemonadeModel {
                 .id
                 .get(..7)
                 .is_some_and(|start| start.eq_ignore_ascii_case("whisper"))
+    }
+
+    /// Whether the model answers chat completions: labelled "chat" (newer
+    /// servers label every chat model so), or with no label or recipe of a
+    /// speech, sound, embedding, reranking or image model (older servers,
+    /// and models added by hand without labels).
+    pub fn is_chat(&self) -> bool {
+        let has_label = |names: &[&str]| {
+            self.labels
+                .iter()
+                .any(|label| names.iter().any(|name| label.eq_ignore_ascii_case(name)))
+        };
+        if has_label(&["chat"]) {
+            return true;
+        }
+        let other_recipe = self.recipe.as_deref().is_some_and(|recipe| {
+            NON_CHAT_RECIPES
+                .iter()
+                .any(|name| recipe.eq_ignore_ascii_case(name))
+        });
+        !self.is_transcription() && !has_label(NON_CHAT_LABELS) && !other_recipe
     }
 }
 
@@ -671,7 +724,7 @@ fn error_chain(error: &(dyn std::error::Error + 'static)) -> String {
 }
 
 /// Whether `url` names this computer (localhost, 127.0.0.0/8, ::1).
-fn is_loopback_url(url: &str) -> bool {
+pub(crate) fn is_loopback_url(url: &str) -> bool {
     let Some(host) = Url::parse(url)
         .ok()
         .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
@@ -903,42 +956,47 @@ fn parse_segment(row: &Value) -> Option<ExternalTimed> {
 pub fn parse_models(body: &[u8]) -> Result<Vec<LemonadeModel>, LemonadeError> {
     let value: Value = serde_json::from_slice(body)
         .map_err(|e| LemonadeError::BadResponse(format!("invalid model list: {}", e)))?;
+    models_from_value(&value).ok_or_else(|| {
+        LemonadeError::BadResponse(format!("no model list in: {}", body_excerpt(body)))
+    })
+}
+
+/// The models of a parsed `GET /models` body; None when it holds no list.
+pub fn models_from_value(value: &Value) -> Option<Vec<LemonadeModel>> {
     let rows = value
         .get("data")
         .and_then(Value::as_array)
-        .or_else(|| value.as_array())
-        .ok_or_else(|| {
-            LemonadeError::BadResponse(format!("no model list in: {}", body_excerpt(body)))
-        })?;
-    Ok(rows
-        .iter()
-        .filter_map(|row| {
-            let id = row.get("id")?.as_str()?.trim();
-            if id.is_empty() {
-                return None;
-            }
-            let labels = row
-                .get("labels")
-                .and_then(Value::as_array)
-                .map(|labels| {
-                    labels
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .map(str::to_string)
-                        .collect()
+        .or_else(|| value.as_array())?;
+    Some(
+        rows.iter()
+            .filter_map(|row| {
+                let id = row.get("id")?.as_str()?.trim();
+                if id.is_empty() {
+                    return None;
+                }
+                let labels = row
+                    .get("labels")
+                    .and_then(Value::as_array)
+                    .map(|labels| {
+                        labels
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_string)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Some(LemonadeModel {
+                    id: id.to_string(),
+                    recipe: row
+                        .get("recipe")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    labels,
+                    downloaded: row.get("downloaded").and_then(Value::as_bool),
                 })
-                .unwrap_or_default();
-            Some(LemonadeModel {
-                id: id.to_string(),
-                recipe: row
-                    .get("recipe")
-                    .and_then(Value::as_str)
-                    .map(str::to_string),
-                labels,
-                downloaded: row.get("downloaded").and_then(Value::as_bool),
             })
-        })
-        .collect())
+            .collect(),
+    )
 }
 
 /// The error for a non-2xx answer to a request for `model`.
@@ -970,7 +1028,7 @@ pub fn classify_status(status: u16, body: &str, model: &str) -> LemonadeError {
 }
 
 /// The first [`BODY_EXCERPT_CHARS`] characters of a body, on one line.
-fn body_excerpt(body: &[u8]) -> String {
+pub(crate) fn body_excerpt(body: &[u8]) -> String {
     let text = String::from_utf8_lossy(body);
     let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
     match line.char_indices().nth(BODY_EXCERPT_CHARS) {
@@ -1836,6 +1894,61 @@ pub(crate) mod tests {
         assert!(!check.ok);
         assert_eq!(check.error, Some(LemonadeErrorKind::Unauthorized));
         assert!(check.detail.unwrap().contains("API key"));
+    }
+
+    /// A model list as current Lemonade releases send it: every model
+    /// labelled with what it does.
+    pub(crate) const MIXED_MODELS: &str = r#"{"object":"list","data":[
+        {"id":"Qwen3-4B-Instruct-2507-GGUF","recipe":"llamacpp","labels":["chat","hot","tool-calling"],"downloaded":true},
+        {"id":"Whisper-Large-v3-Turbo","recipe":"whispercpp","labels":["realtime-transcription","transcription"],"downloaded":true},
+        {"id":"Gemma-3-4b-it-GGUF","recipe":"llamacpp","labels":["chat","vision"],"downloaded":true},
+        {"id":"nomic-embed-text-v2-moe-GGUF","recipe":"llamacpp","labels":["embeddings"],"downloaded":true},
+        {"id":"bge-reranker-v2-m3-GGUF","recipe":"llamacpp","labels":["reranking"],"downloaded":true},
+        {"id":"kokoro-v1","recipe":"kokoro","labels":["tts"],"downloaded":true},
+        {"id":"SD-Turbo","recipe":"sd-cpp","labels":["image"],"downloaded":true},
+        {"id":"Moonshine-Base","recipe":"moonshine","labels":["transcription"],"downloaded":true},
+        {"id":"Qwen2.5-Omni-3B-GGUF","recipe":"llamacpp","labels":["chat","chat-transcription","vision"],"downloaded":true},
+        {"id":"Llama-3.2-1B-Instruct-Hybrid","recipe":"ryzenai-llm","labels":["chat"],"downloaded":true}]}"#;
+
+    #[test]
+    fn chat_models_are_told_from_speech_embedding_and_image_models() {
+        let chat: Vec<String> = parse_models(MIXED_MODELS.as_bytes())
+            .unwrap()
+            .into_iter()
+            .filter(LemonadeModel::is_chat)
+            .map(|model| model.id)
+            .collect();
+        assert_eq!(
+            chat,
+            [
+                "Qwen3-4B-Instruct-2507-GGUF",
+                "Gemma-3-4b-it-GGUF",
+                "Qwen2.5-Omni-3B-GGUF",
+                "Llama-3.2-1B-Instruct-Hybrid"
+            ]
+        );
+
+        // Older servers label no model "chat": what isn't recognisably
+        // something else is offered.
+        let chat: Vec<bool> = parse_models(MODELS.as_bytes())
+            .unwrap()
+            .iter()
+            .map(LemonadeModel::is_chat)
+            .collect();
+        assert_eq!(chat, [false, false, true]);
+        let model = |id: &str, recipe: Option<&str>, labels: &[&str]| LemonadeModel {
+            id: id.to_string(),
+            recipe: recipe.map(str::to_string),
+            labels: labels.iter().map(|l| l.to_string()).collect(),
+            downloaded: None,
+        };
+        assert!(model("user.MyModel", None, &[]).is_chat());
+        assert!(model("Phi-4-mini", Some("oga-hybrid"), &["custom"]).is_chat());
+        assert!(!model("whisper-small", None, &[]).is_chat());
+        assert!(!model("X", Some("Kokoro"), &[]).is_chat());
+        assert!(!model("X", Some("llamacpp"), &["Embeddings"]).is_chat());
+        assert!(!model("X", None, &["embedding"]).is_chat());
+        assert!(model("X", Some("llamacpp"), &["CHAT", "audio"]).is_chat());
     }
 
     #[test]

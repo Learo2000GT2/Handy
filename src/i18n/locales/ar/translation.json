@@ -431,6 +431,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "طريقة العمل",
+        "intro": "ترسل المعالجة اللاحقة ما تمليه إلى نموذج ذكاء اصطناعي ينظّفه قبل أن يلصقه Handy.",
+        "shortcut": "تعمل عندما تُملي باختصار المعالجة اللاحقة ({{shortcut}})، لا باختصارك العادي ({{normal}}) الذي يلصق كلامك كما نطقته.",
+        "shortcutEvery": "تعمل مع كل إملاء: باختصار المعالجة اللاحقة ({{shortcut}}) وباختصارك العادي ({{normal}}).",
+        "notSet": "غير معيّن",
+        "stepProvider": "اختر مزودًا. لاستخدام Lemonade على هذا الكمبيوتر، اختر Lemonade Server.",
+        "stepModel": "اختر نموذجًا. يحمّل زر التحديث نماذج الخادم.",
+        "stepPrompt": "اختر مطالبة، أو أنشئ مطالبتك الخاصة.",
+        "stepTest": "اضغط «اختبار» أسفل هذه الصفحة لتجربتها.",
+        "fallback": "إذا فشل التنظيف، يلصق Handy كلامك كما نطقته.",
+        "everyDictation": {
+          "label": "تنظيف كل إملاء",
+          "description": "نظّف أيضًا الإملاءات التي تتم باختصارك العادي، وليس فقط تلك التي تتم باختصار المعالجة اللاحقة."
+        }
+      },
       "hotkey": {
         "title": "مفتاح الاختصار"
       },
@@ -445,21 +461,29 @@
         },
         "baseUrl": {
           "title": "URL الأساسي",
-          "description": "URL الأساسي لـ API للمزود المختار. يمكن تعديل المزود المخصص فقط.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "عنوان واجهة API المتوافقة مع OpenAI على خادمك، مثل http://localhost:11434/v1.",
+          "descriptionLemonade": "عنوان Lemonade Server لديك، وهو عادةً http://localhost:13305/api/v1. كانت إصدارات Lemonade الأقدم تستخدم المنفذ 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "أدخل عنوانًا مثل http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "مفتاح API",
           "description": "مفتاح API للمزود المختار.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "مطلوب فقط إذا طلبه خادمك.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "اختياري"
         },
         "model": {
           "title": "النموذج",
           "descriptionCustom": "قدم معرف النموذج المتوقع من قبل نقطة النهاية المخصصة الخاصة بك.",
           "descriptionDefault": "اختر نموذجاً يعرضه المزود المختار.",
+          "descriptionLemonade": "نموذج محادثة على Lemonade Server لديك. لا تظهر في القائمة نماذج الكلام والتضمين والصور.",
           "placeholderWithOptions": "ابحث عن نموذج أو اختره",
           "placeholderNoOptions": "اكتب اسم النموذج",
-          "refreshModels": "تحديث النماذج"
+          "refreshModels": "تحديث النماذج",
+          "use": "استخدام «{{model}}»",
+          "loadError": "تعذر تحميل النماذج. {{problem}}"
         }
       },
       "prompts": {
@@ -476,12 +500,47 @@
         "promptInstructions": "تعليمات المطالبة",
         "promptInstructionsPlaceholder": ".اكتب التعليمات المراد تشغيلها بعد التفريغ الصوتي. مثال: قم بتحسين القواعد والوضوح للنص التالي: ${output}",
         "promptTip": "تلميح: استخدم <code>${output}</code> لإدراج النص المفرغ في مطالبتك.",
+        "promptTipNoMarker": "بدون ${output}، يرسل Handy النص المفرغ بعد مطالبتك، بين وسمَي {{tag}}.",
         "updatePrompt": "تحديث المطالبة",
         "deletePrompt": "حذف المطالبة",
         "createPrompt": "إنشاء مطالبة",
         "cancel": "إلغاء",
         "selectToEdit": ".اختر مطالبة أعلاه لعرض وتعديل تفاصيلها",
         "createFirst": ".انقر على 'إنشاء مطالبة جديدة' أعلاه لإنشاء أول مطالبة معالجة لاحقة لك"
+      },
+      "test": {
+        "title": "جرّبها",
+        "label": "إملاء تجريبي",
+        "description": "ينظّف هذا النص بالمزود والنموذج والمطالبة المحفوظة المختارة أعلاه، بالطريقة نفسها التي يُنظَّف بها الإملاء.",
+        "sample": "اممم طيب ممكن آه ترسل لي التقرير يوم الجمعة",
+        "button": "اختبار",
+        "testing": "جارٍ الاختبار…",
+        "result": "النتيجة ({{seconds}} ث):",
+        "emptyResult": "أجاب النموذج دون أي نص. مع مطالبة تنظيف، يعني ذلك أنه لم يجد شيئًا يستحق الإبقاء عليه.",
+        "failed": "تعذر تشغيل الاختبار: {{error}}"
+      },
+      "problems": {
+        "emptyText": "اكتب نصًا لتختبر به.",
+        "noProvider": "اختر مزودًا أعلاه.",
+        "noModel": "اختر نموذجًا لـ {{provider}} أعلاه. يحمّل زر التحديث بجوار «النموذج» نماذج الخادم.",
+        "noPrompt": "اختر مطالبة أدناه.",
+        "emptyPrompt": "المطالبة المختارة فارغة. اكتب تعليماتها، ثم اضغط «تحديث المطالبة».",
+        "missingApiKey": "يحتاج {{provider}} إلى مفتاح API. أدخله في حقل «مفتاح API» أعلاه.",
+        "invalidApiKey": "يحتوي مفتاح API على أحرف لا يمكن إرسالها. أدخله مرة أخرى.",
+        "invalidAddress": "{{address}} ليس عنوان خادم يمكن لـ Handy استخدامه. يجب أن يكون مثل http://localhost:13305/api/v1.",
+        "unreachable": "تعذر الوصول إلى الخادم على {{address}}. تأكد من أنه قيد التشغيل وأن العنوان صحيح.",
+        "timeout": "لم يُجب الخادم على {{address}} في الوقت المحدد. إذا كان لا يزال يحمّل النموذج، فحاول مرة أخرى بعد دقيقة.",
+        "unauthorized": "لم يقبل الخادم على {{address}} مفتاح API (الخطأ {{status}}). تحقق من حقل «مفتاح API».",
+        "modelNotFound": "لا يحتوي الخادم على {{address}} على النموذج «{{model}}». اختر نموذجًا آخر أعلاه.",
+        "notFound": "لم يُجب شيء على {{address}} (الخطأ 404). تحقق من العنوان.",
+        "serverError": "أجاب الخادم على {{address}} بخطأ (الخطأ {{status}}).",
+        "serverErrorNoStatus": "أجاب {{provider}} بخطأ.",
+        "noAnswer": "أجاب {{provider}} دون أي نص. جرّب نموذجًا آخر.",
+        "badAnswer": "أرسل {{provider}} إجابة تعذر على Handy قراءتها.",
+        "noChatModels": "لا توجد نماذج محادثة على {{provider}} في {{address}}. نزّل نموذجًا في Lemonade، ثم اضغط زر التحديث.",
+        "otherModels": "نماذج على الخادم لا يمكنها تنظيف النص: {{models}}",
+        "internal": "حدث خطأ داخل Handy.",
+        "detail": "التفاصيل: {{detail}}"
       }
     },
     "transcribeFiles": {

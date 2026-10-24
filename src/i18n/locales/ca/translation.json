@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "Com funciona",
+        "intro": "El postprocessament envia el que dicteu a un model d'IA, que ho neteja abans que el Handy ho enganxi.",
+        "shortcut": "S'executa quan dicteu amb la drecera de postprocessament ({{shortcut}}), no amb la drecera habitual ({{normal}}), que enganxa les vostres paraules tal com les heu dites.",
+        "shortcutEvery": "S'executa en cada dictat: amb la drecera de postprocessament ({{shortcut}}) i amb la drecera habitual ({{normal}}).",
+        "notSet": "sense definir",
+        "stepProvider": "Trieu un proveïdor. Per al Lemonade d'aquest ordinador, trieu Lemonade Server.",
+        "stepModel": "Trieu un model. El botó d'actualitzar carrega els models del servidor.",
+        "stepPrompt": "Trieu una indicació o creeu-ne una de pròpia.",
+        "stepTest": "Premeu «Prova» a la part inferior d'aquesta pàgina per provar-ho.",
+        "fallback": "Si la neteja falla, el Handy enganxa les vostres paraules tal com les heu dites.",
+        "everyDictation": {
+          "label": "Neteja cada dictat",
+          "description": "Neteja també els dictats fets amb la drecera habitual, no només els fets amb la drecera de postprocessament."
+        }
+      },
       "hotkey": {
         "title": "Drecera de teclat"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "URL de base",
-          "description": "URL de base de l'API del proveïdor seleccionat. Només es pot editar la del proveïdor personalitzat.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "L'adreça de l'API compatible amb OpenAI del vostre servidor, per exemple http://localhost:11434/v1.",
+          "descriptionLemonade": "L'adreça del vostre Lemonade Server, normalment http://localhost:13305/api/v1. Les versions antigues de Lemonade utilitzaven el port 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Introduïu una adreça com http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "Clau de l'API",
           "description": "Clau de l'API del proveïdor seleccionat.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Només cal si el servidor en demana una.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Opcional"
         },
         "model": {
           "title": "Model",
           "descriptionCustom": "Introduïu l'identificador de model que espera el punt de connexió personalitzat.",
           "descriptionDefault": "Trieu un model ofert pel proveïdor seleccionat.",
+          "descriptionLemonade": "Un model de xat del vostre Lemonade Server. No s'hi mostren els models de veu, d'incrustacions ni d'imatges.",
           "placeholderWithOptions": "Cerqueu o seleccioneu un model",
           "placeholderNoOptions": "Escriviu el nom d'un model",
-          "refreshModels": "Actualitzeu els models"
+          "refreshModels": "Actualitzeu els models",
+          "use": "Utilitza «{{model}}»",
+          "loadError": "No s'han pogut carregar els models. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "Instruccions de la indicació",
         "promptInstructionsPlaceholder": "Escriviu les instruccions que s'executaran després de la transcripció. Exemple: Millora la gramàtica i la claredat del text següol: ${output}",
         "promptTip": "Consell: utilitzeu <code>${output}</code> per inserir el text transcrit a la indicació.",
+        "promptTipNoMarker": "Sense ${output}, el Handy envia la transcripció després de la indicació, entre etiquetes {{tag}}.",
         "updatePrompt": "Actualitzeu la indicació",
         "deletePrompt": "Suprimiu la indicació",
         "createPrompt": "Creeu la indicació",
         "cancel": "Cancel·leu",
         "selectToEdit": "Seleccioneu una indicació more amunt per veure'n i editar-ne els detalls.",
         "createFirst": "Feu clic a «Creeu una indicació nova» més amunt per crear la primera indicació de postprocessament."
+      },
+      "test": {
+        "title": "Proveu-ho",
+        "label": "Dictat de mostra",
+        "description": "Neteja aquest text amb el proveïdor, el model i la indicació desada que heu triat a dalt, de la mateixa manera que es neteja un dictat.",
+        "sample": "eh doncs em podries mm enviar l'informe divendres",
+        "button": "Prova",
+        "testing": "S'està provant…",
+        "result": "Resultat ({{seconds}} s):",
+        "emptyResult": "El model ha respost sense text. Amb una indicació de neteja, vol dir que no ha trobat res que valgui la pena conservar.",
+        "failed": "No s'ha pogut fer la prova: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Escriviu un text per fer la prova.",
+        "noProvider": "Trieu un proveïdor a dalt.",
+        "noModel": "Trieu un model per a {{provider}} a dalt. El botó d'actualitzar que hi ha al costat de «Model» carrega els models del servidor.",
+        "noPrompt": "Trieu una indicació a sota.",
+        "emptyPrompt": "La indicació seleccionada és buida. Escriviu-ne les instruccions i premeu «Actualitzeu la indicació».",
+        "missingApiKey": "{{provider}} necessita una clau de l'API. Introduïu-la al camp «Clau de l'API» de dalt.",
+        "invalidApiKey": "La clau de l'API conté caràcters que no es poden enviar. Torneu-la a introduir.",
+        "invalidAddress": "{{address}} no és una adreça de servidor que el Handy pugui utilitzar. Hauria de ser com http://localhost:13305/api/v1.",
+        "unreachable": "No es pot connectar amb el servidor a {{address}}. Comproveu que s'estigui executant i que l'adreça sigui correcta.",
+        "timeout": "El servidor a {{address}} no ha respost a temps. Si encara està carregant el model, torneu-ho a provar d'aquí a un minut.",
+        "unauthorized": "El servidor a {{address}} no ha acceptat la clau de l'API (error {{status}}). Comproveu el camp «Clau de l'API».",
+        "modelNotFound": "El servidor a {{address}} no té el model «{{model}}». Trieu un altre model a dalt.",
+        "notFound": "No ha respost res a {{address}} (error 404). Comproveu l'adreça.",
+        "serverError": "El servidor a {{address}} ha respost amb un error (error {{status}}).",
+        "serverErrorNoStatus": "{{provider}} ha respost amb un error.",
+        "noAnswer": "{{provider}} ha respost sense text. Proveu un altre model.",
+        "badAnswer": "{{provider}} ha enviat una resposta que el Handy no ha pogut llegir.",
+        "noChatModels": "{{provider}} a {{address}} no té cap model de xat. Baixeu-ne un al Lemonade i premeu el botó d'actualitzar.",
+        "otherModels": "Models del servidor que no poden netejar text: {{models}}",
+        "internal": "Alguna cosa ha fallat dins del Handy.",
+        "detail": "Detalls: {{detail}}"
       }
     },
     "transcribeFiles": {

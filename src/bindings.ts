@@ -264,9 +264,37 @@ async setPostProcessProvider(providerId: string) : Promise<Result<null, string>>
     else return { status: "error", error: e  as any };
 }
 },
-async fetchPostProcessModels(providerId: string) : Promise<Result<string[], string>> {
+/**
+ * The provider's models to choose from. For a Lemonade Server these are
+ * its chat models, plus the model chosen before when the server lists it.
+ */
+async fetchPostProcessModels(providerId: string) : Promise<Result<string[], PostProcessProblem>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("fetch_post_process_models", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * "Clean up every dictation": post-process dictations made with the normal
+ * shortcut too.
+ */
+async changePostProcessEveryDictationSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_post_process_every_dictation_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Post-processes `text` exactly as a dictation would be, with the saved
+ * provider, model and prompt. Problems are reported in the answer.
+ */
+async testPostProcess(text: string) : Promise<Result<PostProcessTest, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("test_post_process", { text }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -851,6 +879,9 @@ async setSelectedChannel(channel: number | null) : Promise<Result<null, string>>
 async setModelUnloadTimeout(timeout: ModelUnloadTimeout) : Promise<void> {
     await TAURI_INVOKE("set_model_unload_timeout", { timeout });
 },
+/**
+ * Starts recording a pronunciation sample from the selected microphone.
+ */
 async startPronunciationSample() : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("start_pronunciation_sample") };
@@ -859,6 +890,10 @@ async startPronunciationSample() : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Stops the sample and returns what Handy typed for it ("" when nothing was
+ * heard).
+ */
 async stopPronunciationSample() : Promise<Result<string, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("stop_pronunciation_sample") };
@@ -867,6 +902,10 @@ async stopPronunciationSample() : Promise<Result<string, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Stops a pronunciation sample without transcribing it. Does nothing when no
+ * sample is being recorded, so it never cancels a dictation.
+ */
 async cancelPronunciationSample() : Promise<void> {
     await TAURI_INVOKE("cancel_pronunciation_sample");
 },
@@ -1272,10 +1311,8 @@ async labelTranscriptSpeakers(source: TranscriptSource, replace: boolean, path: 
 }
 },
 /**
- * Checks if the Mac is a laptop by detecting battery presence
- * 
- * This uses pmset to check for battery information.
- * Returns true if a battery is detected (laptop), false otherwise (desktop)
+ * Stub implementation for non-macOS platforms
+ * Always returns false since laptop detection is macOS-specific
  */
 async isLaptop() : Promise<Result<boolean, string>> {
     try {
@@ -1360,7 +1397,19 @@ selected_channel?: number | null; clamshell_microphone?: string | null; selected
  * word (`"Stacey"` -> `["Stacy", "Stacie"]`). Every listed spelling is
  * rewritten to its word, exactly and for every model.
  */
-custom_word_variants?: Partial<{ [key in string]: string[] }>; model_unload_timeout?: ModelUnloadTimeout; word_correction_threshold?: number; history_limit?: number; recording_retention_period?: RecordingRetentionPeriod; paste_method?: PasteMethod; clipboard_handling?: ClipboardHandling; auto_submit?: boolean; auto_submit_key?: AutoSubmitKey; post_process_enabled?: boolean; post_process_provider_id?: string; post_process_providers?: PostProcessProvider[]; post_process_api_keys?: SecretMap; post_process_models?: Partial<{ [key in string]: string }>; post_process_prompts?: LLMPrompt[]; post_process_selected_prompt_id?: string | null; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; theme?: Theme; experimental_enabled?: boolean; lazy_stream_close?: boolean; keyboard_implementation?: KeyboardImplementation; show_tray_icon?: boolean; paste_delay_ms?: number; paste_delay_after_ms?: number; 
+custom_word_variants?: Partial<{ [key in string]: string[] }>; model_unload_timeout?: ModelUnloadTimeout; word_correction_threshold?: number; history_limit?: number; recording_retention_period?: RecordingRetentionPeriod; paste_method?: PasteMethod; clipboard_handling?: ClipboardHandling; auto_submit?: boolean; auto_submit_key?: AutoSubmitKey; post_process_enabled?: boolean; post_process_provider_id?: string; post_process_providers?: PostProcessProvider[]; post_process_api_keys?: SecretMap; post_process_models?: Partial<{ [key in string]: string }>; post_process_prompts?: LLMPrompt[]; post_process_selected_prompt_id?: string | null; 
+/**
+ * Ids of the built-in prompts added after release that this store has
+ * already been given (see `ensure_post_process_defaults`), so one the
+ * user deleted is not added again. Missing in older stores.
+ */
+post_process_prompts_offered?: string[]; 
+/**
+ * Post-process dictations made with the normal "transcribe" shortcut
+ * too, not only those made with the post-processing shortcut. Needs
+ * `post_process_enabled`.
+ */
+post_process_every_dictation?: boolean; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; theme?: Theme; experimental_enabled?: boolean; lazy_stream_close?: boolean; keyboard_implementation?: KeyboardImplementation; show_tray_icon?: boolean; paste_delay_ms?: number; paste_delay_after_ms?: number; 
 /**
  * Debug-gated ("beta") receipt-sequenced paste: restore the clipboard only
  * after the target app actually reads the transcript, instead of after a
@@ -1866,7 +1915,124 @@ export type OverlayStyle = "none" | "minimal" | "live"
 export type PaginatedHistory = { entries: HistoryEntry[]; has_more: boolean }
 export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_shift_v" | "external_script"
 export type PermissionAccess = "allowed" | "denied" | "unknown"
-export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean }
+/**
+ * A problem with post-processing; the page words it from `kind`.
+ */
+export type PostProcessProblem = { kind: PostProcessProblemKind; 
+/**
+ * The provider's name, e.g. "Lemonade Server".
+ */
+provider: string | null; 
+/**
+ * The provider's API address, without any password in it.
+ */
+address: string | null; 
+/**
+ * The model asked for.
+ */
+model: string | null; 
+/**
+ * The HTTP status of an error answer.
+ */
+status: number | null; 
+/**
+ * English detail: the server's message, the system's error, or (for
+ * `NoChatModels`) the server's other models.
+ */
+detail: string | null }
+/**
+ * What kept post-processing (or the model list) from working.
+ */
+export type PostProcessProblemKind = 
+/**
+ * There is no text to test with.
+ */
+"empty_text" | 
+/**
+ * No provider is selected.
+ */
+"no_provider" | 
+/**
+ * The provider has no model chosen.
+ */
+"no_model" | 
+/**
+ * No prompt is selected.
+ */
+"no_prompt" | 
+/**
+ * The selected prompt is empty.
+ */
+"empty_prompt" | 
+/**
+ * Apple Intelligence can't run on this device.
+ */
+"apple_intelligence_unavailable" | 
+/**
+ * The provider needs an API key and none is set.
+ */
+"missing_api_key" | 
+/**
+ * The API key holds characters that can't be sent.
+ */
+"invalid_api_key" | 
+/**
+ * The provider's address isn't usable.
+ */
+"invalid_address" | 
+/**
+ * The server can't be reached.
+ */
+"unreachable" | 
+/**
+ * The server didn't answer in time.
+ */
+"timeout" | 
+/**
+ * The server didn't accept the API key.
+ */
+"unauthorized" | 
+/**
+ * The server doesn't have the model.
+ */
+"model_not_found" | 
+/**
+ * The server answered with an error.
+ */
+"server_error" | 
+/**
+ * The server answered without any text.
+ */
+"no_answer" | 
+/**
+ * The server's answer couldn't be read.
+ */
+"bad_answer" | 
+/**
+ * A Lemonade Server has no chat models.
+ */
+"no_chat_models" | 
+/**
+ * Something failed inside Handy.
+ */
+"internal"
+export type PostProcessProvider = { id: string; label: string; base_url: string; 
+/**
+ * The user can change `base_url` (a server they run or choose).
+ */
+allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean }
+/**
+ * The answer to a test.
+ */
+export type PostProcessTest = { 
+/**
+ * The post-processed text; None when the test failed.
+ */
+output: string | null; problem: PostProcessProblem | null; 
+/**
+ * How long post-processing took.
+ */
+elapsed_ms: number }
 export type RecordingPhase = "recording" | "paused" | 
 /**
  * Saving the audio after Stop.

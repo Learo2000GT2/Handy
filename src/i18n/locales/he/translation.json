@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "איך זה עובד",
+        "intro": "העיבוד המשלים שולח את מה שאתה מכתיב למודל בינה מלאכותית, שמנקה אותו לפני ש-Handy מדביק אותו.",
+        "shortcut": "הוא פועל כשאתה מכתיב עם קיצור המקשים לעיבוד משלים ({{shortcut}}), ולא עם קיצור המקשים הרגיל ({{normal}}), שמדביק את המילים שלך כפי שנאמרו.",
+        "shortcutEvery": "הוא פועל בכל הכתבה: עם קיצור המקשים לעיבוד משלים ({{shortcut}}) ועם קיצור המקשים הרגיל ({{normal}}).",
+        "notSet": "לא הוגדר",
+        "stepProvider": "בחר ספק. עבור Lemonade במחשב הזה, בחר Lemonade Server.",
+        "stepModel": "בחר מודל. כפתור הרענון טוען את המודלים של השרת.",
+        "stepPrompt": "בחר פרומפט, או צור פרומפט משלך.",
+        "stepTest": "לחץ על „בדיקה” בתחתית הדף כדי לנסות.",
+        "fallback": "אם הניקוי נכשל, Handy מדביק את המילים שלך כפי שנאמרו.",
+        "everyDictation": {
+          "label": "ניקוי כל הכתבה",
+          "description": "לנקות גם הכתבות שנעשו עם קיצור המקשים הרגיל, ולא רק כאלה שנעשו עם קיצור המקשים לעיבוד משלים."
+        }
+      },
       "hotkey": {
         "title": "קיצור מקשים"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "כתובת URL בסיסית",
-          "description": "כתובת ה-API הבסיסית עבור הספק הנבחר. רק ספק מותאם אישית ניתן לעריכה.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "הכתובת של ה-API התואם ל-OpenAI בשרת שלך, לדוגמה http://localhost:11434/v1.",
+          "descriptionLemonade": "הכתובת של Lemonade Server שלך, בדרך כלל http://localhost:13305/api/v1. גרסאות ישנות של Lemonade השתמשו בפורט 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "הזן כתובת כמו http://localhost:13305/api/v1."
         },
         "apiKey": {
           "title": "מפתח API",
           "description": "מפתח API עבור הספק הנבחר.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "נדרש רק אם השרת שלך מבקש אותו.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "אופציונלי"
         },
         "model": {
           "title": "מודל",
           "descriptionCustom": "ספק את מזהה המודל שה-endpoint המותאם שלך מצפה לו.",
           "descriptionDefault": "בחר מודל שהספק הנבחר חושף.",
+          "descriptionLemonade": "מודל צ'אט ב-Lemonade Server שלך. מודלים של דיבור, הטמעות ותמונות אינם מופיעים ברשימה.",
           "placeholderWithOptions": "חפש או בחר מודל",
           "placeholderNoOptions": "הקלד שם מודל",
-          "refreshModels": "רענן מודלים"
+          "refreshModels": "רענן מודלים",
+          "use": "שימוש ב-{{model}}",
+          "loadError": "לא ניתן לטעון את המודלים. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "הוראות לפרומפט",
         "promptInstructionsPlaceholder": "כתוב את ההוראות שירוצו אחרי התמלול. לדוגמה: שפר דקדוק ובהירות עבור הטקסט הבא: ${output}",
         "promptTip": "טיפ: השתמש ב-<code>${output}</code> כדי להכניס את הטקסט המתומלל לפרומפט שלך.",
+        "promptTipNoMarker": "בלי ${output}, Handy שולח את התמליל אחרי הפרומפט שלך, בין תגי {{tag}}.",
         "updatePrompt": "עדכן פרומפט",
         "deletePrompt": "מחק פרומפט",
         "createPrompt": "צור פרומפט",
         "cancel": "ביטול",
         "selectToEdit": "בחר פרומפט למעלה כדי לצפות בפרטים שלו ולערוך אותם.",
         "createFirst": "לחץ על 'צור פרומפט חדש' למעלה כדי ליצור את פרומפט העיבוד הראשון שלך."
+      },
+      "test": {
+        "title": "נסה את זה",
+        "label": "הכתבה לדוגמה",
+        "description": "מנקה את הטקסט הזה עם הספק, המודל והפרומפט השמור שנבחרו למעלה, באותה דרך שבה מנוקה הכתבה.",
+        "sample": "אממ אז אתה יכול אה לשלוח לי את הדוח עד יום שישי",
+        "button": "בדיקה",
+        "testing": "בודק…",
+        "result": "תוצאה ({{seconds}} שנ׳):",
+        "emptyResult": "המודל ענה בלי טקסט. עם פרומפט ניקוי, המשמעות היא שהוא לא מצא שום דבר ששווה לשמור.",
+        "failed": "לא ניתן להריץ את הבדיקה: {{error}}"
+      },
+      "problems": {
+        "emptyText": "הקלד טקסט לבדיקה.",
+        "noProvider": "בחר ספק למעלה.",
+        "noModel": "בחר מודל עבור {{provider}} למעלה. כפתור הרענון שליד „מודל” טוען את המודלים של השרת.",
+        "noPrompt": "בחר פרומפט למטה.",
+        "emptyPrompt": "הפרומפט שנבחר ריק. כתוב את ההוראות שלו ולחץ על „עדכן פרומפט”.",
+        "missingApiKey": "{{provider}} דורש מפתח API. הזן אותו בשדה „מפתח API” למעלה.",
+        "invalidApiKey": "מפתח ה-API מכיל תווים שאי אפשר לשלוח. הזן אותו שוב.",
+        "invalidAddress": "{{address}} אינה כתובת שרת ש-Handy יכול להשתמש בה. היא צריכה להיראות כמו http://localhost:13305/api/v1.",
+        "unreachable": "לא ניתן להתחבר לשרת בכתובת {{address}}. ודא שהוא פועל ושהכתובת נכונה.",
+        "timeout": "השרת בכתובת {{address}} לא ענה בזמן. אם הוא עדיין טוען את המודל, נסה שוב בעוד דקה.",
+        "unauthorized": "השרת בכתובת {{address}} לא קיבל את מפתח ה-API (שגיאה {{status}}). בדוק את השדה „מפתח API”.",
+        "modelNotFound": "לשרת בכתובת {{address}} אין את המודל {{model}}. בחר מודל אחר למעלה.",
+        "notFound": "שום דבר לא ענה בכתובת {{address}} (שגיאה 404). בדוק את הכתובת.",
+        "serverError": "השרת בכתובת {{address}} ענה בשגיאה (שגיאה {{status}}).",
+        "serverErrorNoStatus": "{{provider}} ענה בשגיאה.",
+        "noAnswer": "{{provider}} ענה בלי טקסט. נסה מודל אחר.",
+        "badAnswer": "{{provider}} שלח תשובה ש-Handy לא הצליח לקרוא.",
+        "noChatModels": "ב-{{provider}} בכתובת {{address}} אין מודלי צ'אט. הורד מודל ב-Lemonade ולחץ על כפתור הרענון.",
+        "otherModels": "מודלים בשרת שלא יכולים לנקות טקסט: {{models}}",
+        "internal": "משהו השתבש בתוך Handy.",
+        "detail": "פרטים: {{detail}}"
       }
     },
     "transcribeFiles": {

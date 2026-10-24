@@ -455,6 +455,22 @@
       }
     },
     "postProcessing": {
+      "howItWorks": {
+        "title": "So funktioniert es",
+        "intro": "Die Nachbearbeitung schickt dein Diktat an ein KI-Modell, das den Text bereinigt, bevor Handy ihn einfügt.",
+        "shortcut": "Sie läuft, wenn du mit dem Tastenkürzel für die Nachbearbeitung ({{shortcut}}) diktierst – nicht mit deinem normalen Tastenkürzel ({{normal}}), das deine Worte so einfügt, wie du sie gesprochen hast.",
+        "shortcutEvery": "Sie läuft bei jedem Diktat: mit dem Tastenkürzel für die Nachbearbeitung ({{shortcut}}) und mit deinem normalen Tastenkürzel ({{normal}}).",
+        "notSet": "nicht festgelegt",
+        "stepProvider": "Wähle einen Anbieter. Für Lemonade auf diesem Computer wähle Lemonade Server.",
+        "stepModel": "Wähle ein Modell. Die Schaltfläche zum Aktualisieren lädt die Modelle des Servers.",
+        "stepPrompt": "Wähle einen Prompt oder erstelle einen eigenen.",
+        "stepTest": "Klicke unten auf dieser Seite auf „Testen“, um es auszuprobieren.",
+        "fallback": "Wenn die Bereinigung fehlschlägt, fügt Handy deine Worte so ein, wie du sie gesprochen hast.",
+        "everyDictation": {
+          "label": "Jedes Diktat bereinigen",
+          "description": "Auch Diktate mit dem normalen Tastenkürzel bereinigen, nicht nur die mit dem Tastenkürzel für die Nachbearbeitung."
+        }
+      },
       "hotkey": {
         "title": "Tastenkürzel"
       },
@@ -469,21 +485,29 @@
         },
         "baseUrl": {
           "title": "Basis-URL",
-          "description": "API-Basis-URL für den ausgewählten Anbieter. Nur der benutzerdefinierte Anbieter kann bearbeitet werden.",
-          "placeholder": "https://api.openai.com/v1"
+          "descriptionCustom": "Die Adresse der OpenAI-kompatiblen API deines Servers, zum Beispiel http://localhost:11434/v1.",
+          "descriptionLemonade": "Die Adresse deines Lemonade Servers, meist http://localhost:13305/api/v1. Ältere Lemonade-Versionen verwendeten Port 8000.",
+          "placeholder": "https://api.openai.com/v1",
+          "placeholderLemonade": "http://localhost:13305/api/v1",
+          "invalid": "Gib eine Adresse wie http://localhost:13305/api/v1 ein."
         },
         "apiKey": {
           "title": "API-Schlüssel",
           "description": "API-Schlüssel für den ausgewählten Anbieter.",
-          "placeholder": "sk-..."
+          "descriptionOptional": "Nur nötig, wenn dein Server einen verlangt.",
+          "placeholder": "sk-...",
+          "placeholderOptional": "Optional"
         },
         "model": {
           "title": "Modell",
           "descriptionCustom": "Gib die Modellkennung an, die von deinem benutzerdefinierten Endpunkt erwartet wird.",
           "descriptionDefault": "Wähle ein Modell des ausgewählten Anbieters.",
+          "descriptionLemonade": "Ein Chat-Modell auf deinem Lemonade Server. Sprach-, Embedding- und Bildmodelle werden nicht aufgeführt.",
           "placeholderWithOptions": "Modell suchen oder auswählen",
           "placeholderNoOptions": "Modellnamen eingeben",
-          "refreshModels": "Modelle aktualisieren"
+          "refreshModels": "Modelle aktualisieren",
+          "use": "„{{model}}“ verwenden",
+          "loadError": "Die Modelle konnten nicht geladen werden. {{problem}}"
         }
       },
       "prompts": {
@@ -500,12 +524,47 @@
         "promptInstructions": "Prompt-Anweisungen",
         "promptInstructionsPlaceholder": "Schreibe die Anweisungen, die nach der Transkription ausgeführt werden sollen. Beispiel: Verbessere Grammatik und Klarheit für folgenden Text: ${output}",
         "promptTip": "Tipp: Verwende <code>${output}</code>, um den transkribierten Text in deinen Prompt einzufügen.",
+        "promptTipNoMarker": "Ohne ${output} sendet Handy die Transkription nach deinem Prompt, zwischen {{tag}}-Tags.",
         "updatePrompt": "Prompt aktualisieren",
         "deletePrompt": "Prompt löschen",
         "createPrompt": "Prompt erstellen",
         "cancel": "Abbrechen",
         "selectToEdit": "Wähle oben einen Prompt aus, um dessen Details anzuzeigen und zu bearbeiten.",
         "createFirst": "Klicke oben auf 'Neuen Prompt erstellen', um deinen ersten Nachbearbeitungs-Prompt zu erstellen."
+      },
+      "test": {
+        "title": "Ausprobieren",
+        "label": "Beispieldiktat",
+        "description": "Bereinigt diesen Text mit dem oben gewählten Anbieter, Modell und gespeicherten Prompt – genauso, wie ein Diktat bereinigt wird.",
+        "sample": "ähm also kannst du mir äh den bericht bis freitag schicken",
+        "button": "Testen",
+        "testing": "Wird getestet…",
+        "result": "Ergebnis ({{seconds}} s):",
+        "emptyResult": "Das Modell hat ohne Text geantwortet. Bei einem Bereinigungs-Prompt heißt das, dass es nichts Behaltenswertes gefunden hat.",
+        "failed": "Der Test konnte nicht ausgeführt werden: {{error}}"
+      },
+      "problems": {
+        "emptyText": "Gib einen Text zum Testen ein.",
+        "noProvider": "Wähle oben einen Anbieter.",
+        "noModel": "Wähle oben ein Modell für {{provider}}. Die Schaltfläche zum Aktualisieren neben „Modell“ lädt die Modelle des Servers.",
+        "noPrompt": "Wähle unten einen Prompt.",
+        "emptyPrompt": "Der gewählte Prompt ist leer. Schreibe seine Anweisungen und klicke dann auf „Prompt aktualisieren“.",
+        "missingApiKey": "{{provider}} braucht einen API-Schlüssel. Gib ihn oben im Feld „API-Schlüssel“ ein.",
+        "invalidApiKey": "Der API-Schlüssel enthält Zeichen, die nicht gesendet werden können. Gib ihn erneut ein.",
+        "invalidAddress": "{{address}} ist keine Serveradresse, die Handy verwenden kann. Sie sollte wie http://localhost:13305/api/v1 aussehen.",
+        "unreachable": "Der Server unter {{address}} ist nicht erreichbar. Stelle sicher, dass er läuft und die Adresse stimmt.",
+        "timeout": "Der Server unter {{address}} hat nicht rechtzeitig geantwortet. Falls er das Modell noch lädt, versuche es in einer Minute erneut.",
+        "unauthorized": "Der Server unter {{address}} hat den API-Schlüssel nicht akzeptiert (Fehler {{status}}). Prüfe das Feld „API-Schlüssel“.",
+        "modelNotFound": "Der Server unter {{address}} hat das Modell „{{model}}“ nicht. Wähle oben ein anderes Modell.",
+        "notFound": "Unter {{address}} hat nichts geantwortet (Fehler 404). Prüfe die Adresse.",
+        "serverError": "Der Server unter {{address}} hat mit einem Fehler geantwortet (Fehler {{status}}).",
+        "serverErrorNoStatus": "{{provider}} hat mit einem Fehler geantwortet.",
+        "noAnswer": "{{provider}} hat ohne Text geantwortet. Versuche ein anderes Modell.",
+        "badAnswer": "{{provider}} hat eine Antwort gesendet, die Handy nicht lesen konnte.",
+        "noChatModels": "{{provider}} unter {{address}} hat keine Chat-Modelle. Lade eines in Lemonade herunter und klicke dann auf die Schaltfläche zum Aktualisieren.",
+        "otherModels": "Modelle auf dem Server, die keinen Text bereinigen können: {{models}}",
+        "internal": "In Handy ist etwas schiefgelaufen.",
+        "detail": "Details: {{detail}}"
       }
     },
     "transcribeFiles": {
